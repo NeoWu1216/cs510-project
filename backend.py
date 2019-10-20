@@ -7,7 +7,7 @@ app = Flask(__name__)
 def index():
     return render_template('index.html')
 
-@app.route("/query")
+@app.route("/query", methods=['POST'])
 def query():
     query_string = request.json["queryString"]
     print(query_string)
