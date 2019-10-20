@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template
+from flask import Flask, request, render_template, jsonify
 import search
 
 app = Flask(__name__)
@@ -11,7 +11,7 @@ def index():
 def query():
     query_string = request.json["queryString"]
     print(query_string)
-    search.query(query_string)
+    return jsonify([search.query(query_string)])
 
 
 if __name__ == "__main__":
