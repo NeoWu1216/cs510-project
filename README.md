@@ -12,7 +12,10 @@ For metapy engine to operate properly, we need to put each file in one line insi
 We used metapy's builtin OkapiBM25 as our ranker. We tested many simple queries to verify its performance. We fit the corpus using the unigram language model. Eventually we added a simple frontend that can be accessed here.
 
 ### Instruction for preprocessing
-python3 parse.py
+python3 preprocess.py
 
 ### Instruction for deployment
-python3 backend.py
+python3 app.py
+
+### Demo App
+https://cs510-preproject.herokuapp.com
