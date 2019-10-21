@@ -1,35 +1,29 @@
+import sys
 import metapy
-# import importlib
 
-
-# ranker = metapy.index.OkapiBM25()
-with open('./parsed_paper/parsed_paper.dat', "r", encoding='utf-8') as input_file:
-    all_lines = input_file.read().split('\n')
+# Path of parsed papers
+path_parsed = "./parsed_paper/"
 
 def query(string):
-    # importlib.reload(metapy)
+    with open(path_parsed + 'parsed_paper.dat', "r", encoding='utf-8') as f:
+        papers = f.read().split('\n')
+        
+    # Create inverted index
     idx = metapy.index.make_inverted_index('main.toml')
-    idx.num_docs()
-    idx.avg_doc_length()
-    # print('received')
+    # Initialize ranker
     ranker = metapy.index.OkapiBM25()
+    # Initialize query
     q = metapy.index.Document()
-    q.content(string) # query from AP news
-    # print('created query doc')
+    q.content(string)
+    # Get documents
     top_docs = ranker.score(idx, q, num_results=5)
-    # print('found top 5')
-    str_to_return = ""
-    for num, (d_id, _) in enumerate(top_docs):
-#     print(idx.metadata(d_id).__dict__())
-#     print(inspect.getdoc(idx.metadata(d_id)))
-# content = idx.metadata(d_id)
-        str_to_return+= all_lines[d_id]
-        str_to_return += "<br>"
-    print(str_to_return)
-    return str_to_return
-
+    # Construct search results
+    search_result = ""
+    for d_id, _ in top_docs:
+        search_result += papers[d_id]
+        search_result += "<br><br>"
+        
+    return search_result
 
 if __name__ == '__main__':
-    import sys
-    print(sys.argv)
     print(query(sys.argv[1]))
