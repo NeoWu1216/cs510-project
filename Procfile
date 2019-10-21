@@ -1,1 +1,1 @@
-web: gunicorn app:backend --log-file=-
+web: gunicorn app:app --log-file=-
