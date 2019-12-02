@@ -1,0 +1,989 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Efficient Large-Scale Similarity Search Using Matrix Factorization</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ahmet</forename><surname>Iscen</surname></persName>
+							<email>ahmet.iscen@inria.fr</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Inria Rennes</orgName>
+								<address>
+									<country key="FR">France</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><surname>Rabbat</surname></persName>
+							<email>michael.rabbat@mcgill.ca</email>
+							<affiliation key="aff1">
+								<orgName type="laboratory">Teddy Furon Inria Rennes</orgName>
+								<orgName type="institution">McGill University Montréal</orgName>
+								<address>
+									<country>Canada, France</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Efficient Large-Scale Similarity Search Using Matrix Factorization</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:40+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We consider the image retrieval problem of finding the images in a dataset that are most similar to a query image. Our goal is to reduce the number of vector operations and memory for performing a search without sacrificing accuracy of the returned images. We adopt a group testing formulation and design the decoding architecture using either dictionary learning or eigendecomposition. The latter is a plausible option for small-to-medium sized problems with high-dimensional global image descriptors, whereas dictionary learning is applicable in large-scale scenarios. We evaluate our approach for global descriptors obtained from both SIFT and CNN features. Experiments with standard image search benchmarks, including the Ya-hoo100M dataset comprising 100 million images, show that our method gives comparable (and sometimes superior) accuracy compared to exhaustive search while requiring only 10% of the vector operations and memory. Moreover, for the same search complexity, our method gives significantly better accuracy compared to approaches based on dimensionality reduction or locality sensitive hashing.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>This paper is about image retrieval and similarity search for large datasets. Image retrieval aims to find the images in a large scale dataset that are most similar to a given query image. Recent approaches <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b23">24]</ref> aggregate local SIFT <ref type="bibr" target="#b16">[17]</ref> features or use deep-learning networks <ref type="bibr" target="#b3">[4]</ref> to create a global descriptor vector for each image. Visual similarity is then quantified by measuring the similarity of these vectors (e.g., cosine similarity). If the dataset has N images each represented by a d-dimensional feature vector, then an exhaustive search for each query requires dN operations.</p><p>A common approach to accelerate image search is indexing, which operates in sub-linear time <ref type="bibr" target="#b19">[20]</ref>. Indexing partitions the feature space R d into clusters and computes similarities between the query and dataset vectors that fall in the same or neighboring clusters. Yet, as the dimension d grows, the chance that similar images are assigned to different clusters increases, and the efficiency of these methods collapses <ref type="bibr" target="#b19">[20,</ref><ref type="bibr" target="#b30">31]</ref>. This is problematic in computer vision since most state-of-the-art image descriptors have high intrinsic dimensionality. A recent work tries to solve this by indexing descriptors based on sparse approximation <ref type="bibr" target="#b4">[5]</ref>.</p><p>Another popular approach to efficient image search performs a linear scan over the dataset, computing approximate similarities using compact codes <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b5">6,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b31">32]</ref>. These techniques have a complexity of d ′ N where d ′ &lt; d is the reduced dimensionality of the compact code. The similarity between vectors in R d is approximated by the distance between their compact codes. State-of-the-art large scale search algorithms combine indexing strategies with approximated similarities <ref type="bibr" target="#b13">[14]</ref>.</p><p>Recently, a complementary approach inspired by group testing has emerged <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b26">27]</ref>. Here the goal is to reduce the number of vectors against which the query is compared. The full dataset of N vectors is first summarized by M ≪ N group vectors, where each group vector is also d-dimensional. As the name suggests, each group vector represents a small subset of images in the original dataset. These groups are composed by a random partition of the dataset. Computation of the group vectors is performed offline under a specific construction such that a comparison group vector vs query vector measures how likely the group contains query matching vectors. Then, when presented with a query, the system compares the query with the group vectors instead of individual image vectors. This reduces the complexity from dN to dM .</p><p>Initial attempts <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b26">27]</ref> considered an adaptive group testing approach. M groups are composed from the dataset, and querying proceeds in two stages. In the first stage, the scores between group vectors and the query are computed. They measure how likely their group contains some matching images. Then, in the second stage, the query is compared with individual image vectors for only the mostly likely positive groups. If the groups are roughly balanced in size and the query only matches a small number of group vectors, then the complexity is reduced from dN to d(M + N/M ). Although this results in efficient image retrieval, it has one major drawback: memory usage is increased since the group vectors and mapping from images to groups are stored in addition to the dataset feature vectors. In other words, these works trade complexity for memory. This is not a tractable option for large-N datasets.</p><p>In this work, we pursue the idea of deducing which vectors are matching in a database of size N from only M &lt; N measurements. We re-examine the group testing formulation. Rather than a random partition of the dataset into groups followed by a specific construction of the group vectors, we formulate the problem of finding an optimal group testing design for a given image dataset. Removing the restriction to binary designs, the continuous version of this optimization problem turns out to be equivalent to dictionary learning. For small and medium sized datasets, with N &lt; d, one can remove the requirement of a sparse design matrix, and then the problem simplifies further to that of a matrix factorization whose solution is given by the SVD.</p><p>The paper is organized as follows. Section 2 introduces the problem formulation and notation. Section 3 proposes different techniques to solve the problem depending on the parameters N and d. Section 4 shows the compatibility of our approach with an existing coding method in the literature. Section 5 presents the evaluation of proposed method using real image datasets.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Problem statement</head><p>The dataset is composed of N d-dimensional vectors</p><formula xml:id="formula_0">{x i } N i=1</formula><p>such that x i = 1, for all i, and each x i is the global feature vector of one image in the dataset. The similarity between two vectors x i and x j is the scalar product</p><formula xml:id="formula_1">x ⊤ i x j . Denote by X the d × N matrix [x 1 , . . . , x N ].</formula><p>As mentioned in Section 1, we aim to find M group vectors of dimension d,</p><formula xml:id="formula_2">{y i } M i=1 , stored in d × M matrix Y.</formula><p>Unlike the previous group testing approaches, we do not randomly assign dataset vectors to groups and we do not compute the group vectors according to a specific construction. Our goal is to directly find the best M group vectors globally summarizing the dataset. We call this process the encoding, and we restrict our scope to a linear encoding:</p><formula xml:id="formula_3">Y = enc(X) = XG ⊤ .<label>(1)</label></formula><p>Given a query image, represented by its global descriptor vector q, we compute the group scores,</p><formula xml:id="formula_4">s = q ⊤ Y.<label>(2)</label></formula><p>Finally, we estimate the similarities between query and database vectors c = q ⊤ X from the measurements s. Again, we assume a linear estimator:</p><formula xml:id="formula_5">c = dec(s) = sH.<label>(3)</label></formula><p>Our aim is to design G ∈ R M ×N and H ∈ R M ×N to allow for a fast and accurate search. Note that this setup is similar to the pioneering work of Shi et al. <ref type="bibr" target="#b26">[27]</ref>: in their paper, G is indeed a randomly generated binary matrix where G(i, j) = 1 if x j belongs to the i-th group and G(i, j) = 0 otherwise. Hence, in the previous group testing approach, G captures both how groups are made and how the group vectors are computed (a simple sum in <ref type="bibr" target="#b26">[27]</ref>). On the contrary, we look for the best matrix representing the dataset, which will heavily depend on X. Complexity. Exhaustive search involves computing q ⊤ X, which has a complexity of dN . Computing the group measurements (2) takes dM operations, and the decoding (3) takes M N . This gives a complexity of dM + N M for group-testing search, compared to dN operations for exhaustive search. The complexity ratio is thus ρ = M/N + M/d, implying that M must be smaller than both N and d to yield efficient queries.</p><p>Previous work based on group testing <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b26">27]</ref> designs groups so that every column of G has exactly m ≪ M ones; i.e., each dataset vector belongs to m groups. This produces a sparse decoding matrix H which, in turn, yields the better complexity ratio ρ = M/N + m/d. However, none of the approaches <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b26">27]</ref> attempt to optimize G and H. They either create G randomly or use a clustering algorithm to coarsely group similar dataset vectors <ref type="bibr" target="#b10">[11]</ref>. In the following sections, we discuss two techniques that optimize the matrices G and H for a particular dataset X.</p><p>We focus on the complexity of performing a query. Determining the optimal encoding and decoding matrices G and H requires additional computation applied offline or periodically. We assume that the corresponding complexity is not as critical as in the query stage. Our only requirement is that the complexity of this offline computation be polynomial in N and d to ensure that it is tractable.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Proposed solutions</head><p>We now provide two alternative solutions for the setup described in Section 2. As we will show in the experimental section, both solutions have advantages and drawbacks, and can be chosen depending on the feature vectors and the number of items in the dataset.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">First solution: Eigendecomposition</head><p>In the first approach, we consider finding matrices G ∈ R M ×N and H ∈ R M ×N so that the approximate scoresĉ and exact scores c are as close as possible. Based on (1), <ref type="bibr" target="#b1">(2)</ref> and <ref type="bibr" target="#b2">(3)</ref>, this amounts to:</p><formula xml:id="formula_6">minimize G,H q∈Q c −ĉ 2 2 = minimize G,H q∈Q q T X − q T XG ⊤ H 2 2 ,</formula><p>where Q is assumed to be representative of typical queries. Of course, this distance cannot be zero for all q ∈ R d since the N × N matrix G ⊤ H has rank at most M &lt; N . We focus on providing accurate scores for typical queries. We use the dataset of vectors itself as a proxy of the typical ensemble of queries. This amounts to replacing q by X and to consider the Frobenius matrix norm:</p><formula xml:id="formula_7">minimize G,H X ⊤ X − X ⊤ XG ⊤ H 2 F .<label>(4)</label></formula><p>This problem is commonly solved by eigendecomposition. Let A = X ⊤ X be the Gramian symmetric matrix associated to X. As a real symmetric matrix, A is diago-</p><formula xml:id="formula_8">nalizable: A = UΛU ⊤ , where U is an orthogonal matrix (U ⊤ U = UU ⊤ = I N )</formula><p>. This means that we can simply assign G ⊤ = U M and H = U ⊤ M , where U M are the eigenvectors associated with the M largest eigenvalues.</p><p>In practice, we do not need to compute the Gram matrix A = X ⊤ X . The singular value decomposition (SVD) of X is defined as X = SΣU ⊤ , where S are the eigenvectors of XX ⊤ , and U are the eigenvectors of X ⊤ X. Hence, this SVD gives us the desired output without having to calculate A. It is worth noting that this solution resembles a well known dimension reduction method: Principal Component Analysis (PCA). However, while PCA is usually employed to reduce the dimensionality of the vectors from d to d ′ components, in our approach we use it to reduce the number of vectors from N to M . Alternatively, more efficient dimensionality reduction methods, such as sparse projectors <ref type="bibr" target="#b20">[21]</ref>, can be used to construct H.</p><p>The major drawback of this approach is that H is not sparse. Therefore, the complexity of the decoding (3) is in O(M N ). Hence, this solution is efficient for scenarios where d is larger than N .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Second solution: Dictionary learning</head><p>Dictionary learning has been widely applied in imaging problems, e.g., to obtain efficient representations and discover structure using local patches; see <ref type="bibr" target="#b17">[18]</ref> for a survey. Our second solution applies dictionary learning to find a sparse description of the dataset enabling efficient image search. For any query q, we expect the score vector c to be sparse; the few high-amplitude coefficients correspond to the matching images, and remaining low-amplitude coefficients correspond to non-matching images. Moreover, we do not need the estimateĉ to be very close to c, per se, as long as the matching images receive a substantially higher score than the non-matching ones.</p><p>Because the three steps (1), (2) and (3) of our method are linear, this reconstruction of the similarities through a sparse matrix H implies a sparse representation of the dataset vectors, which leads to the connection with dictionary learning. Specifically, we aim to approximate X by YH where H ∈ R M ×N stores the sparse representations of the dataset vectors in terms of columns (so-called atoms) of the dictionary Y ∈ R d×M . This leads to the following optimization problem:</p><formula xml:id="formula_9">minimize Y,H 1 2 X − YH 2 F + λ H 1 subject to y k 2 ≤ 1 for all 0 ≤ k &lt; M.</formula><p>The ℓ 1 -norm penalty on H (sum of the magnitude of its elements) encourages a solution where each column of X can be represented as a sparse combination of columns of the dictionary Y. The level of sparsity depends on λ.</p><p>Unlike the previous solution of Section 3.1, this scheme is competitive when N is larger than d since we benefit from the reduced complexity of sparse matrix multiplication. An algorithm such as Orthogonal Matching Pursuit (OMP) <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b22">23]</ref> allows us to strictly control the sparsity of H. For a given dictionary Y,</p><formula xml:id="formula_10">OMP finds H = [h 1 , · · · , h N ] by sequentially solving minimize hi 1 2 x i − Yh i 2 2 subject to h i 0 ≤ m.</formula><p>Adopting this algorithm, we control the sparsity of the matrix H by setting m to a desired value. Note that this solution is directly related with the problem statement in Section 2, even if G is not directly a part of the solution. The reconstruction of the vectors X is linear up to an approximation, X ≈ YH. Since this is a linear process , we have Y = XG ⊤ (1) where G ⊤ = H + (pseudo-inverse). Therefore, the connection is obvious. Furthermore, G is not needed during the search; what matters is Y and H.</p><p>This solution is similar to the recently proposed indexing strategy based on sparse approximation <ref type="bibr" target="#b4">[5]</ref>, which also involves training a dictionary Y and a sparse matrix H. However, the way these matrices are used in <ref type="bibr" target="#b4">[5]</ref> is completely different from the approach proposed here. Their framework adheres to a space partitioning approach; it indexes each descriptor in buckets using an inverted file based on the non-zero entries of H. For a given query, their system runs orthogonal matching pursuit (OMP) to find a sparse approximation, and then it calculates distances between the query and the dataset vectors that share the same buckets. In contrast, the method proposed here involves no indexing and makes no direct distance calculations between the query and the dataset vectors. Indeed, this allows us to completely avoid touching dataset vectors at query time.</p><p>Similarly, clustering can be used to make groups, as in traditional indexing approaches <ref type="bibr" target="#b19">[20]</ref>, but the decoding does not perform well for the following reason. The decoding matrix is too sparse: a single non-zero component in each column (this vector belongs to that cluster). This requires an additional verification step after the decoding step for the vectors in the leading cluster. This is not needed in our method, hence we obtain huge savings in complexity and memory. Our approach can be seen as performing a sortof soft clustering, where each vector belongs to multiple clusters with different weights.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Large-scale dictionary learning</head><p>When designing an image search system, one must consider large-scale problems consisting of millions to billions of images. As explained in Section 1, our primary goal is an efficient image search system whose query time complexity (computational, and memory) is reduced. Although we have been ignoring the complexity of the encoding phase, by assuming that the complexity of this stage is less critical application-wise, it should remain tractable.</p><p>One of the most widely-known dictionary learning algorithms is that proposed by Mairal et al. <ref type="bibr" target="#b18">[19]</ref>. This algorithm provides a fast implementation and allows other possibilities such as mini-batch learning and online dictionary updates. These features make it an attractive algorithm for large-scale problems. However, the training time increases dramatically with M for large-N datasets, as reported in Section 5. Even though this calculation needs to be done only once in the offline stage, we still need a scalable training approach to index all dataset vectors easily.</p><p>One solution is to use a subset of dataset vectors as a surrogate for the entire dataset. Once the dictionary Y is trained on the subset, a less expensive sparse decoding algorithm, such as OMP, can be used to compute the matrix H for the entire dataset.</p><p>Elhamifar et al. <ref type="bibr" target="#b8">[9]</ref> propose a solution similar to dictionary learning, with the sole aim of finding representatives from the data. A related approach is to use coresets <ref type="bibr" target="#b0">[1]</ref>. A coreset C is a problem-dependent approximation of a dataset X. Feldman et al. <ref type="bibr" target="#b9">[10]</ref> show that for every X and ǫ &gt; 0 there exists a coreset C ∈ R d×N ′ , N ′ &lt; N , for which the following inequality holds:</p><formula xml:id="formula_11">(1 − ǫ)· min H∈R M ×N X − YH 2 F ≤ min H∈R M ×N ′ C − Y H 2 F ≤ (1 + ǫ) · min H∈R M ×N X − YH 2 F .</formula><p>Typically, C has many fewer columns than X, thereby summarizing the whole dataset with just a few representatives. The main advantage of this approach is its speed. Finding a coreset for a large-scale dataset takes a short time, only a few seconds in our experiments. Then, running dictionary learning on the coreset is significantly faster than on the original dataset. We empirically evaluate the speedup and the effect on accuracy in the experimental section.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Compressed dictionaries</head><p>Instead of dealing with a database of N image vectors of length d, our novel approach now manages a database of M group vectors of the same dimension. Compared to a linear scan, we reduce the number of comparisons from N to M , and yet, rank N items based on their estimated score.</p><p>Nevertheless, our scheme remains compatible with the traditional coding methods briefly introduced in the introduction. Instead of a linear scan browsing group vectors, we can add on top of our method an approximate search. This can take the form of either an embedding producing compact representations of the group vectors, or an indexing structure finding the closest group vectors w.r.t. a query. This improves even further the overall efficiency. Case study: Combination with PQ-codes. An embedding offers a compact representation of group vectors allowing a fast approximation of their dot products with the query. PQ-codes <ref type="bibr" target="#b13">[14]</ref>, for instance, are a priori not compliant since they operate on Euclidean distances. We convert Euclidean distance to cosine similarity in the following way. Each group vector y is split into ℓ subvectorsỹ u , where 1 ≤ u ≤ ℓ. Each subvectorỹ u is quantized using the code-</p><formula xml:id="formula_12">book C u = {c i,u } Q i=1 : v u = arg min 1≤i≤Q ỹ u − c i,u .</formula><p>The compact representation of y is the list of codeword indices (v 1 , . . . , v ℓ ) ∈ {1, . . . , Q} ℓ . This is exactly the same encoding stage as the original PQ-codes <ref type="bibr" target="#b13">[14]</ref>.</p><p>The dot product query vs group vector is approximated by the dot product query vs quantized group vector:</p><formula xml:id="formula_13">q ⊤ y = ℓ u=1q ⊤ uỹu ≈ ℓ u=1q ⊤ u c vu,u ,<label>(5)</label></formula><p>whereq u is the u-th subvector of the query. As in the original application of PQ-codes, the quantities {q ⊤ u c i,u } are computed at query time and stored in a lookup table for evaluating (5) efficiently over a large number of group vectors. Using approximate dot products is an additional source of error, but experiments in the next section show that the decoding schemes described above gracefully handle this.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experiments</head><p>After detailing the experimental protocol, we report retrieval performance results together with a comparison with other image retrieval approaches.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Experimental setup</head><p>Datasets. We evaluate our retrieval system using the Ox-ford5k <ref type="bibr" target="#b24">[25]</ref> and Paris6k <ref type="bibr" target="#b25">[26]</ref> datasets, which contain 5,063 and 6,412 images respectively. For large-scale experiments we add 100,000 Flickr distractor images <ref type="bibr" target="#b24">[25]</ref>, resulting in datasets referred as to Oxford105k and Paris106k. Additionally, we use the Yahoo Flickr Creative Commons 100M  <ref type="figure">Figure 1</ref>. Comparison of eigendecomposition, dictionary learning (DL), and LSH <ref type="bibr" target="#b5">[6]</ref>. DL gives better performance, all the more so as the dataset is large. We only evaluate DL up to M/N = 1/10 for Oxford105k and Paris106k. Performance eventually converges to the baseline after this point. dataset <ref type="bibr" target="#b28">[29]</ref> (referred as to Yahoo100M), which comprises about 100 million image vectors. For comparison with other works, we also run experiments on the Holidays <ref type="bibr" target="#b12">[13]</ref> and UKB <ref type="bibr" target="#b21">[22]</ref> datasets.</p><p>For each dataset, we follow its standard procedure to evaluate performances. The mean Average Precision (mAP) measures the retrieval quality in all datasets except for UKB, where the performance is gauged by 4×recall@4.</p><p>Features. For most of our experiments, we use the stateof-the-art R-MAC features <ref type="bibr" target="#b29">[30]</ref>. Depending on the network used, these features have dimensionality of either d = 512 or d = 256. 1 In section 5.3, we use T-embedding features <ref type="bibr" target="#b15">[16]</ref> with d = 8, 064 to allow a more direct comparison with the most similar concurrent methods. For Ya-hoo100M, we use VLAD <ref type="bibr" target="#b14">[15]</ref> with d = 1, 024 as in <ref type="bibr" target="#b27">[28]</ref>.</p><p>Complexity analysis. We report the complexity ratio, ρ = (M d + s)/dN , where s = nnz(H) is the number of nonzero elements of matrix H. For the eigendecomposition, we set s = M N , whereas for dictionary learning (Section 3.2), m controls the sparsity of H making the complexity ratio ρ = M/N + m/d. Unless otherwise specified, we set m = 10 for R-MAC features; when d = 512 then decoding contributes only 0.02 to ρ (i.e., 2% of the complexity of exhaustive search). The memory ratio, the ratio of the memory required compared to that of exhaustive search, is equal to ρ for non-sparse H. When H is sparse, we need to store mN scalars and their indices, making the memory ratio M/N + m/d + m log 2 (M )/d ≈ ρ.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Retrieval performance</head><p>We first evaluate our system for different M using either eigendecomposition or dictionary learning solutions. We also include the popular sketching technique LSH <ref type="bibr" target="#b5">[6]</ref>, which approximates similarity by comparing binary compact codes of length d ′ = ρd. We measure the retrieval performance in terms of mAP and complexity ratio as mentioned in Section 5.1. <ref type="figure">Figure 1</ref> shows the retrieval performance for different complexity ratios. It is clearly seen that eigendecomposition suffers at low complexity ratio in large-scale datasets. This is expected because we must set M to a very small value to obtain a low complexity ratio since the decoding matrix H is not sparse in this solution. On the other hand, we can set M to a much higher value for a given complexity ratio using dictionary learning since H is sparse.</p><p>Our variant based on dictionary learning performs better than the baseline on all datasets. One would expect the performance to be worse than baseline for M ≪ N due to loss of information, but this is surprisingly not the case. A possible explanation is that dictionary learning "denoises" similarities between vectors. In computer vision, each image is represented by a global vector, which is usually obtained by aggregating local features, such as SIFT, or response maps from convolutional neural networks (in the case of R-MAC). These local features are obtained from both useful structure of the scene and also from clutter.</p><p>Our interpretation is that dictionary learning decreases the impact of features extracted from clutter patches because they are not common across the image collection; i.e., it favors the frequent visual patterns in the image collection. To explore this phenomenon further, we plot the distribution of matching and non-matching vector similarities from Oxford5k using the original global descriptors. We repeat the same process using the reconstructed similarities from dictionary learning. As we see in <ref type="figure">Figure 2</ref>, both reconstructed similarity distributions have a lower variance than the original distributions. This is especially true for the nonmatching distribution. This variance reduction increases the separation between the distributions, which translates to the better performance of our dictionary learning method. Sparsity of H is controlled by parameter m in dictionary learning (see Section 3.2). This is an important factor in the complexity ratio ρ. The ratio between m and d contributes to ρ independently from M . It is possible to set this ratio to a small value to eliminate its influence.</p><p>We compute a dictionary of M atoms and we calculate several matrices H by applying OMP with different m. plies lower complexity and less memory usage. Although our experiments up to now are done in what can be considered as a low-dimensional feature space (d = 512), we evaluate our system with even smaller features, d = 256, in <ref type="figure">Figure 4</ref>. The results are similar to those for d = 512, although the accuracy of eigendecomposition increases at a slower rate for large N .</p><p>The training stage computes Y and H and is performed only once and offline. However, it is important that this stage is scalable for updating the dictionary if needed. Experimentally, a small number of iterations (≈ 100) is sufficient for dictionary learning. This does not require much training time. Using Mairal et al. 's algorithm <ref type="bibr" target="#b18">[19]</ref>, we report the duration of the offline training on <ref type="figure">Figure 5</ref>. All experiments are done on a server with Intel Xeon E5-2650 2.00GHz CPU and 32 cores. The training time is reasonable for all datasets, but it increases dramatically with M in large datasets. Other training procedures would be necessary for handling large M and N .</p><p>Coresets, as explained in Section 3.3, reduce the training time even further for large datasets. Instead of using the entire dataset, we find a coreset C which represents the data with a few representatives vectors to train the dictionaries. We report results for coresets of different sizes in <ref type="table">Table 1</ref>. Empirically, we achieve a similar performance by training on coresets of vectors. This allows us to train the dictionary for larger M in just a few minutes. Note that Paris106k has fast training time even without coresets. This is because the best performance for this dataset is obtained with M = 532, a rather small value. The drawback to using coresets  <ref type="table">Table 1</ref>. Performance and training time (in minutes) using coresets to train the dictionary. M is set to 5, 257 and 532 for Oxford105k and Paris105k respectively, and m = 50. Each experiment is run 5 times, and we report the mean and the standard deviation.</p><p>is that H is less sparse: m = 50. This results in the same performance but slightly higher complexity. The search time is the average number of seconds to respond to a query. Although comparing vector operations is reliable in general, we also include the actual timings. Exhaustive search takes 0.029s on Oxford105k and 0.03s on Paris106k (average per query). Our method takes 0.003s on Oxford105k (M = 5, 257), and 0.001s on Paris106k (M = 532), with higher mAP than exhaustive search.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">Comparison with other methods</head><p>We compare our system with other image retrieval approaches. First we compare with the popular FLANN toolbox <ref type="bibr" target="#b19">[20]</ref> using Oxford105k and R-MAC features. We set the target precision to 0.95 and use the "autotuned" setting of FLANN, which optimizes the indexing structure based on the data. We repeat this experiment 5 times. The average speed-up ratio provided by the algorithm is 1.05, which corresponds to a complexity ratio of 0.95. In other words, FLANN is ineffective for these R-MAC descriptors, most  likely due to their high intrinsic dimensionality (d = 512): as discussed by its authors <ref type="bibr" target="#b19">[20]</ref>, FLANN is not better than exhaustive search when applied to truly high-dimensional vectors. In contrast, our approach does not partition the feature space and does not suffer as much the curse of dimensionality. Our descriptors are whitened for better performance <ref type="bibr" target="#b11">[12]</ref>, which tends to reduce the effectiveness of partitioning-based approaches.</p><p>Next we compare our method with other group testing and indexing methods in the image retrieval literature. To have a fair comparison, we report the performance using the same high-dimensional features (d = 8, 064), same datasets, and the same complexity ratio as the group testing methods. Additionally, we also compare our scores to a dictionary learning-based hashing method <ref type="bibr" target="#b4">[5]</ref>, LSH <ref type="bibr" target="#b5">[6]</ref> and PCA, where dimensionality of vectors is reduced such that d ′ = 0.4d. <ref type="table">Table 2</ref> shows the comparison for a fixed complexity ratio. We outline two observations. First, eigendecomposition works well in these experiments. This is especially true for the Holidays dataset where N = 1, 491 and d = 8, 064; large M can be used while keeping the complexity ratio low since N &lt; d. This is clearly a scenario where it is plausible to use the eigendecomposition approach. Second, dictionary learning performs poorly for Holidays. This dataset contains only 1, 491 images, which constrains the size of the dictionary M to be small and prevents sparsity: the best parameters (via cross-validation) are found to be M = 519 and m = 409, giving ρ = 0.4. Note that this experiment uses long t-embedding descriptors (d = 8, 096) in small and mid-scale datasets. Most likely, these features have low intrinsic dimensionality, and PCA and LSH are thus favored. <ref type="table">Table 3</ref> uses shorter R-MAC features (d = 512) for comparison. The increase in performance is more significant, especially for large datasets.</p><p>Yahoo100M is a recently released large-scale dataset consisting of approximately 100M images. Since there is no manually annotated ground-truth, we use the following evaluation protocol: a dataset vector is considered to match the query if its cosine similarity is at least 0.5. There are 112 queries randomly selected from the dataset. Each query has between 2 and 96 matches, and 11.4 matches on average.  <ref type="table">Table 4</ref>. Some examples of match and query in Yahoo100M dataset. Two vectors are considered a match if their similarity is above 0.5.  <ref type="table" target="#tab_2">Table 5</ref>. Performance (mAP) and complexity ratio (ρ) in Ya-hoo100M for different M and m.</p><p>can perform this offline stage in parallel. At query time, we pool scores from each chunk together and sort them to determine a final ranking. When we evaluate the retrieval performance, we obtain a mAP of 89.4 with ρ ≈ 1/10. This is a significant increase compared to running the same setup with LSH, which results in a mAP of 70.9. Furthermore, it is still possible for the dictionary learning approach to obtain very good performance with ρ &lt; 1/10 by setting M and m to smaller values as shown in <ref type="table" target="#tab_2">Table 5.3.</ref> Similar to other datasets, we apply coresets for the Ya-hoo100M dataset. We learn a coreset for each chunk separately, which makes its calculation feasible. We set |C| = N/2, m = 100 and M = N/100, and obtain a mAP of 87.9 compared to a mAP of 89.4 using the entire chunks. Compatibility with coding methods. One of the main strengths of our method is its complementarity with other popular coding strategies in computer vision. We combine our method with PQ-codes <ref type="bibr" target="#b13">[14]</ref> as explained in Section 4. We use ℓ = d/b subvectors for different values of b and Q = 256 codewords per each subquantizer (except for Paris6k where Q = 16 due to small M ). This reduces the term O(M × d) by a factor of b if we neglect the fixed cost of complexity of building the lookup table. <ref type="table">Table 6</ref> shows the difference of performance with and without PQ-codes. Observe that the performance remains almost the same for b = 8. The compression factor by PQ- code is significant (8 floats replaced by 1 byte).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>This paper lowers the complexity of image search by reducing the number of vector comparisons. We formulate the image search problem as a matrix factorization problem, which can be solved using eigendecomposition or dictionary learning. We show that the former is a plausible option for small datasets, whereas the latter can be applied for large-scale problems in general. When applied to real datasets comprising up to 10 8 images, our framework achieves a comparable, and sometimes better performance, than exhaustive search within a fraction of complexity. It is worth noting that this approach is complementary to other indexing/approximated similarity approaches such that it can be combined to further increase efficiency.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 2 .Figure 3 .</head><label>23</label><figDesc>We plot the retrieval performance for different m and M in Figure 3. In most cases, the performance does not vary much w.r.t. m. The biggest difference is observed for Oxford105k where larger m leads to better performance for small M . The dimensionality of the vectors is an important factor affecting the overall complexity. Lower dimensionality im-Distributions of matching and non-matching vector similarities from Oxford5k dataset. Red (blue) curves represent distributions of true (resp. reconstructed) similarities. The main improvement comes from the reduction of variance under the negative distribution. Retrieval performance with different M and m. Varying m does not affect the performance in most cases, except for Oxford105k, where increasing m improves performance for small M .</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 4 .Figure 5 .</head><label>45</label><figDesc>Retrieval performance using smaller features: Offline training time needed for dictionary learning with 100 iterations.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>Table 3. Comparison with R-MAC features (d = 512) and 0.1 complexity ratio.</figDesc><table>Mem. Ratio 
+Holidays 
+Oxford5k 
+UKB 
+
+Exhaustive 
+
+1.0 
+77.1 
+67.4 3.63 
+
+Iscen et al. [11]-Kmeans 
+
+1.4 
+76.9 
+67.3 3.63 
+
+Iscen et al. [11]-Rand 
+
+1.4 
+75.8 
+62.0 3.63 
+
+Shi et al. [27] w/ bp. 
+
+1.4 
+75.5 
+64.4 3.63 
+
+Borges et al. [5] 
+
+1.0 
+59.2 
+59.9 3.43 
+
+LSH [6] 
+
+0.4 
+73.9 
+65.8 3.61 
+
+PCA 
+
+0.4 
+75.4 
+64.3 3.61 
+
+Shi et al. [27] w/o bp. 
+
+0.4 
+8.7 
+24.1 1.33 
+
+Ours -Eigen. 
+
+0.4 
+76.9 
+67.7 3.63 
+
+Ours -Dict. Learn. 
+
+0.4 
+55.2 
+68.8 3.59 
+Table 2. Comparison in image retrieval for a given complexity 
+ratio of 0.4. This experiment uses long t-embedding features 
+(d = 8, 096). Eigendecomposition and dictionary learning gen-
+erally performs better at lower memory ratio. 
+
+Mem. Ratio 
+Oxf5k 
+Oxf105k 
+Paris6k 
+Paris106k 
+
+Exhaustive 
+
+1.0 
+66.9 
+61.6 
+83.0 
+75.7 
+
+[11]-Kmeans 
+
+1.1 
+65.6 
+61.2 
+79.7 
+75.7 
+
+[11]-Rand 
+
+1.1 
+25.1 
+43.7 
+21.2 
+44.4 
+
+[27] w/ bp. 
+
+1.1 
+15.4 
+28.1 
+18.7 
+37.7 
+
+[5] 
+
+1.0 
+8.5 
+22.7 
+8.2 
+18.9 
+
+LSH [6] 
+
+0.1 
+48.6 
+40.5 
+70.1 
+58.2 
+
+PCA 
+
+0.1 
+58.1 
+8.0 
+86.1 
+38.9 
+
+Ours-Eigen. 
+
+0.1 
+56.8 
+8.0 
+86.3 
+40.9 
+
+Ours-D.L. 
+
+0.1 
+73.7 
+65.5 
+85.3 
+78.9 
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 5 .</head><label>5</label><figDesc><ref type="bibr" target="#b1">2</ref> shows visual examples of queries and matches. This dataset is split into chunks of N ′ = 100k images. We run dictionary learning and OMP independently to learn matrices Y and H for each chunk, setting M ′ = N ′ /100 and m = 100. Overall, it results in M = N/100. We</figDesc><table>Query 
+
+Match 
+Query 
+Match 
+Query 
+Match 
+
+Query 
+Match 
+Match 
+Match 
+Match 
+Match 
+
+Query 
+Match 
+Match 
+Match 
+Match 
+Match 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head></head><label></label><figDesc>Baseline Our Method b = 8 b = 64Table 6. Combination of our method with PQ-codes. We use M = 350 for Oxford5k, M = 30 for Paris6k, M = 5257 for Oxford105k, and M = 532 for Paris106k.</figDesc><table>Oxford5k 
+66.9 
+73.4 
+73.1 
+72.9 
+Paris6k 
+83.0 
+88.1 
+87.7 
+85.6 
+Oxford105k 
+61.6 
+65.5 
+63.1 
+30.4 
+Paris106k 
+75.7 
+81.2 
+80.9 
+76.8 
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Features available online: ftp://ftp.irisa.fr/local/ texmex/corpus/memvec/cvpr16/rmac/</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgments</head><p>This work was supported, in part, by the Natural Sciences and Engineering Research Council of Canada through grant RGPAS 429296-12, and by the French National Project IDFRAud (ANR-14-CE28-0012). Portions of this work were completed while the first author was visiting McGill University.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Approximating extent measures of points</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">K</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Har-Peled</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">R</forename><surname>Varadarajan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of the ACM</title>
+		<imprint>
+			<biblScope unit="volume">51</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="606" to="635" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Extremely low bit-rate nearest neighbor search using a set compression tree</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Arandjelović</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. PAMI</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">The inverted multi-index</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Babenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lempitsky</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Neural codes for image retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Babenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Slesarev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Chigorin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lempitsky</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">High-dimensional indexing by sparse approximation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Borges</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mourão</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Magalhães</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 5th ACM on International Conference on Multimedia Retrieval</title>
+		<meeting>the 5th ACM on International Conference on Multimedia Retrieval</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Similarity estimation techniques from rounding algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">S</forename><surname>Charikar</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">STOC</title>
+		<imprint>
+			<date type="published" when="2002-05" />
+			<biblScope unit="page" from="380" to="388" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Adaptive timefrequency decompositions with matching pursuit</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">M</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">G</forename><surname>Mallat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SPIE&apos;s International Symposium on Optical Engineering and Photonics in Aerospace Sensing</title>
+		<imprint>
+			<date type="published" when="1994" />
+			<biblScope unit="page" from="402" to="413" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Asymmetric distance estimation with sketches for similarity search in highdimensional spaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Dong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Charikar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SIGIR</title>
+		<imprint>
+			<date type="published" when="2008-07" />
+			<biblScope unit="page" from="123" to="130" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">See all by looking at a few: Sparse modeling for finding representative objects</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Elhamifar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Sapiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Vidal</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Learning big (image) data via coresets for dictionaries</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Feldman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Feigin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Sochen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Mathematical Imaging and Vision</title>
+		<imprint>
+			<biblScope unit="volume">46</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="276" to="291" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Memory vectors for similarity search in high-dimensional spaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Iscen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Furon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Gripon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rabbat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.3328</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Negative evidences and cooccurrences in image retrieval: The benefit of PCA and whitening</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012-10" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Hamming embedding and weak geometric consistency for large scale image search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Douze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2008-10" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Product quantization for nearest neighbor search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Douze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. PAMI</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="117" to="128" />
+			<date type="published" when="2011-01" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Aggregating local descriptors into a compact image representation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Douze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Pérez</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Triangulation embedding and democratic kernels for image search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Distinctive image features from scale-invariant keypoints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Lowe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">60</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="91" to="110" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Sparse modeling for image and vision processing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Mairal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Bach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ponce</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1411.3230</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Online learning for matrix factorization and sparse coding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Mairal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Bach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ponce</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Sapiro</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">The Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="page" from="19" to="60" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Scalable nearest neighbor algorithms for high dimensional data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Muja</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Lowe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. PAMI</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Dimensionality reduction of visual features using sparse projectors for content-based image retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Negrel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Picard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P.-H</forename><surname>Gosselin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICIP 2014</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="2192" to="2196" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Scalable recognition with a vocabulary tree</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Nistér</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Stewénius</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2006-06" />
+			<biblScope unit="page" from="2161" to="2168" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Orthogonal matching pursuit: Recursive function approximation with applications to wavelet decomposition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">C</forename><surname>Pati</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Rezaiifar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krishnaprasad</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ASILOMAR</title>
+		<imprint>
+			<date type="published" when="1993" />
+			<biblScope unit="page" from="40" to="44" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Fisher kernels on visual vocabularies for image categorization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Perronnin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">R</forename><surname>Dance</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2007-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Object retrieval with large vocabularies and fast spatial matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Philbin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Isard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2007-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Lost in quantization: Improving particular object retrieval in large scale image databases</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Philbin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Isard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">A group testing framework for similarity search in high-dimensional spaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Furon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACM Multimedia</title>
+		<imprint>
+			<date type="published" when="2014-11" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">A comprehensive study over VLAD and product quantization in large-scale image retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Spyromitros-Xioufis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Papadopoulos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kompatsiaris</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Tsoumakas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Vlahavas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. on Multimedia</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Yfcc100m: The new data in multimedia research</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Thomee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">A</forename><surname>Shamma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Friedland</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Elizalde</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Ni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Poland</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Borth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L.-J</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Commun. ACM</title>
+		<imprint>
+			<biblScope unit="volume">59</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title level="m" type="main">Particular object retrieval with integral max-pooling of cnn activations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Tolias</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sicre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<publisher>ICLR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">A quantitative analysis and performance study for similarity-search methods in high-dimensional spaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Weber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-J</forename><surname>Schek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Blott</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">VLDB</title>
+		<imprint>
+			<date type="published" when="1998" />
+			<biblScope unit="page" from="194" to="205" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Weiss</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+		<title level="m">Spectral hashing. In NIPS</title>
+		<imprint>
+			<date type="published" when="2009-12" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

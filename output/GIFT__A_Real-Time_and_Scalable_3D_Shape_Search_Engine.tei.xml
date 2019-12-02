@@ -1,0 +1,1428 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">GIFT: A Real-time and Scalable 3D Shape Search Engine</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Song</forename><surname>Bai</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Huazhong University of Science and Technology</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiang</forename><surname>Bai</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Huazhong University of Science and Technology</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhichao</forename><surname>Zhou</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Huazhong University of Science and Technology</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhaoxiang</forename><surname>Zhang</surname></persName>
+							<affiliation key="aff2">
+								<orgName type="department">CAS Center for Excellence in Brain Science and Intelligence Technology</orgName>
+								<address>
+									<region>CASIA</region>
+								</address>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Longin</forename><forename type="middle">Jan</forename><surname>Latecki</surname></persName>
+							<email>latecki@temple.edu</email>
+							<affiliation key="aff1">
+								<orgName type="institution">Temple University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">GIFT: A Real-time and Scalable 3D Shape Search Engine</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:40+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Projective analysis is an important solution for 3D shape retrieval, since human visual perceptions of 3D shapes rely on various 2D observations from different view points. Although multiple informative and discriminative views are utilized, most projection-based retrieval systems suffer from heavy computational cost, thus cannot satisfy the basic requirement of scalability for search engines.</p><p>In this paper, we present a real-time 3D shape search engine based on the projective images of 3D shapes. The real-time property of our search engine results from the following aspects: (1) efficient projection and view feature extraction using GPU acceleration; (2) the first inverted file, referred as F-IF, is utilized to speed up the procedure of multi-view matching; (3) the second inverted file (S-IF), which captures a local distribution of 3D shapes in the feature manifold, is adopted for efficient context-based reranking. As a result, for each query the retrieval task can be finished within one second despite the necessary cost of IO overhead. We name the proposed 3D shape search engine, which combines GPU acceleration and Inverted File (Twice), as GIFT. Besides its high efficiency, GIFT also outperforms the state-of-the-art methods significantly in retrieval accuracy on various shape benchmarks and competitions.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>3D shape retrieval is a fundamental issue in computer vision and pattern recognition. With the rapid development of large scale public 3D repositories, e.g., Google 3D Warehouse or TurboSquid, and large scale shape benchmarks, e.g., ModelNet <ref type="bibr" target="#b38">[39]</ref>, SHape REtrieval Contest (SHREC) <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b30">31]</ref>, the scalability of 3D shape retrieval algorithms becomes increasingly important for practical applications. However, efficiency issue has been more or less ignored by previous works, though enormous efforts have been devoted to retrieval effectiveness, that is to say, to design informative and discriminative features <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b1">2,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b5">6</ref>, * Corresponding author <ref type="bibr" target="#b39">40,</ref><ref type="bibr" target="#b14">15,</ref><ref type="bibr" target="#b17">18]</ref> to boost the retrieval accuracy. As suggested in <ref type="bibr" target="#b13">[14]</ref>, plenty of these algorithms do not scale up to large 3D shape databases due to their high time complexity.</p><p>Meanwhile, owing to the fact that human visual perception of 3D shapes depends upon 2D observations, projective analysis has became a basic and inherent tool in 3D shape domain for a long time, with applications to segmentation <ref type="bibr" target="#b37">[38]</ref>, matching <ref type="bibr" target="#b23">[24]</ref>, reconstruction, etc.. Specifically in 3D shape retrieval, projection-based methods demonstrate impressive performances. Especially in recent years, the success of planar image representation <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b34">35,</ref><ref type="bibr" target="#b42">43]</ref>, makes it easier to describe 3D models using depth or silhouette projections.</p><p>Generally, a typical 3D shape search engine is comprised of the following four components (see also <ref type="figure" target="#fig_0">Fig. 1</ref>):</p><p>1. Projection rendering. With a 3D model as input, the output of this component is a collection of projections. Most methods set an array of virtual cameras at pre-defined view points to capture views. These view points can be the vertices of a dodecahedron <ref type="bibr" target="#b3">[4]</ref>, located on the unit sphere <ref type="bibr" target="#b34">[35]</ref>, or around the lateral surface of a cylinder <ref type="bibr" target="#b23">[24]</ref>. In most cases, pose normalization <ref type="bibr" target="#b21">[22]</ref> is needed for the sake of invariance to translation, rotation and scale changes.</p><p>2. View feature extraction. The role of this component is to obtain multiple view representations, which affects the retrieval quality largely. A widely-used paradigm is Bag-of-Words (BoW) <ref type="bibr" target="#b6">[7]</ref> model, since it has shown its superiority as natural image descriptors. However, in order to get better performances, many features <ref type="bibr" target="#b13">[14]</ref> are of extremely high dimension. As a consequence, raw descriptor extraction (e.g., SIFT <ref type="bibr" target="#b19">[20]</ref>), quantization and distance calculation are all time-consuming.</p><p>3. Multi-view matching. This component establishes the correspondence between two sets of view features, and returns a matching cost between two 3D models. Since at least a set-to-set matching strategy <ref type="bibr" target="#b24">[25,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b8">9]</ref> is required, this stage suffers from high time complexity even when using the simplest Hausdorff matching.</p><p>Hence, the usage of algorithms incorporated with some more sophisticated matching strategies on large scale 3D datasets is limited due to their heavy computational cost.</p><p>4. Re-ranking. It aims at refining the initial ranking list by using some extra information. For retrieval problems, since no prior or supervised information is available, contextual similarity measure is usually utilized. A classic context-based re-ranking methodology for shape retrieval is diffusion process <ref type="bibr" target="#b4">[5]</ref>, which exhibits outstanding performance on various datasets. However, as graph-based and iterative algorithms, many variants of diffusion process (e.g., locally constrained diffusion process <ref type="bibr" target="#b40">[41]</ref>), generally require the computational complexity of O(T N 3 ), where N is the total number of shapes in the database and T is the number of iterations. In this sense, diffusion process does not seem to be applicable for real-time analysis.</p><p>In this paper, we present a real-time 3D shape search engine using projections that includes all the aforementioned components. It combines Graphics Processing Unit (G-PU) acceleration and Inverted File (Twice), hence we name it GIFT. In on-line processing, once a user submits a query shape, GIFT can react and present the retrieved shapes within one second (the off-line preprocessing operations, such as CNN model training and inverted file establishment, are excluded). GIFT is evaluated on several popular 3D benchmarks datasets, especially on one track of SHape REtrieval Contest (SHREC) which focuses on scalable 3D retrieval. The experimental results on retrieval accuracy and query time demonstrate the capability of GIFT in handling large scale data.</p><p>In summary, our main contributions are as follows. Firstly, GPU is used to speed up the procedure of projection rendering and feature extraction. Secondly, in multi-view matching procedure, a robust version of Hausdorff distance for noise data is approximated with an inverted file, which allows for extremely efficient matching between two view sets without impairing the retrieval performances too much. Thirdly, in the re-ranking component, a new context-based algorithm based on fuzzy set theory is proposed. Different from diffusion processes of high time complexity, our reranking here is ultra time efficient on the account of using inverted file again.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Proposed Search Engine</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Projection Rendering</head><p>Prior to projection rendering, pose normalization for each 3D shape is needed in order to attain invariance to some common geometrical transformations. However, apart from many pervious algorithms <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b21">22</ref>] that re-quire rotation normalization using some Principal Component Analysis (PCA) techniques, we only normalize the scale and the translation in our system. Our concerns are two-fold: 1) PCA techniques are not always stable, especially when dealing with some specific geometrical characteristics such as symmetries, large planar or bumpy surfaces; 2) the view feature used in our system can tolerate the rotation issue to a certain extent, though cannot be completely invariant to such changes. In fact, we observe that if enough projections (more than 25 in our experiments) are used, one can achieve reliable performances.</p><p>The projection procedure is as follows. Firstly, we place the centroid of each 3D shape at the origin of a spherical coordinate system, and resize the maximum polar distance of the points on the surface of the shape to unit length. Then N v virtual cameras are set on the unit sphere evenly, and they are located by the azimuth θ az and the elevation θ el angles. At last, we render one projected view in depth buffer at each combination of θ az and θ el . For the sake of speed, GPU is utilized here such that for each 3D shape, the average time cost of rendering 64 projections is only 30ms.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Feature Extraction via GPU Acceleration</head><p>Feature design has been a crucial problem in 3D shape retrieval for a long time owing to its great influence on the retrieval accuracy. Though extensively studied, almost all the existing algorithms ignore the efficiency of the feature extraction.</p><p>To this end, our search engine adopts GPU to accelerate the procedure of feature extraction. Impressed by the superior performance of deep learning approaches in various visual tasks, we propose to use the activation of a Convolutional Neural Network (CNN). The CNN used here takes depth images as input, and the loss function is exerted on the classification error for projections. The network architecture consists of five successive convolutional layers and three fully connected layers as in <ref type="bibr" target="#b2">[3]</ref>. We normalize each activation in its Euclidean norm to avoid scale changes. It only takes 56ms on average to extract the view features for a 3D model.</p><p>Since no prior information is available to judge the discriminative power of activations of different layers, we propose a robust re-ranking algorithm described in Sec. 2.4. It can fuse those homogenous features efficiently based on fuzzy set theory.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.">Inverted File for Multi-view Matching</head><p>Consider a query shape x q and a shape x p from the database X = {x 1 , x 2 , . . . , x N }. Let V denote a mapping function from 3D shapes to their feature sets. We can obtain two sets V(x q ) = {q 1 , q 2 , . . . , q Nv } and V(x p ) = {p 1 , p 2 , . . . , p Nv } respectively, where N v is the number of views. q i (or p i ) denotes the view feature assigned to the i-th view of shape x q (or x p ). A 3D shape search engine requires a multi-view matching component to establish a correspondence between two sets of view features. These matching strategies are usually metrics defined on sets (e.g., Hausdorff distance) or graph matching algorithms (e.g., Hungarian method, Dynamic Programming, clock-matching). However, these pairwise strategies are time-consuming for a real-time search engine. Among them, Hausdorff distance may be the most efficient one, since it only requires some simple algebraic operations without sophisticated optimizations.</p><p>Recall that the standard Hausdorff distance measures the difference between two sets, and it is defined as</p><formula xml:id="formula_0">D(x q , x p ) = max qi∈V(xq) min pj ∈V(xp) d(q i , p j ),<label>(1)</label></formula><p>where function d(·) measures the distance between two input vectors. In order to eliminate the disturbance of isolated views in the query view set, a more robust version of Hausdorff distance is given by</p><formula xml:id="formula_1">D(x q , x p ) = 1 N v qi∈V(xq) min pj ∈V(xp) d(q i , p j ).<label>(2)</label></formula><p>For the convenience of analysis, we consider its dual form in the similarity space as</p><formula xml:id="formula_2">S(x q , x p ) = 1 N v qi∈V(xq) max pj ∈V(xp) s(q i , p j ),<label>(3)</label></formula><p>where s(·) measures the similarity between the two input vectors. In this paper, we adopt the cosine similarity. As can be seen from Eq. (2) and Eq. <ref type="formula" target="#formula_2">(3)</ref>, Hausdorff matching requires the time complexity O(N × N v 2 ) for retrieving a given query (assuming that there are N shapes in the database). Though the complexity grows linearly with respect to the database size, it is still intolerable when N gets larger. However, by analyzing Eq. (3), we can make several observations: (1) let s * (q i ) = max 1≤j≤Nv s(q i , p j ), the similarity calculations of s(q i , p j ) are unnecessary when s(q i , p j ) &lt; s * (q i ), since these similarity values are unused due to the max operation, i.e., only s * (q i ) is kept; (2) when considering from the query side, we can find that s * (q i ) counts little to the final matching cost if s * (q i ) &lt; ξ and ξ is a small threshold. Those observations suggest that although the matching function in Eq. (3) requires the calculation of all the pairwise similarities between two view sets, some similarity calculations, which generate small values, can be eliminated without impairing the retrieval performance too much.</p><p>In order to avoid these unnecessary operations and improve the efficiency of multi-view matching procedure, we adopt inverted file to approximate Eq. (3) by adding the Kronecker delta response as</p><formula xml:id="formula_3">S(xq, xp) = 1 Nv q i ∈V(xq ) max p j ∈V(xp) s(qi, pj) · δ c(q i ),c(p j ) ,<label>(4)</label></formula><p>where δ x,y = 1 if x = y, and δ x,y = 0 if x = y. The quantizer c(x) = arg min 1≤i≤K x − b i 2 maps the input feature into an integer index that corresponds to the nearest codeword of the given vocabulary B = {b 1 , b 2 , . . . , b K }. As a result, the contribution of p j , which satisfies c(q i ) = c(p j ), to the similarity measure can be directly set to zero, without estimating s(q i , p j ) explicitly.</p><p>In conclusion, our inverted file for multi-view matching is built as illustrated in <ref type="figure" target="#fig_1">Fig. 2</ref>. For each view feature, we store it and its corresponding shape ID in the nearest codeword. It should be mentioned that we can also use Multiple Assignment (MA), i.e., assign each view to multiple codewords, to improve the matching precision at the sacrifice of memory cost and on-line query time.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.4.">Inverted File for Re-ranking</head><p>A typical search engine usually involves a re-ranking component <ref type="bibr" target="#b20">[21]</ref>, aiming at refining the initial candidate list by using some contextual information. In GIFT, we propose a new contextual similarity measure called Aggregated Contextual Activation (ACA), which follows the same principles as diffusion process <ref type="bibr" target="#b4">[5]</ref>, i.e., the similarity between two shapes should go beyond their pairwise formulation and is influenced by their contextual distributions along the underlying data manifold. However, apart from diffusion process which has high time complexity, ACA enables real-time re-ranking, which can be applied to large scale data.</p><p>Let N k (x q ) denote the neighbor set of x q , which contains its top-k neighbors. Similar to <ref type="bibr" target="#b41">[42]</ref>, our basic idea is that the similarity between two shapes can be more reliably measured by comparing their neighbors using Jaccard similarity as</p><formula xml:id="formula_4">S ′ (x q , x p ) = |N k (x q ) ∩ N k (x p )| |N k (x q ) ∪ N k (x p )| .<label>(5)</label></formula><p>One can find that the neighbors are treated equally in Eq. <ref type="bibr" target="#b4">(5)</ref>. However the top-ranked neighbors are more likely to be true positives. So a more proper behavior is increasing the weights of top-ranked neighbors.</p><p>To achieve this, we propose to define the neighbor set using fuzzy set theory 1 . Different from classical (crisp) set theory where each element either belongs or does not belong to the set, fuzzy set theory allows a gradual assessment of the membership of elements in a set. We utilize S(x q , x i ) to measure the membership grade of x i in the neighbor set of x q . Accordingly, Eq. (5) is re-written as</p><formula xml:id="formula_5">S ′ (x q , x p ) = xi∈N k (xq)∩N k (xp) min (S(x q , x i ), S(x p , x i )) xi∈N k (xq) N k (xp) max (S(x q , x i ), S(x p , x i )) .</formula><p>(6) Since considering equal-sized vector comparison is more convenient in real computational applications, we use F ∈ R N to encode the membership values. The i-th element in F q is given as</p><formula xml:id="formula_6">F q [i] = S(x q , x i ) if x i ∈ N k (x q ) 0 otherwise.<label>(7)</label></formula><p>Based on this definition we replace Eq. 6 with</p><formula xml:id="formula_7">S ′ (x q , x p ) = N i=1 min (F q [i], F p [i]) N i=1 max (F q [i], F p [i]) .<label>(8)</label></formula><p>Considering vector F q is sparse, we can view it as sparse activation of shape x q , where the activation at coordinate i is the membership grade of x i in the neighbor set N k (x q ).</p><p>Eq. (8) utilizes the sparse activations F q and F p to define the new contextual shape similarity measure. Note that all the above analysis is carried out for only one similarity measure. However, in our specific scenario, the outputs of different layers of CNN are usually at different abstraction resolutions.</p><p>For example, two different layers of CNN lead to two different similarities S (1) and S (2) by Eq. <ref type="formula" target="#formula_2">(3)</ref>, which in turn yield two different sparse activations F (1) q and F (2) q by Eq. <ref type="bibr" target="#b6">(7)</ref>. Since no prior information is available to assess their discriminative power, our goal now is to fuse them in a unsupervised way. For this we utilize the aggregation operation in fuzzy set theory, by which several fuzzy sets are combined in a desirable way to produce a single fuzzy set. We consider two fuzzy sets represented by the sparse activations F (1) q and F</p><p>(2) q (the extension to more than two activations is similar) . Their aggregation is then defined as</p><formula xml:id="formula_8">F q = (F (1) q ) α + (F (2) q ) α 2 1 α ,<label>(9)</label></formula><p>which computes the element-wise generalized means with exponent α of F (1) q and F</p><p>q . Instead of using arithmetic mean, we use this generalized means (α is set to 0.5 throughout our experiments). Our concern for this is to avoid the problem that some artificially large elements in F q dominate the similarity measure. This motivation is very similar to handling bursty visual elements in Bag-of-Words (BoW) model (see <ref type="bibr" target="#b9">[10]</ref> for examples).</p><p>In summary, we call the feature in Eq. (9) Aggregated Contextual Activation (ACA). Next, we will introduce some improvements of Eq. (9) concerning its retrieval accuracy and computational efficiency.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.4.1">Improving Accuracy</head><p>Similar to diffusion process, the proposed ACA requires an accurate estimation of the context in the data manifold. Here we provide two alternative ways to improve the retrieval performance of ACA without depriving its efficiency.</p><p>Neighbor Augmentation. The first one is to augment F q using the neighbors of second order, i.e., the neighbors of the neighbors of x q . Inspired by query expansion <ref type="bibr" target="#b23">[24]</ref>, the second order neighbors are added as</p><formula xml:id="formula_10">F (l) q := 1 |N (l) k (x q )| xi∈N (l) k (xq) F (l) i .<label>(10)</label></formula><p>Neighbor Co-augmentation. Our second improvement is to use a so-called "neighbor co-augmentation". Specifical-  <ref type="figure">Figure 3</ref>. The structure of the second inverted file.</p><p>ly, the neighbors generated by one similarity measure are used to augment contextual activations of the other similarity measure, formally defined as</p><formula xml:id="formula_11">F (1) q := 1 |N (2) k (x q )| xi∈N (2) k (xq) F (1) i , F (2) q := 1 |N (1) k (x q )| xi∈N (1) k (xq) F (2) i .<label>(11)</label></formula><p>This formula is inspired by "co-training" <ref type="bibr" target="#b43">[44]</ref>. Essentially, one similarity measure tells the other one that "I think these neighbors to be true positives, and lend them to you such that you can improve your own discriminative power". Note that the size of neighbor set used here may be different from that used in Eq. <ref type="bibr" target="#b6">(7)</ref>. In order to distinguish them, we denote the size of neighbor set in Eq. (7) as k 1 , while that used in Eq. (10) and Eq. (11) as k 2 .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.4.2">Improving Efficiency</head><p>Considering that the length of F q is N , one may doubt the efficiency of similarity computation in Eq. (8), especially when the database size N is large. In fact, F q is a sparse vector, since F q only encodes the neighborhood structure of x q , and the number of non-zero values is only determined by the size of N k (x q ). This observation motivate us to utilize an inverted file again to leverage the sparsity of F q . Now we derive the feasibility of applying inverted file in Jaccard similarity theoretically.</p><p>The numerator in Eq. <ref type="formula" target="#formula_7">(8)</ref> is computed as</p><formula xml:id="formula_12">i min (F q [i], F p [i]) = i|Fq[i] =0,Fp[i] =0 min(F q [i], F p [i]) + i|Fq[i]=0 min(F q [i], F p [i]) + i|Fp[i]=0 min(F q [i], F p [i]).<label>(12)</label></formula><p>Since all values of the aggregated contextual activation are non-negative, the last two items in Eq. (12) are equal to zero. Consequently, Eq. (12) can be simplified as</p><formula xml:id="formula_13">i min (F q [i], F p [i]) = i|Fq[i] =0,Fp[i] =0 min(F q [i], F p [i]),<label>(13)</label></formula><p>which only requires accessing non-zero entries of the query, and hence can be computed efficiently on-the-fly.</p><p>Although the calculation of the denominator in Eq. (8) seems sophisticated, it can be expressed as</p><formula xml:id="formula_14">i max (F q [i], F p [i]) = F q 1 + F p 1 − i min (F q [i], F p [i]) = F q 1 + F p 1 − i|Fq[i] =0,Fp[i] =0 min(F q [i], F p [i]).<label>(14)</label></formula><p>Besides the query-dependent operations (the first and the last items), Eq. <ref type="formula" target="#formula_0">(14)</ref> only involves an operation of L 1 norm calculation of F p , which is simply equal to the cardinality of the fuzzy set N k (x p ) and can be pre-computed off-line.</p><p>Our inverted file for re-ranking is built as illustrated in <ref type="figure">Fig. 3</ref>. It has exactly N entries, and each entry corresponds to one shape in the database. For each entry, we first store the cardinality of its fuzzy neighbor set. Then, we find those shapes which have non-negative membership values in this entry. Those shape IDs and the membership values are stored in this entry.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Experiments</head><p>In this section, we evaluate the performance of GIFT on different kinds of 3D shape retrieval tasks. The evaluation metrics used in this paper include mean average precision (MAP), area under curve (AUC), Nearest Neighbor (NN), First Tier (FT) and Second Tier (ST). Refer to <ref type="bibr" target="#b38">[39,</ref><ref type="bibr" target="#b28">29]</ref> for their detailed definitions.</p><p>If not specified, we adopt the following setup throughout our experiments. The projection rendered for each shape is N v = 64. For multi-view matching procedure, the approximate Hausdorff matching defined in Eq. (4) with an inverted file of 256 entries is used. Multiple Assignment is set to 2. We use two pairwise similarity measures, which are calculated using features from convolutional layer L 5 and fully-connected layer L 7 respectively. In re-ranking component, each similarity measure generates one sparse activation F q to capture the contextual information for the 3D shape x q , and neighbor co-augmentation in Eq. (11) is used to produce F </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">ModelNet</head><p>ModelNet is a large-scale 3D CAD model dataset introduced by Wu et al. <ref type="bibr" target="#b38">[39]</ref> recently, which contains 151, 128 3D CAD models divided into 660 object categories. Two subsets are used for evaluation, i.e., ModelNet40 and Mod-elNet10. The former one contains 12, 311 models, and the latter one contains 4, 899 models. We evaluate the performance of GIFT on both subsets and adopt the same training and test split as in <ref type="bibr" target="#b38">[39]</ref>, namely randomly selecting 100   unique models per category from the subset, in which 80 models are used for training the CNN model and the rest for testing the retrieval performance.</p><p>For comparison, we collected all the retrieval results publicly available 2 . The chosen methods are (Spherical Harmonic) SPH <ref type="bibr" target="#b10">[11]</ref>, (Light Field descriptor) LFD <ref type="bibr" target="#b3">[4]</ref>, PANORAMA <ref type="bibr" target="#b23">[24]</ref>, 3D ShapeNet <ref type="bibr" target="#b38">[39]</ref>, DeepPano <ref type="bibr" target="#b27">[28]</ref> and MVCNN <ref type="bibr" target="#b31">[32]</ref>. As <ref type="table">Table 1</ref> shows, GIFT outperforms all the state-of-the-art methods remarkably. We also present the performance of two baseline methods, i.e., feature L 5 or L 7 with exact Hausdorff matching. As can be seen, L 7 achieves a better performance than L 5 , and GIFT leads to a significant improvement over L 7 of 5.82% in AUC, 5.31% in MAP for ModelNet40 dataset, and 3.32% in AUC, 3.07% in MAP for ModelNet10 dataset. <ref type="figure" target="#fig_4">Fig. 4</ref> compares the precision-recall curves. It demonstrates again the discriminative power of the proposed search engine in 3D shape retrieval. Note that ModelNet also defines the 3D shape classification tasks. Considering GIFT is initially developed for real-time retrieval, its classification results are given in the supplementary material.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Large Scale Competition</head><p>As the most authoritative 3D retrieval competition held each year, SHape REtrieval Contest (SHREC) pays much attention to the development of scalable algorithms gradual-2 http://modelnet.cs.princeton.edu/ ly. Especially in recent years, several large scale tracks <ref type="bibr" target="#b30">[31]</ref>, such as SHREC14LSGTB <ref type="bibr" target="#b13">[14]</ref>, are organized to test the scalability of algorithms. However, most algorithms that the participants submit are of high time complexity, and cannot be applied when the dataset becomes larger (millions or more). Here we choose SHREC14LSGTB dataset for a comprehensive evaluation. This dataset contains 8, 987 3D models classified into 171 classes, and each 3D shape is taken in turn as the query. As for the feature extractor, we collected 54, 728 unrelated models from ModelNet <ref type="bibr" target="#b38">[39]</ref> divided into 461 categories to train a CNN model.</p><p>To keep the comparison fair, we choose two types of results from the survey paper <ref type="bibr" target="#b13">[14]</ref> to present in <ref type="table">Table 2</ref>. The first type consists of the top-5 best-performing methods on retrieval accuracy, including PANORAMA <ref type="bibr" target="#b23">[24]</ref>, DBSVC, MR-BF-DSIFT, MR-D1SIFT and LCDR-DBSVC. The second type is the most efficient one, i.e., ZFDR <ref type="bibr" target="#b12">[13]</ref>.</p><p>As can be seen from the table, excluding GIFT, the best performance is achieved by LCDR-DBSVC. However, it requires 668.6s to return the retrieval results per query, which means that 69 days are needed to finish the query task on the whole dataset. The reason behind such a high complexity lies in two aspects: 1) its visual feature is 270K dimensional, which is time consuming to compute, store and compare; 2) it adopts locally constrained diffusion process (LCDP) <ref type="bibr" target="#b40">[41]</ref> for re-ranking, while it is known that LCDP is an iterative graph-based algorithm of high time complexity. As for ZFDR, its average query time is shortened to 1.77s by computing parallel on 12 cores. Unfortunately, ZFDR achieves much less accurate retrieval performance, and its FT is 13% smaller than LCDR-DBSVC. In summary, a conclusion can be drawn that no method can achieve a good enough performance at a low time complexity.</p><p>By contrast, GIFT outperforms all these methods, including a very recent algorithm called Two Layer Coding (TLC) <ref type="bibr" target="#b0">[1]</ref> which reports 0.585 in FT. What is more important that GIFT can provide the retrieval results within 63.14ms, which is 4 orders of magnitude faster than LCDR-DBSVC. Meanwhile, the two baseline methods L 5 and L 7 incur heavy query cost due to the usage of exact Hausdorff matching, which testifies the advantage of the proposed F-IF.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Generic 3D Retrieval</head><p>Following <ref type="bibr" target="#b33">[34]</ref>, we select three popular datasets for a generic evaluation, including Princeton Shape Benchmark (PSB) <ref type="bibr" target="#b28">[29]</ref>, Watertight Models track of SHape REtrieval Contest 2007 (WM-SHREC07) <ref type="bibr" target="#b7">[8]</ref> and McGill dataset <ref type="bibr" target="#b29">[30]</ref>. Among them, PSB dataset is probably the first widely-used generic shape benchmark, and it consists of 907 polygonal models divided into 92 categories. WM-SHREC07 contains 400 watertight models evenly distributed in 20 classes, and is a representative competition held by SHREC community. McGill dataset focuses on non-rigid analysis, and contains 255 articulated objects classified into 10 classes. We train CNN on an independent TSB dataset <ref type="bibr" target="#b35">[36]</ref>, and then use the trained CNN to extract view features for the shapes in all the three testing datasets.</p><p>In <ref type="table">Table 3</ref>, a comprehensive comparison between GIFT and various state-the-art methods is presented, including LFD <ref type="bibr" target="#b3">[4]</ref>, the curve-based method of Tabia et al. <ref type="bibr" target="#b32">[33]</ref>, DESIRE descriptor <ref type="bibr" target="#b36">[37]</ref>, total Bregman Divergences (tB-D) <ref type="bibr" target="#b18">[19]</ref>, Covariance descriptor <ref type="bibr" target="#b33">[34]</ref>, the Hybrid of 2D and 3D descriptor <ref type="bibr" target="#b22">[23]</ref>, Two Layer Coding (TLC) <ref type="bibr" target="#b0">[1]</ref> and PANORAMA <ref type="bibr" target="#b23">[24]</ref>. As can be seen, GIFT exhibits encouraging discriminative ability in retrieval accuracy and achieves state-of-the-art performances consistently on all the three evaluation metrics.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Execution Time</head><p>In addition to state-of-the-art performances on several datasets and competitions, the most important property of GIFT is the "real-time" performance with the potential of handling large scale shape corpora. In <ref type="table">Table 4</ref>, we give a deeper analysis of the time cost. The off-line operations mainly include projection rendering and feature extraction for database shapes, training CNN, and building two inverted files. As the table shows, the time cost of off-line operations varies significantly for different datasets. Among them, the most time-consuming operation is training CNN, followed by building the first inverted file with k-means. However, the average query time for different datasets can be controlled within one second, even for the biggest SHREC14LSGTB dataset.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Feature</head><p>Hausdorff Re-ranking First Tier <ref type="table">Table 5</ref>. The performance improvements brought by various components in GIFT over baseline. In column "Hausdorff", √ denotes approximate Hausdorff matching in Eq. (4), while × denotes exact matching in Eq. <ref type="bibr" target="#b2">(3)</ref>. Column "α" present the value of exponent in Eq. <ref type="bibr" target="#b8">(9)</ref>. Column "NA" describes the procedure of neighbor augmentation in Sec. 2.4.1:</p><formula xml:id="formula_15">α NA L5 × 0.588 L7 × 0.653 L5 + L7 × 1 0.688 L5 + L7 × 0.5 0.692 L5 + L7 × 0.5 × 0.710 L5 + L7 × 0.5 √ 0.717 L5 + L7 √ 0.5 √ 0.712</formula><p>√ is associated with Eq. (11) and × is associated with Eq. (10). The blanks mean that this improvement is not used.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.5.">Parameter Discussion</head><p>Due to the space limitation, the discussion is conducted only on PSB dataset. Improvements Over Baseline. In <ref type="table">Table 5</ref>, a thorough discussion is given about the influence of various components of GIFT. We can observe a consistent performance boost by those improvements. The performance jumps a lot especially when re-ranking component is embedded. One should note a slight performance decrease when approximate Hausdorff matching with F-IF is used as compared with its exact version. However, as discussed below, the embedding with inverted file does not necessarily result in a poorer performance, but shortens the query time significantly.</p><p>Discussion on F-IF. In <ref type="figure" target="#fig_6">Fig. 5</ref>, we plot the retrieval performance and the average query time using feature L 7 , as the number of entries used in the first inverted file changes. As <ref type="figure" target="#fig_6">Fig. 5(a)</ref> shows, the retrieval performance generally decreases with more entries, and multiple assignment can boost the retrieval performance significantly. However, it should be addressed that a better approximation to Eq. (3) using fewer entries (decreasing K) or larger multiple assignments (increasing MA) does not necessarily imply a better retrieval performance. For example, when K = 256 and MA= 2, the performance of approximate Hausdorff matching using inverted file surpasses the baseline using exact Hausdorff matching. The reason for this "abnormal" observation is that the principle of inverted file here is to reject those view matching operations that lead to smaller similarities, and sometimes they are noisy and false matching pairs which can be harmful to retrieval performance.</p><p>As can be seen from <ref type="figure" target="#fig_6">Fig. 5(b)</ref>, the average query time is higher at smaller K and larger MA, since the two cases both increase the number of candidate matchings in each entry. The baseline query time using exact Hausdorff matching is   0.69s, which is at least one order of magnitude larger than the approximate one.</p><p>Discussion on S-IF. Two parameters, k 1 and k 2 , are involved in the second inverted file, which are determined empirically. We plot the influence of them in <ref type="figure" target="#fig_7">Fig. 6</ref>. As can be drawn from the figure, when k 1 increases, the retrieval performance increases at first. Since noise contextual information can be included at a larger k 1 , we can observe the performance decreases after k 1 &gt; 10. Meanwhile, neighbor augmentation can boost the performance further. For example, the best performance is achieved when k 2 = 4. However, when k 2 = 5, the performance tends to decrease. One may find that the optimal value of k 2 is much smaller than that of k 1 . The reason for this is that k 2 defines the size of the second order neighbor, which is more likely to return noise context compared with the first order neighbor defined by k 1 .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Conclusions</head><p>In the past years, 3D shape retrieval was evaluated with only small numbers of shapes. In this sense, the problem of 3D shape retrieval has stagnated for a long time. Only recently, shape community started to pay more attention to the scalable retrieval issue gradually. However, as suggested in <ref type="bibr" target="#b13">[14]</ref>, most classical methods encounter severe obstacles when dealing with larger databases. In this paper, we focus on the scalability of 3D shape retrieval algorithms, and build a well-designed 3D shape search engine called GIFT. In our retrieval system, GPU is utilized to accelerate the speed of projection rendering and view feature extraction, and two inverted files are embedded to enable real-time multi-view matching and re-ranking. As a result, the average query time is controlled within one second, which clearly demonstrates the potential of GIFT for large scale 3D shape retrieval. What is more impressive is that while preserving the high time efficiency, GIFT outperforms state-of-the-art methods in retrieval accuracy by a large margin. Therefore, we view the proposed search engine as a promising step towards larger 3D shape corpora.</p><p>We submitted a version of GIFT to the latest SHREC2016 large scale track (the results are available in https://shapenet.cs.stanford.edu/ shrec16/), and won the first place on perturbed dataset.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>The structure of the proposed 3D shape search engine GIFT.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .</head><label>2</label><figDesc>The structure of the first inverted file.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 4 .</head><label>4</label><figDesc>Precision-recall curves on ModelNet40 (a) and Model-Net10 (b).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 5 .</head><label>5</label><figDesc>The performance difference between Hausdorff matching and its approximate version in terms of retrieval accuracy (a) and average query time (b).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 6 .</head><label>6</label><figDesc>The influence of neighbor set sizes k1 and k2 used in the second inverted file.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head></head><label></label><figDesc>The time cost analysis of GIFT.</figDesc><table>Methods 
+
+Accuracy 
+Query time 
+NN 
+FT 
+ST 
+
+ZFDR 
+0.879 
+0.398 
+0.535 
+1.77s 
+PANORAMA 
+0.859 
+0.436 
+0.560 
+370.2s 
+DBSVC 
+0.868 
+0.438 
+0.563 
+62.66s 
+MR-BF-DSIFT 
+0.845 
+0.455 
+0.567 
+65.17s 
+MR-D1SIFT 
+0.856 
+0.465 
+0.578 
+131.04s 
+LCDR-DBSVC 0.864 
+0.528 
+0.661 
+668.6s 
+
+L5 
+0.879 
+0.460 
+0.592 
+22.73s 
+L7 
+0.884 
+0.507 
+0.642 
+4.82s 
+GIFT 
+0.889 
+0.567 
+0.689 
+63.14ms 
+Table 2. The performance comparison on SHREC14LSGTB. 
+
+Datasets 
+Off-line 
+On-line Indexing 
+
+ModelNet40 
+≈ 0.7h 
+27.02ms 
+ModelNet10 
+≈ 0.3h 
+10.25ms 
+SHREC14LSGTB 
+≈ 8.5h 
+63.14ms 
+PSB 
+≈ 1.8h 
+
+16.25ms 
+WMSHREC07 
+16.05ms 
+McGill 
+9.38ms 
+Table 4. </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head></head><label></label><figDesc>Table 3. The performance comparison with other state-of-the-art algorithms on PSB dataset, WM-SHREC07 dataset and McGill dataset.</figDesc><table>Methods 
+
+PSB dataset 
+WM-SHREC07 competition 
+McGill dataset 
+
+NN 
+FT 
+ST 
+NN 
+FT 
+ST 
+NN 
+FT 
+ST 
+
+LFD [4] 
+0.657 
+0.380 
+0.487 
+0.923 
+0.526 
+0.662 
+-
+-
+-
+Tabia et al. [33] 
+-
+-
+-
+0.853 
+0.527 
+0.639 
+-
+-
+-
+DESIRE [37] 
+0.665 
+0.403 
+0.512 
+0.917 
+0.535 
+0.673 
+-
+-
+-
+tBD [19] 
+0.723 
+-
+-
+-
+-
+-
+-
+-
+-
+Covariance [34] 
+-
+-
+-
+0.930 
+0.623 
+0.737 
+0.977 
+0.732 
+0.818 
+2D/3D Hybrid [23] 
+0.742 
+0.473 
+0.606 
+0.955 
+0.642 
+0.773 
+0.925 
+0.557 
+0.698 
+PANORAMA [24] 
+0.753 
+0.479 
+0.603 
+0.957 
+0.673 
+0.784 
+0.929 
+0.589 
+0.732 
+PANORAMA + LRF [24] 
+0.752 
+0.531 
+0.659 
+0.957 
+0.743 
+0.839 
+0.910 
+0.693 
+0.812 
+TLC [1] 
+0.763 
+0.562 
+0.705 
+0.988 
+0.831 
+0.935 
+0.980 
+0.807 
+0.933 
+
+L5 
+0.849 
+0.588 
+0.721 
+0.980 
+0.777 
+0.877 
+0.984 
+0.747 
+0.881 
+L7 
+0.837 
+0.653 
+0.784 
+0.980 
+0.805 
+0.898 
+0.980 
+0.763 
+0.897 
+GIFT 
+0.849 
+0.712 
+0.830 
+0.990 
+0.949 
+0.990 
+0.984 
+0.905 
+0.973 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Please refer to supplementary material for the formal definitions of all the fuzzy operations used in this paper.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements. This work was supported in part by NSFC 61573160, Program for New Century Excellent Talents in University under Grant NCET-12-0217, NSF No. IIS-1302164 and China Scholarship Council.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">3d shape matching via two layer coding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Bai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">J</forename><surname>Latecki</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="volume">37</biblScope>
+			<biblScope unit="issue">12</biblScope>
+			<biblScope unit="page" from="2361" to="2373" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Scale-invariant heat kernel signatures for non-rigid shape recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">M</forename><surname>Bronstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kokkinos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="1704" to="1711" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Return of the devil in the details: Delving deep into convolutional nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chatfield</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<idno>abs/1405.3531</idno>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">On visual similarity based 3d model retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">Y</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><forename type="middle">P</forename><surname>Tian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">T</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ouhyoung</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Comput. Graph. Forum</title>
+		<imprint>
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="223" to="232" />
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Diffusion processes for retrieval revisited</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Donoser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1320" to="1327" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">3d deep shape descriptor</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Fang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Wong</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2319" to="2328" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">A bayesian hierarchical model for learning natural scene categories</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="524" to="531" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Shape retrieval contest 2007: Watertight models track. SHREC competition, 8</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Giorgi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Biasotti</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Paraboschi</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Vocmatch: Efficient multiview correspondence for structure from motion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Havlena</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Schindler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="46" to="60" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">On the burstiness of visual elements</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Douze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="1169" to="1176" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Rotation invariant spherical harmonic representation of 3d shape descriptors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kazhdan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Funkhouser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Rusinkiewicz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SGP</title>
+		<imprint>
+			<date type="published" when="2003" />
+			<biblScope unit="page" from="156" to="164" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Bronstein. Intrinsic shape context descriptors for deformable shapes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kokkinos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">M</forename><surname>Bronstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Litman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">M</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="159" to="166" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">3d model retrieval using hybrid features and class information. Multimedia tools and applications</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Johan</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">62</biblScope>
+			<biblScope unit="page" from="821" to="846" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">A comparison of 3d shape retrieval methods based on a large-scale benchmark supporting multimodal queries</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Godil</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Schreck</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Aono</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">CVI-U</title>
+		<imprint>
+			<biblScope unit="volume">131</biblScope>
+			<biblScope unit="page" from="1" to="27" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Persistence-based structural recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ovsjanikov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Chazal</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Cm-bof: visual similarity-based 3d shape retrieval using clock matching and bag-of-features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Godil</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Mach. Vis. Appl</title>
+		<imprint>
+			<biblScope unit="volume">24</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1685" to="1704" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Shape classification using the inner-distance</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Ling</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">W</forename><surname>Jacobs</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="volume">29</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="286" to="299" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Supervised learning of bag-of-features shape descriptors using sparse coding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Litman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bronstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bronstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Castellani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computer Graphics Forum</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="127" to="136" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">C</forename><surname>Vemuri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Amari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Nielsen</surname></persName>
+		</author>
+		<title level="m">Shape retrieval using hierarchical total bregman soft clustering. T-PAMI</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="page" from="2407" to="2419" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Distinctive image features from scale-invariant keypoints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Lowe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">60</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="91" to="110" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Multimedia search reranking: A literature survey</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Rui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Tian</surname></persName>
+		</author>
+		<idno>38:1- 38:38</idno>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Comput. Surv</title>
+		<imprint>
+			<biblScope unit="volume">46</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Efficient 3d shape matching and retrieval using a concrete radialized spherical projection representation. Pattern Recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Papadakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Pratikakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">J</forename><surname>Perantonis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Theoharis</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="volume">40</biblScope>
+			<biblScope unit="page" from="2437" to="2452" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Perantonis. 3d object retrieval using an efficient and compact hybrid shape descriptor</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Papadakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Pratikakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Theoharis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Passalis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">J</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">3DOR</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="9" to="16" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Panorama: A 3d shape descriptor based on panoramic views for unsupervised 3d object retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Papadakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Pratikakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Theoharis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">J</forename><surname>Perantonis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">89</biblScope>
+			<biblScope unit="issue">2-3</biblScope>
+			<biblScope unit="page" from="177" to="192" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Efficient shape matching using vector extrapolation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Rodolà</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Harada</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Kuniyoshi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Dense non-rigid shape correspondence using random forests</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Rodola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bulò</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Windheuser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Vestner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="4177" to="4184" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Elastic net constraints for shape matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Rodola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torsello</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Harada</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Kuniyoshi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1169" to="1176" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Deeppano: Deep panoramic representation for 3-d shape recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Bai</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Signal Processing Letters</title>
+		<imprint>
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="issue">12</biblScope>
+			<biblScope unit="page" from="2339" to="2343" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">The princeton shape benchmark</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Shilane</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Min</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">M</forename><surname>Kazhdan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">A</forename><surname>Funkhouser</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SMI</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Retrieving articulated 3-d models using medial surfaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Siddiqi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Macrini</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Shokoufandeh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bouix</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">J</forename><surname>Dickinson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Mach. Vis. Appl</title>
+		<imprint>
+			<biblScope unit="volume">19</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="261" to="275" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+		<title level="m" type="main">Scalability of non-rigid 3d shape retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sipiran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Bustos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Schreck</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bronstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Choi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Lai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Litman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Sun</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page" from="121" to="128" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Learned-Miller. Multi-view convolutional neural networks for 3d shape recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Maji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Kalogerakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">A new 3d-matching method of nonrigid and partially similar models using curve analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Tabia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Daoudi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-P</forename><surname>Vandeborre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Colot</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="852" to="858" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Covariance descriptors for 3d shape matching and retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Tabia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Laga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Picard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P.-H</forename><surname>Gosselin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="4185" to="4192" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Compact vectors of locally aggregated tensors for 3d shape retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Tabia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Picard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Laga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H</forename><surname>Gosselin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">3DOR</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="17" to="24" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">A large-scale shape benchmark for 3d object retrieval: Toyohashi shape benchmark</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Tatsuma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Koyanagi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Aono</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">APSIPA</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1" to="10" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Desire: a composite 3d-shape descriptor</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">V</forename><surname>Vranic</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICME</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="962" to="965" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Projective analysis for 3d shape segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Gong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cohen-Or</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Chen</surname></persName>
+		</author>
+		<idno>192:1-192:12</idno>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Graph</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">3d shapenets: A deep representation for volumetric shape modeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Deepshape: Deep learned shape descriptor for 3d shape matching and retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Fang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Wong</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1275" to="1283" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Locally constrained diffusion process on locally densified distance spaces with applications to shape retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Koknar-Tezel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">J</forename><surname>Latecki</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="357" to="364" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Query specific rank fusion for image retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Cour</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">N</forename><surname>Metaxas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="volume">37</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="803" to="815" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Query-adaptive late fusion for image search and person reidentification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Tian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Tian</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1741" to="1750" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Semi-supervised regression with cotraining</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z.-H</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IJCAI</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

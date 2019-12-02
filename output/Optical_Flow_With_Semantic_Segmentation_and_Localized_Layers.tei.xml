@@ -1,0 +1,1436 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Optical Flow with Semantic Segmentation and Localized Layers</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Laura</forename><surname>Sevilla-Lara</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">MPI for Intelligent Systems</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Deqing</forename><surname>Sun</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="institution">NVIDIA</orgName>
+							</affiliation>
+							<affiliation key="aff2">
+								<orgName type="institution">Harvard University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Varun</forename><surname>Jampani</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">MPI for Intelligent Systems</orgName>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+							<email>black@tuebingen.mpg.dedeqings@nvidia.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">MPI for Intelligent Systems</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Optical Flow with Semantic Segmentation and Localized Layers</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:44+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>a) Initial segmentation [9] (b) Our segmentation (c) DiscreteFlow [38] (d) Semantic Optical Flow Figure 1: (a) Semantic segmentation breaks the image into regions such as road, bike, person, sky, etc. (c) Existing optical flow algorithms do not have access to either the segmentations or the semantics of the classes. (d) Our semantic optical flow algorithm computes motion differently in different regions, depending on the semantic class label, resulting in more precise flow, particularly at object boundaries. (b) The flow also helps refine the segmentation of the foreground objects.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>Existing optical flow methods make generic, spatially homogeneous, assumptions about the spatial structure of the flow. In reality, optical flow varies across an image depending on object class. Simply put, different objects move differently. Here we exploit recent advances in static semantic scene segmentation to segment the image into objects of different types. We define different models of image motion in these regions depending on the type of object. For example, we model the motion on roads with homographies, vegetation with spatially smooth flow, and independently moving objects like cars and planes with affine motion plus deviations. We then pose the flow estimation problem using a novel formulation of localized layers, which addresses limitations of traditional layered models for dealing with complex scene motion. Our semantic flow method achieves the lowest error of any published monocular method in the KITTI-2015 flow benchmark and produces qualitatively better flow and segmentation than recent top methods on a wide range of natural videos.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>The accuracy of optical flow methods is improving steadily, as evidenced by results on several recent datasets <ref type="bibr" target="#b6">[8,</ref><ref type="bibr" target="#b11">13]</ref>. However, even state-of-the-art optical flow meth-ods still perform poorly with fast motions, in areas of low texture, and around object (occlusion) boundaries ( <ref type="figure">Fig. 1  (c)</ref>). Here we address these issues and improve the estimation of optical flow by using semantic image segmentation. Like flow, the field of semantic segmentation is also making rapid progress, driven by convolutional neural networks (CNNs) and large amounts of labeled data. Here we use a state-of-the-art method <ref type="bibr" target="#b7">[9]</ref>  <ref type="figure">(Fig. 1 (a)</ref>) and find that existing semantic segmentation methods, while not perfect, are good enough to significantly improve flow estimation.</p><p>We use semantic image segmentation in multiple ways. First, it provides information about object boundaries. Second, different objects move differently; roads are flat, cars move independently, and trees sway in the wind. This means that our prior expectations about the image motion should vary between regions with different class labels. Third, the spatial relationships between objects provide information about the relative local depth ordering of regions. Reasoning about depth order is typically challenging and we use the semantics to simplify this, improving flow estimates at occlusion boundaries. Fourth, object identities are constant over time, providing a cue that we exploit to encourage temporal consistency of the optical flow.</p><p>To model complex scene motions and to deal well with motion boundaries, we adopt a layered approach <ref type="bibr" target="#b2">[4,</ref><ref type="bibr" target="#b9">11,</ref><ref type="bibr" target="#b16">18,</ref><ref type="bibr" target="#b19">21,</ref><ref type="bibr" target="#b22">24,</ref><ref type="bibr" target="#b47">49,</ref><ref type="bibr" target="#b52">54,</ref><ref type="bibr" target="#b53">55,</ref><ref type="bibr" target="#b54">56]</ref>. Layered models, however are typically global and cannot represent complex occlusion rela- <ref type="figure">Figure 2</ref>: Localized layered model. An image is segmented into semantic regions (color coded). Different regions are assigned different motion models. Independently moving objects are shown with a box around them. These regions require reasoning about occlusion because such objects move in front of the background. Within each such region, we make the assumption that two motions are present (the background and the foreground object). The formulation is similar to previous layered models but here the spatial extent of each layer may vary.</p><p>tionships. There have been attempts to formulate locally layered models <ref type="bibr" target="#b23">[25,</ref><ref type="bibr" target="#b45">47]</ref>, but these methods are still spatially homogenous. Here we propose a new model of localized layers in which the number of layers in the scene varies spatially. Any pixel of the scene may belong to one or more layers and these layers may have varying spatial extent. Local layered models are used as needed to capture the motion of relevant objects. In regions corresponding to objects that can move, we may find two motionsthe foreground motion of the object against a background motion. Here we use local two-layer models. Rather than a small number of global layers, the result is a patchwork of smaller layered regions on top of background regions as illustrated in <ref type="figure">Fig. 2</ref>. The approach keeps the complexity and optimization manageable by using at most two layers within any patch. And because we can use as many patches as needed, the approach can model complex motions. This adaptive, spatially heterogeneous approach extends layered models to more complex scenes and uses them where they are most valuable.</p><p>Each layer or region is represented by a motion model and the type of model varies depending on the semantic label of the region. For regions that are likely to be planar we model their motion with a homography; this includes roads, sky, and water. For regions corresponding to independently moving objects, we treat their motion as affine but allow it to deviate from this assumption; these classes include objects like cars, planes, boats, horses, bicycles, and people. There are still other classes like vegetation and buildings that are diverse in their 3D shape and motion and are consequently not well modeled by a simple parametric motion. Consequently, we model these classes with a classical spatially varying dense flow field. The motion of the scene is then described by composing the motions of all the semantic regions <ref type="figure" target="#fig_1">(Fig. 4)</ref>.</p><p>We call the algorithm semantic optical flow (SOF) because it exploits scene semantics to improve flow estimation. The approach achieves the lowest error on the KITTI-2015 flow dataset <ref type="bibr" target="#b35">[37]</ref>, when compared with all published monocular flow methods. <ref type="bibr">1</ref> We also test the method on a challenging range of sequences from the Internet. There are several reasons for the improvements. First our motion models provide a form of long-range regularization in areas like roads. Since these are well modeled by a homography, accuracy improves. Second, this region-based regularization helps flow estimation in homogeneous regions, which contain few motion cues. Third, the localized layer formulation improves the segmentation and flow around motion boundaries. Key here is that the object segmentation gives a good initialization for layered flow segmentation and gives a good hypothesis for which surface is in front and which is behind; this improves occlusion estimation.</p><p>While we focus on improving optical flow, we note that motion can also help with scene segmentation. While current semantic segmentation methods are good, they still struggle to separate object boundaries from appearance boundaries ( <ref type="figure">Fig. 1 (a)</ref>). Layered optical flow estimation segments the region and provides additional information about object boundaries ( <ref type="figure">Fig. 1 (b)</ref>). When computed over several frames, this segmentation can be quite precise.</p><p>In summary, we make two contributions. First, we present the first optical flow method that uses semantic information about scenes, objects, and their segmentation, producing the lowest error among all monocular methods on the KITTI flow benchmark. Second, we show how layered optical flow estimation can be extended to cope with complex scenes. Our results confirm that knowing what and where things are helps the estimation of how they move.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>Motion estimation and segmentation. There is a long history of simultaneously estimating optical flow and its segmentation <ref type="bibr" target="#b34">[36,</ref><ref type="bibr" target="#b38">40]</ref>. Many methods focus on segmentation using motion information alone; we do not consider these here. More relevant are methods that use image segmentation to aid optical flow. Previous work <ref type="bibr" target="#b5">[7,</ref><ref type="bibr" target="#b57">59]</ref> segments the scene into patches according to color or other cues, and then fits parametric flow models within these. Like us they vary the type of model in each region but we go beyond this to use semantic information to determine the appropriate model. Sun et al. <ref type="bibr" target="#b45">[47]</ref> first segment the scene into superpixels and then reason about the occlusion relationships between neighboring superpixels (cf. <ref type="bibr" target="#b56">[58]</ref>). These methods are generic in the sense that they do not know anything about the objects being segmented but rather seek a partitioning of the scene into coherently moving regions.</p><p>Combining flow models. Here we use different flow models to represent the motion of different parts of the scene. These are combined within our localized layer formulation to define the flow for the whole image. Previous work has explored the combination of different flow algorithms <ref type="bibr" target="#b29">[31,</ref><ref type="bibr" target="#b32">34]</ref>. Irani and Anandan <ref type="bibr" target="#b17">[19]</ref> develop a theory for modeling motion in general scenes with varying levels of complexity. The above methods, however, are generic in the sense that they do not use any semantic information about objects to select among the possible models.</p><p>Occlusion reasoning and figure-ground. One goal of optical flow estimation is the detection of motion discontinuities that may signal the presence of an object (surface) boundary (see <ref type="bibr" target="#b50">[52]</ref> for an overview). Previous methods focus on generic constraints without taking into account object-specific information <ref type="bibr" target="#b4">[6,</ref><ref type="bibr" target="#b44">46,</ref><ref type="bibr" target="#b48">50,</ref><ref type="bibr" target="#b50">52]</ref>. In these cases the goal is to detect boundaries that may be useful later for object detection. We turn this around by performing object detection and then using this to detect motion boundaries more accurately.</p><p>Layered optical flow. Layered flow estimation has a long history <ref type="bibr" target="#b2">[4,</ref><ref type="bibr" target="#b9">11,</ref><ref type="bibr" target="#b16">18,</ref><ref type="bibr" target="#b19">21,</ref><ref type="bibr" target="#b22">24,</ref><ref type="bibr" target="#b52">54,</ref><ref type="bibr" target="#b53">55]</ref> and recent improvements have made the approach more competitive on standard benchmarks <ref type="bibr" target="#b47">[49]</ref> and more computationally tractable <ref type="bibr" target="#b54">[56]</ref>. The most recent work integrates image segmentation cues with motion cues to produce an accurate segmentation at motion boundaries. In particular, we build on <ref type="bibr" target="#b47">[49]</ref>, which uses a fully connected graphical model (cf. <ref type="bibr" target="#b24">[26]</ref>) to exploit long-range image cues for layer segmentation. Unlike previous work, we apply the model locally within image patches around segmented objects that can move.</p><p>Traditional layered models have limitations and are most applicable to simple scenes with a small number of moving objects. Occlusion relationships in the world are complex and 2D motion layers are too restrictive to capture the 3D spatial occlusion relationships in real scenes. Also, while the depth order of layers is important, this may be ambiguous in two frames <ref type="bibr" target="#b46">[48]</ref>. Reasoning about layer depth order is combinatorial (K! for K layers), which becomes infeasible in realistic scenarios. To address these issues, locally layered models of motion have been proposed <ref type="bibr" target="#b23">[25,</ref><ref type="bibr" target="#b45">47]</ref>. These models, again, are generic and do not know about objects. Here we find the problem of depth order reasoning is often simplified when we have semantic information. For example, we assume that independently moving objects like cars are in front of static objects like roads. When the assumption holds, as it often does, this simplifies layered flow estimation and produces accurate motion boundaries.</p><p>Several methods decompose scenes into layers corresponding to objects <ref type="bibr" target="#b20">[22,</ref><ref type="bibr" target="#b22">24,</ref><ref type="bibr" target="#b26">28,</ref><ref type="bibr" target="#b51">53,</ref><ref type="bibr" target="#b58">60]</ref>. What these methods mean by "object," however, is a region of the image that moves coherently and differently from the background; there is no notion of what this object is. In contrast, Isola and Liu <ref type="bibr" target="#b18">[20]</ref> represent static images of scenes as a patchwork of objects layered on top of each other but they do not consider image motion.</p><p>Video segmentation. There is significant and increasing interest in the field <ref type="bibr" target="#b10">[12,</ref><ref type="bibr" target="#b12">14,</ref><ref type="bibr" target="#b30">32,</ref><ref type="bibr" target="#b39">41,</ref><ref type="bibr" target="#b40">42,</ref><ref type="bibr" target="#b55">57]</ref> but the definition of the problem varies between identifying coherent motions or coherent objects regions. Like the approaches above, these methods are generic in that they focus on bottom-up analysis of regions and motion. They typically use optical flow as a cue to track superpixels over time to establish temporal coherence. They usually do not use high-level object recognizers or try to improve optical flow. Taylor et al. <ref type="bibr" target="#b49">[51]</ref> incorporate object detections and use temporal information to reason about occlusions to improve their segmentation results, but do not compute optical flow. Lalos et al. <ref type="bibr" target="#b28">[30]</ref> compute optical flow for an object of interest using a tracking-by-detection approach. Unlike us, they only estimate object displacement (not full flow), ignore background motion, and do not take object identity into account.</p><p>Semantic segmentation in other low-level vision problems. Object class influences the way things move, but also influences their shape. Recent work uses semantic segmentation to resolve ambiguities in stereo <ref type="bibr" target="#b13">[15]</ref>, to guide 3D reconstruction <ref type="bibr" target="#b14">[16,</ref><ref type="bibr" target="#b27">29]</ref>, and to constrain the motion of the 3D scene by enforcing class label coherence over time <ref type="bibr" target="#b42">[44]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Model and Methods</head><p>Using a semantic segmentation of the scene allows us to model the motion of different regions of the image differently. We define the motion in the scene compositionally in terms of the motion of the regions. Below we discuss how we compute the motion for each segmented region and then how we combine these into a coherent flow field.</p><p>Classes. We define three classes of objects (Things, Planes, and Stuff) that exhibit different types of motion (see <ref type="figure">Fig. 2</ref>). (1) Things <ref type="bibr" target="#b0">[2,</ref><ref type="bibr" target="#b15">17]</ref> correspond to objects with a defined spatial extent, that can move independently, are typically seen in the foreground and may be rigid or non-rigid. Things include aeroplane, bicycle, bird, boat, bus, car, cat, cow, dog, horse, motorbike, sheep, train and person. <ref type="bibr" target="#b0">(2)</ref> Planes are regions like 'roads' that have a broad spatial extent, are roughly planar, and are typically in the background. Other classes that we treat as planes are 'sky' and 'water'. Water is treated as a plane because the air/water boundary is often planar. (3) Stuff <ref type="bibr" target="#b1">[3]</ref> corresponds to classes that exhibit textural motion or objects like 'buildings' and 'vegetation' that may have a complicated 3D shape, exhibit complex parallax, and for which we have no compact motion representation. Regions of unknown class are modeled as Stuff.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Preprocessing</head><p>Segmentation. We used Caffe <ref type="bibr" target="#b21">[23]</ref> to train the semantic segmentation model DeepLab <ref type="bibr" target="#b7">[9]</ref>, substituting all fully- connected layers in the VGG network <ref type="bibr" target="#b43">[45]</ref> with convolutional layers. We modified the output layer to predict the 22 classes described above and used the atrous <ref type="bibr" target="#b33">[35]</ref> algorithm to get denser predictions. We initialized the network with the VGG model and fine-tuned it with standard stochastic gradient descent using a fixed momentum of 0.9 and weight decay of 0.0005 during 200K iterations. The learning rate is 0.0001 for the first 100K iterations and is reduced by 0.1 after every 50K steps. To improve performance <ref type="bibr" target="#b7">[9,</ref><ref type="bibr" target="#b25">27]</ref> we used a densely connected conditional random field (Dense-CRF). The unaries are the CNN output and the pairwise potentials are a position kernel and a bilateral kernel with both position and RGB values. The standard deviation of the filter kernels and their relative weights are cross-validated. The inference in the Dense-CRF model is performed using 10 steps of meanfield. To train the network, we selected 22 of the 540 classes from the Pascal-Context dataset <ref type="bibr" target="#b37">[39]</ref>.</p><p>Thing matching. Given the segmentation in each frame, we compute connected components to obtain regions containing putative objects (Things). Regions smaller than 200 pixels are treated as Stuff. For each Thing found in the first frame, we find its corresponding region in subsequent frames and create a bounding box for layered flow estimation that fully surrounds the object regions across all frames. This defines the spatial extent of the layered flow estimation <ref type="figure" target="#fig_0">(Fig. 3)</ref>. Below we estimate the flow of Things using T = 5 frames at a time unless otherwise stated. <ref type="figure">Figure 2</ref> shows a few Thing regions in one frame. If a Thing region is not found over the entire sub-sequence, it is treated as Stuff.</p><p>Initial flow. We also compute an initial dense flow field, u using the DiscreteFlow method <ref type="bibr" target="#b36">[38]</ref> based on <ref type="bibr" target="#b41">[43]</ref>. We use this in several ways as described below.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Motion Models</head><p>The motion of Planes. We model planar regions using homographies. Given the initial flow vectorsû(x), x ∈ R i in region i, we use RANSAC to robustly estimate the parameters, h i of the homography. The planar motion then defines the flow u Plane (x; h i ) for every pixel x ∈ R i .</p><p>The motion of Stuff. For Stuff we have no class-specific motion model and set the flow in every Stuff region i to be the initial flow; that is u Stuff (x) =û(x) for x ∈ R i .</p><p>The motion of Things. In Thing regions we expect occlusions and disocclusions, complex geometry, and deformations. Thus, we assume the motion of a Thing can be described as affine plus a smooth deformation from affine. This may sound restrictive but we build on the work of <ref type="bibr" target="#b47">[49]</ref>, where they show positive results applying this motion model to the entire scene. Our Thing regions are much smaller than the entire scene, and the motion within this region is more likely to satisfy the assumptions. We allow the motion of Things to deviate from affine and the amount of deviation depends on the object class. For example, cars are more rigid than people and their motion is more affine. Consequently we assume that the motion of cars will be more affine and penalize deviations from this assumption more.</p><p>While we are interested in the motion of the Thing, because we assume Things are in front of backgrounds, it is actually important to also consider the motion of the background. Specifically, estimating an accurate foreground segmentation requires that we reason about the motion of both foreground and background. We do this using a local layered model based on <ref type="bibr" target="#b47">[49]</ref>.</p><p>Formally, given a sequence of images {I t , 1 ≤ t ≤ T }, we want to jointly estimate the motion (u tk , v tk ) for every pixel, in each layer, at every frame, as well as group pixels that move together into layers denoted by g tk , where k ∈ {1, 2}. We only consider two layers, and thus we only need to estimate the foreground segmentation, g t1 , as the background layer is constant. We formulate the local layered energy term (Eq. 1) similar to Sun et al. with some modifications described below and refer the reader to <ref type="bibr" target="#b47">[49]</ref> for further details. The method estimates the motion of both layers and the segmentation of the foreground region.</p><p>The general formulation incorporates occlusion reasoning in the motion estimation using layered segmentation (data term), enforces temporal consistency of layer segmentation (time term) according to the motion, couples semantic segmentation and layered segmentation (layer term), and encourages spatial contiguity of layered segmentation using a fully-connected CRF model (space term).</p><p>The data term imposes appearance constancy when corresponding pixels are visible at the same layer, and a constant penalty otherwise. It reasons about occlusions by com-</p><formula xml:id="formula_0">k=1 T −1 t=1 {E data (u tk ,v tk ,g tk ;I t , I t+1 )+λ motion E motion (u tk ,v tk ,g tk , Θ tk ) (1) +λ time E time (u tk ,v tk ,g t,k , g t+1,k )}+ T t=1 {λ layer E layer (g tk ;ĝ tk )+λ space E space (g tk )} .</formula><p>paring the layer assignment of corresponding pixels:</p><formula xml:id="formula_1">E data (u tk ,v tk ,g tk ; I t , I t+1 ) = p ρ D (I p t −I q t+1 )δ(g p t1 = g q t+1,1 )+ λ D δ(g p t1 = g q t+1,1 ),<label>(2)</label></formula><p>where q = (x+u p tk , y+v p tk ) denotes the corresponding pixel according to the motion for pixel p, for every pixel in the image, ρ D is a robust penalty function, and λ D is a constant penalty for occluded pixels and pixels of different objects. The indicator function δ(x) is 1 if the expression x is true, and 0 otherwise.</p><p>The motion term encodes two assumptions. First, neighboring pixels should have similar motion if they belong to the same layer. Second, pixels from each layer k should share a global motion modelū(Θ tk ), where Θ tk are parameters that change over time and depend on the object class k:</p><formula xml:id="formula_2">E motion (u tk ,v tk ,g tk , Θ tk ) = p r∈Np ρ(u p tk −u r tk )δ(g p tk = g r tk )+ λ aff p ρ aff (u p tk −ū p (Θ tk ))<label>(3)</label></formula><p>where the set N p contains the four nearest neighbors of pixel p. The motion term for the vertical flow field v t is defined similarly. The time term encourages corresponding pixels over time to have the same layer label</p><formula xml:id="formula_3">E time (u tk ,v tk ,g tk , g t+1k ) = p δ(g p tk = g q t+1k ),<label>(4)</label></formula><p>where q is the corresponding pixel at the next frame for p according to the motion (u tk , v tk ).</p><p>The space term encourages spatial contiguity of layer segmentation:</p><formula xml:id="formula_4">E space (g tk ) = p r =p w p r δ(g p tk = g r tk ),<label>(5)</label></formula><p>where the weight w p r is the same as in Sun et al. <ref type="bibr" target="#b47">[49]</ref>. This term fully connects each pixel with all other pixels in the localized region. In our implementation, we modify the approach in <ref type="bibr" target="#b47">[49]</ref> and apply this, not over the whole frame, but over a detected object region.</p><p>The major difference from Sun et al. <ref type="bibr" target="#b47">[49]</ref> is that we have a semantic segmentation for the foreground and this segmentation is usually reasonably good. Consequently we define a new coupling term, E layer , that enforces similarity between the foreground layer segmentation and the semantic segmentation:</p><formula xml:id="formula_5">E layer (g tk ;ĝ tk ) = p δ g p tk =ĝ p tk ,<label>(6)</label></formula><p>whereĝ t is the segmentation mask of the foreground Thing.</p><p>Initialization and optimization. The layer method requires an initialization of the foreground region g, an initial flowû, and parametric motions of both layersū(Θ). The initial flow is typically inaccurate at the boundaries and we do not want this to corrupt the initialization. Consequently we compute the initial affine motion ignoring the pixels close to the object boundary both in the background and foreground. We then optimize Eq. 1 using the method in <ref type="bibr" target="#b47">[49]</ref>. This refines the flow of each layer and the segmentation <ref type="figure" target="#fig_0">(Fig. 3)</ref>. The segmentation is quite accurate because it uses backward and forward flow and image evidence with the fully connected model in the region (see <ref type="bibr" target="#b47">[49]</ref>). The method <ref type="bibr" target="#b47">[49]</ref> uses heuristics to reason about depth ordering. Here we use the class category to decide the depth ordering and assume that Things are always foreground.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Composing the Flow Field</head><p>Each Plane and Stuff region gives exactly one flow value per pixel. If these pixels are not occluded by a localized layer, then their flow becomes the final flow value. The localized layers estimate the flow of the foreground and background pixels within an object region. These regions may extend over Plane and Stuff regions, giving multiple possible flow values for these overlapped pixels. We select a single value for each such pixel as follows <ref type="figure" target="#fig_1">(Fig. 4)</ref>. The foreground flow is directly pasted onto the flow field (blue region). When the background region of a localized layer overlaps a Plane, we keep the planar motion (yellow region). When the background overlaps a Stuff region, we take a weighted average of the Stuff flow and the layer flow (red region). The weight for the layer flow is high near the foreground and decays to zero at the region boundary. Thus we favor the layered flow estimate near the foreground because it tends to be more accurate at boundaries. We found this approach faster and better than FusionFlow <ref type="bibr" target="#b29">[31]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>We test our Semantic Optical Flow (SOF) method in two different datasets: natural Youtube sequences and KITTI 2015 <ref type="bibr" target="#b35">[37]</ref>. Standard optical flow benchmarks do not contain the variety of objects that a semantic segmentation method can recognize. Thus, we collected a suite of natural videos from YouTube, containing objects of the Pascal VOC classes that move. Although there is no ground truth to provide a quantitative analysis, the difference of quality is clearly visible in planar regions and at motion boundaries. All sequences will be made publicly available [1]. In addition, we test our method on the KITTI 2015 dataset, where existing semantic segmentation methods perform reasonably well. We do not include results on the Sintel dataset because semantic segmentation does not produce reasonable results. This is probably due to the fact that the statistics of synthetically generated images are different from those of natural images, like the ones in the enriched Pascal VOC dataset. We tried training the same network using the Sintel training set (manually annotated), and we found that the network did not perform well, presumably due to a shortage of training data. In the Middlebury dataset <ref type="bibr" target="#b3">[5]</ref> the semantic segmentation results produce mostly the 'unknown' class, or they correspond to classes without a specific motion model (i.e. building), or they are very small regions and we do not consider them. Thus, on Middlebury our results are identical to the initial flow (DiscreteFlow) in all sequences but in one, where our accuracy is 0.004 better.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">KITTI 2015</head><p>We quantitatively evaluate our method on the KITTI 2015 benchmark <ref type="figure">(Fig. 5)</ref> using T = 2 frames as input.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Method</head><p>Fl-all (All px)  <ref type="bibr" target="#b36">[38]</ref> and FullFlow <ref type="bibr" target="#b8">[10]</ref>, which is the next most accurate published monocular method.</p><p>A numerical comparison between DiscreteFlow, FullFlow <ref type="bibr" target="#b8">[10]</ref>, and our method is shown in <ref type="table">Table 1</ref>. Our method significantly reduces the overall percentage of outliers compared with DiscreteFlow (from 22.38% to 16.81%). The improvements mainly come from 1) our refined motion for the Planes; and 2) correctly interpolated motion for the occluded background regions. <ref type="figure" target="#fig_2">Figure 6</ref> shows several examples where our method fixes large errors of the foreground cars in the initial DiscreteFlow results. Our method has a slightly higher percentage of outliers in the foreground region. This reveals a tradeoff between segmentation and flow accuracy. The more we restrict the foreground to affine motion, the better the segmentation but the worse the flow estimate. Also our method only assumes two major motions are present in the detected region, and it may fail when the assumption does not hold <ref type="figure" target="#fig_3">(Fig. 7)</ref>. This is due to our segmentation method giving a class segmentation and grouping multiple objects together. To address this, we either need instance-level segmentation of Things or a formulation that deals with more than two layers <ref type="bibr" target="#b46">[48]</ref>.</p><p>The execution time of our method depends on the size of the image, the number of objects, and the size of these. An upper bound for the total time is 6 minutes for a frame of KITTI 2015. Specifically, the initial semantic segmentation takes 10 seconds, the initial motion estimation from DiscreteFlow takes 3 minutes, the motion of Planes takes 2 seconds, and the motion of Things depends on the size of the object, but takes on average 1-2 minutes. <ref type="figure" target="#fig_4">Figure 8</ref> shows examples on natural sequences downloaded from YouTube. We estimate the flow using nonoverlapping 5-frame subsequences. Our method improves over the state-of-the-art optical flow estimation method. It corrects errors in large planar regions and produces more accurate motion boundaries. It is also able to refine the semantic segmentation, especially at object boundaries and in thin regions. These results demonstrate the benefits of our approach when reliable semantic segmentation is available.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Natural Sequences.</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion and Future work</head><p>We have defined a method for using semantic segmentation to improve optical flow estimation. Our semantic op- <ref type="figure">Figure 5</ref>: Examples of Semantic Optical Flow on KITTI 2015. From left to right: Initial segmentation; Optical flow estimation from SOF; Comparison of outliers between DiscreteFlow and SOF (black pixels indicate neither algorithm produced an outlier in that location, yellow pixels indicate both methods produced an outlier, green pixels indicate DiscreteFlow was incorrect SOF was correct, and red pixels indicate DiscreteFlow was correct but SOF was not). Notice that much of the gain from SOF is on the road, especially at occluded regions, and on the areas close to cars. tical flow method uses object class labels to determine the appropriate motion model to apply in each region. We classify a scene into Things, which move independently, Planes, which are large, roughly planar regions, and Stuff, which is everything else. We focus on the estimation of Things using a localized layer model in which we only apply layered optical flow in constrained regions around objects of interest. We introduce a novel constraint to prefer layered segmentations that resemble our semantic segmentation. A key insight is that a detected object region is likely to contain at most two motions and the object is likely to be in front. We show that using motion we are able to visually improve the segmentation, sometimes dramatically. We tested the method on the KITTI-2015 flow benchmark and have the lowest error of any monocular method by a significant margin at the time of writing. We also tested on a wide range of other videos containing more varied classes and see clear qualitative improvement in terms of flow and segmentation. This work confirms the benefit of using high quality segmentation for optical flow and for exploiting knowledge of the class labels in estimating flow. This opens several doors for future work. In particular, it may be possible to formulate our localized layer model as a single objective function and optimize it as such; this may improve results further. Additionally it would be useful, but challenging, to integrate flow estimation with semantic segmentation. Flow information may even help with class recognition in addition to segmentation.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 3 :</head><label>3</label><figDesc>The method in pictures. (a) Image with the segmentation into road (blue), car (green), sky (yellow), grass (grey), and "unknown" (clear) superimposed. (b) Initial dense flow computed with DiscreteFlow [38]. The following images show intermediate results in the extracted car region. (c) Our final Thing segmentation. (d) Our final flow. (e) Estimated foreground motion. (f) Estimated background motion. (g) Estimated flow for the localized region. (h) Final layer segmentation (blue is foreground).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 4 :</head><label>4</label><figDesc>Compositing the flow. The motion of Stuff, Planes (yellow) and regions around Things (red and blue) is composited to produce the final flow estimation.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 6 :</head><label>6</label><figDesc>Comparison of details recovered by Semantic Optical Flow. From left to right: Initial segmentation; SOF segmentation; Optical flow estimation from DiscreteFlow; Optical flow estimation from SOF; Ground truth flow.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 7 :</head><label>7</label><figDesc>Failure case. From left to right: Initial segmentation; SOF segmentation; Flow estimation from Discrete-Flow; Flow estimation from SOF; Ground truth flow. Our layered method assumes two dominant motions in the region, failing if there are more than two motions.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 8 :</head><label>8</label><figDesc>Qualitative analysis of Semantic Optical Flow. We show a few representative examples from the YouTube dataset. From left to right: Initial segmentation, SOF segmentation, optical flow estimation from DiscreteFlow, optical flow estimation from SOF. More examples can be found at [1].</figDesc></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">The most accurate methods use stereo motion sequences and exploit the stereo to estimate scene structure.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgments. We thank Martin Kiefel and Jonas</head><p>Wulff for their help and insight. We thank Raquel Urtasun for helpful comments on the manuscript.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">The plenoptic function and the elements of early vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Adelson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bergen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computational Models of Visual Processing</title>
+		<editor>M. Landy and J. Movshon</editor>
+		<imprint>
+			<publisher>MIT Press</publisher>
+			<date type="published" when="1991" />
+			<biblScope unit="page" from="1" to="20" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">On seeing stuff: the perception of materials by humans and machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">H</forename><surname>Adelson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Photonics West 2001-Electronic Imaging</title>
+		<imprint>
+			<date type="published" when="2001" />
+			<biblScope unit="page" from="1" to="12" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Layered representation of motion video using robust maximum-likelihood estimation of mixture models and MDL encoding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ayer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">S</forename><surname>Sawhney</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="1995-06" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">A database and evaluation methodology for optical flow</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Baker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Scharstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">P</forename><surname>Lewis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">92</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="1" to="31" />
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Probabilistic detection and tracking of motion boundaries</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Fleet</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">38</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="231" to="245" />
+			<date type="published" when="2000-07" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title level="m" type="main">Estimating optical flow in segmented images using variable-order parametric models with local deformations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Jepson</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1996-10" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">18</biblScope>
+			<biblScope unit="page" from="972" to="986" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">A naturalistic open source movie for optical flow evaluation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Butler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wulff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">B</forename><surname>Stanley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV, IV</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="611" to="625" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Semantic image segmentation with deep convolutional nets and fully connected crfs. CoRR, abs/1412</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Papandreou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kokkinos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Murphy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">7062</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Full flow: Optical flow estimation by global optimization over regular grids</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">CVPR</title>
+		<imprint>
+			<biblScope unit="issue">6</biblScope>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Robust estimation of a multilayered motion representation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Pentland</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Workshop on Visual Motion</title>
+		<imprint>
+			<date type="published" when="1991" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">A unified video segmentation benchmark: Annotation, metrics and analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Galasso</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Nagaraja</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Cardenas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013-12" />
+			<biblScope unit="page" from="3527" to="3534" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Vision meets robotics: The KITTI dataset</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Lenz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Stiller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Robotics Research</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="1231" to="1237" />
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Efficient hierarchical graph-based video segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Grundmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Kwatra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Essa</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+			<publisher>CVPR</publisher>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Displets: Resolving stereo ambiguities using object knowledge</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Gney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Joint 3d scene reconstruction and class segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Hane</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Cohen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Angst</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="97" to="104" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Learning spatial context: Using stuff to find things</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Heitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Koller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="30" to="43" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Accurate computation of optical flow by using layered motion representations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hsu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Anandan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Peleg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICPR</title>
+		<imprint>
+			<date type="published" when="1994" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">A unified approach to moving object detection in 2d and 3d scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Irani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Anandan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="577" to="589" />
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Scene collaging: Analysis and synthesis of natural images with semantic layers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Isola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="3048" to="3055" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Mixture models for optical flow computation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Jepson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="1993" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">A layered motion representation with occlusion and compact spatial support</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Jepson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fleet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Black</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="volume">I</biblScope>
+			<biblScope unit="page" from="692" to="706" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Caffe: Convolutional architecture for fast feature embedding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Karayev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Guadarrama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACM International Conference on Multimedia, MM &apos;14</title>
+		<meeting><address><addrLine>New York, NY, USA</addrLine></address></meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="675" to="678" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Learning flexible sprites in video layers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Jojic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Frey</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2001" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Skin and bones: Multi-layer, locally affine, optical flow and regularization with transparency</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ju</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">D</forename><surname>Jepson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="1996-06" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Efficient inference in fully connected CRFs with gaussian edge potentials</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krähenbühl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="109" to="117" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Efficient nonlocal regularization for optical flow</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krähenbühl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="356" to="369" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Learning layered motion segmentations of video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Torr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">76</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="301" to="319" />
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Joint optimization for object class segmentation and dense stereo reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ladický</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sturgess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sengupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bastanlar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Clocksin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H S</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">100</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="122" to="133" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Object flow: Learning object displacement</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Lalos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Grabner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Varvarigou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="133" to="142" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Fusionflow: Discretecontinuous optimization for optical flow estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lempitsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008-06" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Multiclass semantic video segmentation with object-level active inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>He</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="4286" to="4294" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Fully convolutional networks for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">CVPR</title>
+		<imprint>
+			<biblScope unit="page" from="3431" to="3440" />
+			<date type="published" when="2015-11" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+		<title level="m" type="main">Brostow. Learning a confidence measure for optical flow</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><forename type="middle">Mac</forename><surname>Aodha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Humayun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">J</forename></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013-05" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="page" from="1107" to="1120" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+		<title level="m" type="main">A wavelet tour of signal processing: the sparse way</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mallat</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+			<publisher>Academic press</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Dense estimation and object-based segmentation of the optical flow with robust techniques</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Mémin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Pérez</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Im. Proc</title>
+		<imprint>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="703" to="719" />
+			<date type="published" when="1988-05" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Object scene flow for autonomous vehicles</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Menze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Discrete optimization for optical flow</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Menze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Heipke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">German Conference on Pattern Recognition (GCPR)</title>
+		<imprint>
+			<publisher>Springer International Publishing</publisher>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">9358</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">The role of context for object detection and semantic segmentation in the wild</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Mottaghi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N.-G</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-W</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yuille</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Scene segmentation from visual motion using global optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">W</forename><surname>Murray</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">F</forename><surname>Buxton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="220" to="228" />
+			<date type="published" when="1987-03" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<monogr>
+		<title level="m" type="main">Segmentation of moving objects by long term video analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Ochs</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2003" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="page" from="1187" to="1200" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Ensemble video object cut in highly dynamic scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>He</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1947" to="1954" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">EpicFlow: Edge-Preserving Interpolation of Correspondences for Optical Flow</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Revaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Weinzaepfel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Harchaoui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Stixmantics: A medium-level model for real-time semantic scene understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Scharwächter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Enzweiler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Franke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="533" to="548" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<monogr>
+		<title level="m" type="main">Very deep convolutional networks for large-scale image recognition. CoRR, abs/1409.1556</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Occlusion boundaries from motion: Low-level detection and mid-level reasoning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">N</forename><surname>Stein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">82</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="325" to="357" />
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Local layering for joint motion estimation and occlusion detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Pfister</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Layered segmentation and optical flow estimation over time</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">B</forename><surname>Sudderth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">A fully-connected layered model of foreground and background flow</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wulff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Sudderth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Pfister</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Black</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="2451" to="2458" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">Occlusion boundary detection and figure/ground assignment from optical flow</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sundberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Maire</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbelaez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="2233" to="2240" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">Semantic video segmentation from occlusion relations within a convex optimization framework</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Taylor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ayvaci</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ravichandran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Soatto</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">EMMCVPR</title>
+		<meeting><address><addrLine>Berlin Heidelberg</addrLine></address></meeting>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">8081</biblScope>
+			<biblScope unit="page" from="195" to="208" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">Exploiting discontinuities in optical flow</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">B</forename><surname>Thompson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">30</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="163" to="173" />
+			<date type="published" when="1998-12" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<analytic>
+		<title level="a" type="main">Segmentation, ordering and multi-object tracking using graphical models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>De La Gorce</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Paragios</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="747" to="754" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b52">
+	<analytic>
+		<title level="a" type="main">Representing moving images with layers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">Y A</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">H</forename><surname>Adelson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. IP</title>
+		<imprint>
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="1994" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b53">
+	<analytic>
+		<title level="a" type="main">Smoothness in layers: Motion segmentation using nonparametric mixture estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Weiss</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="1997" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b54">
+	<analytic>
+		<title level="a" type="main">Efficient sparse-to-dense optical flow estimation using a learned basis and layers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wulff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b55">
+	<analytic>
+		<title level="a" type="main">Streaming hierarchical video segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Xiong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Corso</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<biblScope unit="volume">7577</biblScope>
+			<biblScope unit="page" from="626" to="639" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b56">
+	<monogr>
+		<title level="m" type="main">Robust monocular epipolar flow estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yamaguchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1862" to="1869" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b57">
+	<analytic>
+		<title level="a" type="main">Dense, accurate optical flow estimation with piecewise parametric model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page" from="1019" to="1027" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b58">
+	<analytic>
+		<title level="a" type="main">A background layer model for object tracking through occlusion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Tao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2003" />
+			<biblScope unit="page" from="1079" to="1085" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

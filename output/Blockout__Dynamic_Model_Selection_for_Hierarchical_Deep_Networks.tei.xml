@@ -1,0 +1,941 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Blockout: Dynamic Model Selection for Hierarchical Deep Networks</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Calvin</forename><surname>Murdock</surname></persName>
+							<email>cmurdock@cs.cmu.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Carnegie Mellon University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhen</forename><surname>Li</surname></persName>
+							<email>zhenli@google.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Carnegie Mellon University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Howard</forename><surname>Zhou</surname></persName>
+							<email>howardzhou@google.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Carnegie Mellon University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tom</forename><surname>Duerig</surname></persName>
+							<email>tduerig@google.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Carnegie Mellon University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Google</forename><surname>Research</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Carnegie Mellon University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Blockout: Dynamic Model Selection for Hierarchical Deep Networks</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:38+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Most deep architectures for image classification-even those that are trained to classify a large number of diverse categories-learn shared image representations with a single model. Intuitively, however, categories that are more similar should share more information than those that are very different. While hierarchical deep networks address this problem by learning separate features for subsets of related categories, current implementations require simplified models using fixed architectures specified via heuristic clustering methods. Instead, we propose Blockout, a method for regularization and model selection that simultaneously learns both the model architecture and parameters. A generalization of Dropout, our approach gives a novel parametrization of hierarchical architectures that allows for structure learning via back-propagation. To demonstrate its utility, we evaluate Blockout on the CIFAR and Im-ageNet datasets, demonstrating improved classification accuracy, better regularization performance, faster training, and the clear emergence of hierarchical network structures.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Multi-class classification is an important problem in visual understanding with applications ranging from image retrieval to robot navigation. Due to the vast space of variability, the seemingly simple task of identifying the subject of a photograph is extremely difficult. While once restricted to small label sets and constrained image domains, recent advances in deep neural networks have allowed image recognition to be applied to real-world collections of photographs. Effective image classification with thousands of labels and datasets with millions of images are now commonplace. However, as classification tasks become more involved, larger networks with more capacity are required, emphasizing the importance of careful model selection. While much manual engineering effort has been dedicated to the task of designing deep architectures that are able to effectively generalize from available training data, model selection is typically performed using subjective heuristics by experienced practitioners. Furthermore, an appropriate ar- chitecture is closely tied to the dataset on which it is trained, so this work often must be repeated for each new application. Ideally, model selection should be performed automatically, allowing the architecture to adapt to training data. As a step towards this goal, we propose an automated, end-toend system for model selection within the class of hierarchical deep networks, which have demonstrated excellent performance on large-scale image classification tasks. Deep neural networks are known to be organized such that specificity increases with depth <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b28">29]</ref>. Lower layers tend to represent general, low-level image features like lines and edges while higher layers encode higher-level concepts like object parts or even objects themselves <ref type="bibr" target="#b3">[4]</ref>. Most classification architectures make use of a single shared model with a flat logistic loss layer. Intuitively, however, categories that are more similar should share more information than those that are very different.</p><p>One solution is to train independent fine-grained models for these subsets of related labels. This results in specialized features that are tuned to differentiating between subtle visual differences between similar categories. However, this is often infeasible due to limited training examples. On the other hand, a combined model for classifying many categories is able to use information common to all training images to learn shared, low-level representations.</p><p>Ideally, then, model architectures should be hierarchical. Low-level representations should be shared while higher layers should be separated out and connected only to subsets of classes, allowing for efficient information sharing and reduced training data requirements. However, this raises an obvious question of model selection: which hierarchical architecture is best? <ref type="figure" target="#fig_0">Figure 1</ref> visualizes some potential candidates. Design choices include: the number and locations of branches, the allocation of nodes to each branch, and the clustering of classes in the final layer. Previous approaches to hierarchical deep networks (e.g. <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b26">27]</ref>) have simplified this question by fixing the base architecture and using heuristic clustering methods for separating the classes into groups. While class similarity may provide an effective heuristic for model selection, it is not guaranteed to actually improve performance and ignores important factors such as heterogeneous classification difficulty.</p><p>To achieve automatic model selection in hierarchical deep networks, we introduce Blockout, an approach for simultaneously learning both the model architecture and parameters. This allows for more complex hierarchical architectures specifically tuned to the data without requiring a separate procedure for model selection, which would likely be infeasible due to the vast search space of possible architectures. Inspired by Dropout <ref type="bibr" target="#b8">[9]</ref>, Blockout can be viewed as a technique for stochastic regularization that adheres to hierarchically-structured model architectures. Importantly, its hyper-parameters (analogous to node Dropout probabilities) are represented such that they can be learned using simple back-propagation. Thus, Blockout performs a relaxed form of model selection by effectively learning an ensemble of hierarchical networks, i.e. the distribution of hierarchical architectures over which to average during inference. Despite the additional parameters, the representational power of Blockout is exactly the same as a standard layer and can be parametrized as such during inference. Surprisingly, however, the resulting network is able to achieve improved performance, as demonstrated experimentally on standard image classification datasets.</p><p>In summary, we make the following contributions: (1) a novel parametrization of hierarchical deep networks, (2) stochastic regularization analogous to Dropout that effectively averages over all models within this class of hierarchical architectures, (3) an approach for learning the regularization parameters allowing for architectures that dynamically adapt to the data throughout training, and (4) quantitative and qualitative analyses, including substantial performance gains over baseline models.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>Despite the long history of deep neural networks in computer vision <ref type="bibr" target="#b13">[14]</ref>, the modern incarnation of "deep learning" is a relatively recent phenomenon that began with empirical success in the task of image recognition <ref type="bibr" target="#b12">[13]</ref> on the Ima-geNet dataset <ref type="bibr" target="#b16">[17]</ref>. Since then, tactful architecture modifications have yielded a steady stream of further improvements <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b22">23]</ref>, even surpassing human performance <ref type="bibr" target="#b7">[8]</ref>.</p><p>In addition to general classification of arbitrary images, deep learning has also made a significant impact on finegrained recognition within constrained domains <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b15">16]</ref>. In these cases, deep neural networks are trained (often alongside additional annotations or segmentations of parts) to recognize subtle differences between similar categories, e.g. bird species. However, these methods are often limited by the availability of training data as they typically require expert annotations for ground truth labels. Some approaches have alleviated this problem by pre-training on large collections of general images and then fine-tuning on smaller, domain-specific datasets <ref type="bibr" target="#b15">[16]</ref>.</p><p>Attempts have also been made to incorporate information from a known hierarchy to improve prediction performance without requiring architecture changes. For example, <ref type="bibr" target="#b4">[5]</ref> replaced the flat softmax classification layer with a probabilistic graphical model that respects given relationships between labels. Other methods for incorporating label structure are summarized in <ref type="bibr" target="#b23">[24]</ref>. However, they typically rely on fixed, manually-specified hierarchies, which could contain errors and result in biases that reduce performance.</p><p>Hierarchical deep networks <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b27">28]</ref> attempt to address these issues by learning multi-task models with shared lower layers and parallel, domain-specific higher layers for predicting different subsets of categories. While these methods address one component of model selection by learning clusters of output categories, other architectural hyper-parameters such as the location of branches and the relative allocation of nodes between them must still be specified prior to training.</p><p>The most common approach for model selection in deep learning is simply searching over the space of hyperparameters <ref type="bibr" target="#b1">[2]</ref>. Unfortunately, because training and inference in deep networks are computationally expensive, this is often impractical. While costs can sometimes be reduced (e.g. by taking advantage of the behavior of some network architectures with random weights <ref type="bibr" target="#b17">[18]</ref>), they still require training and evaluating a large number of models. Bayesian optimization approaches <ref type="bibr" target="#b19">[20]</ref> attempt to perform this search more efficiently, but they are still typically applied only to smaller models with few hyper-parameters. Alternatively, <ref type="bibr" target="#b0">[1]</ref> proposed a theoretically-justified approach to learning a deep network with a layer-wise strategy that automatically selects the appropriate number of nodes during training. However, it is unclear how it would perform on largescale image classification benchmarks. A parallel but related task to model selection is regularization. A network with too much capacity (e.g. with too many parameters) can easily overfit without sufficient training data, resulting in poor generalization performance. While the size of the model could be reduced, an easier and often more effective approach is to use regularization. Common methods include imposing constraints on the weights (e.g. through convolution or weight decay), rescaling or whitening internal representations for better conditioning <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b9">10]</ref>, or randomly perturbing activations for improved robustness and better generalizability <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b24">25]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Deep Neural Networks</head><p>Deep neural networks are layered nonlinear functions f : R d → R p that take d-dimensional images as input and output p-dimensional predictions. They have been found to be very successful for image classification, most likely due to the complexity of the class of representable functions along with their ability to effectively and efficiently make use of very large sets of training data.</p><p>Most deep neural networks are simply compositions of alternating linear and nonlinear functions. More concretely, consider a deep network with m layers. Each layer consists of a linear transformation g j (x) = W j x parametrized by W j followed by a fixed nonlinear function a j (x), e.g. a nonlinear activation or a pooling operator. Altogether, the full neural network can be represented as:</p><formula xml:id="formula_0">f = a m • g m • a m−1 • g m−1 • · · · • a 1 • g 1<label>(1)</label></formula><p>Similarly, hierarchical deep networks can be expressed with a separate function f for each subset of outputs where some intermediate representations a j are shared, i.e. they can be used as the inputs to multiple layers.</p><p>The set of all model parameters W = {W j } can be learned from a dataset of n training images x i and corresponding ground-truth label vectors y i using standard empirical risk minimization with a loss function L (e.g. softmax) that measures the discrepancy between y i and the network predictions f (x i ; W), as shown in Equation 2:</p><formula xml:id="formula_1">arg min W 1 n n ∑ i=1 L ( y i , f (x i ; W) ) s.t. {W j ∈ S j } (2)</formula><p>Learning is typically accomplished through stochastic gradient descent, where the gradients of intermediate layers are computed using back-propagation. Consistent with their name, deep neural networks typically consist of many layers that produce high-dimensional intermediate representations, resulting in an extremely large number of parameters to be learned. To prevent overfitting, regularization is typically employed through constraint sets S j on the parameter matrices. The most common and effective form of regularization is convolution, which takes advantage of the local correlations of images and essentially restricts that the weight matrices contain shared parameters with a specific Toeplitz structure, resulting in far fewer free parameters to learn. Other examples of regularization include weight decay, which penalizes the norm of the weights, and Dropout, which has been shown (under certain assumptions) to indirectly impose a penalty function through stochastic perturbations of the internal network activations <ref type="bibr" target="#b24">[25]</ref>. Blockout employs a similar form of stochastic regularization with the additional restriction that the parameter matrices be block-structured leading to hierarchical network architectures.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Hierarchical Network Parametrization</head><p>Blockout is based on the observation that parallel, independent layers can be equivalently expressed as a single combined layer with a block-structured weight matrix (up to a permutation of its rows and columns), as visualized in <ref type="figure" target="#fig_1">Figure 2</ref>. Thus, enforcing that the learned weight matrix have this type of structure during training automatically separates the input and output nodes into independent branches of a hierarchical architecture. This can be parametrized by assigning each node to any number of k clusters and masking out parameters if their corresponding input and output nodes do not belong to the same cluster, thus restricting the information that can be shared between nodes. Here, k represents the maximum number of blocks in the parameter matrix or, equivalently, the maximum number of independent branches in the network. Though simple, this parametrization can encode a wide range of hierarchical structures, as shown in <ref type="figure" target="#fig_2">Figure 3</ref>.</p><p>More formally, we mask the parameter corresponding to s th input node and the t th output node as follows in Equation 3, where w t,s is the original, unconstrained parameter value and I(s ∈ C l ) equals one if node s belongs to cluster l and zero otherwise:</p><formula xml:id="formula_2">w t,s = 1 k k ∑ l=1 I(s ∈ C l )I(t ∈ C l ) w s,t<label>(3)</label></formula><p>This encodes the desired behavior that a parameter be nonzero only if its corresponding input and output nodes belong to the same class while restricting that the mask be between zero and one. Let C j ∈ {0, 1} dj ×k be a binary indicator matrix containing these cluster membership assignments for each of the d j nodes in the output of the j th layer. In other words, C j (s, l) = I(s ∈ C l ). A full mask can then be constructed as 1 k C j C ⊺ j−1 where the block-structured parameter matrix is the element-wise product of an unconstrained parameter matrix W j and this mask. This class of hierarchical architectures can be summarized by the constraint set in <ref type="bibr">Equation 4</ref>, where ⊙ indicates the elementwise Hadamard product.</p><formula xml:id="formula_3">S j = { W j : W j = 1 k W j ⊙ C j C ⊺ j−1 }<label>(4)</label></formula><p>These constraints act as a regularizer that enforces the parameter matrices to be block-structured with potentially many parameters set explicitly to zero. Ideally, we seek to learn the hierarchical structure during training, which is equivalent to learning the cluster membership assignments C j . However, because they are binary variables, learning them directly would be difficult. To address this problem, we instead take an approach akin to stochastic regularization approaches like Dropout: we treat cluster membership assignments as Bernoulli random variables and draw a different hierarchical architecture at each training iteration.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Stochastic Regularization</head><p>Stochastic regularization techniques are simple but effective approaches for reducing overfitting in deep networks by injecting noise into the intermediate activations or parameters during training. Examples include Dropout <ref type="bibr" target="#b8">[9]</ref>, which randomly sets activations to zero, and DropCon- nect <ref type="bibr" target="#b25">[26]</ref>, which randomly sets parameter values to zero. Dropout <ref type="bibr" target="#b8">[9]</ref> works by setting node activations to zero with a certain probability at each training iteration. Inference is accomplished by replacing each activation with its expected value, which amounts to rescaling by the Dropout probability. This procedure approximates an ensemble of different models from the class of network architectures containing all possible subsets of nodes, where the Dropout probability determines the weight given to each architecture in this implicit model average. For example, with a high Dropout probability, models with fewer nodes are more likely to be selected during training. In general, Dropout results in improved generalization performance by preventing the coadaptation of features.</p><p>Similarly, DropConnect <ref type="bibr" target="#b25">[26]</ref> randomly sets parameter values to zero, which drops connections between nodes instead of the node activations themselves. During inference, a moment-matching procedure is used to better approximate an average over model architectures. Again, the success of this approach can be explained through its approximation of an ensemble within a much larger class of architectures: those that contain all possible combinations of connections between nodes in the network.</p><p>Blockout can be seen as another example of stochastic regularization that approximates an ensemble of models from the class of hierarchical architectures introduced in Section 4. Structured noise is introduced by randomly selecting cluster assignments C j corresponding to different hierarchical architectures at each iteration during training. We first consider the case of a single fixed probability p that each node belongs to each of the clusters, but in Section 6 we show how separate cluster probabilities can be learned for each node.</p><p>During inference, we take an approach similar to Dropout and approximate an ensemble of hierarchical architectures using an implicit average with weights determined by the cluster probabilities. This again amounts to simply rescaling the parameter values by the expected value of the parameter mask: p 2 .</p><p>Also note that Dropout can be interpreted as implicitly applying a random mask M that sets parameters corresponding to the dropped inputs and outputs to zero. If we reorder the input and output dimensions and permute the rows and columns of the weight matrix accordingly, the result is a single block of non-zero parameters, as shown in <ref type="figure" target="#fig_3">Figure 4a</ref>. This is very similar to the block-structured masks that can be explicitly represented with Blockout, as shown in <ref type="figure" target="#fig_3">Figure 4b</ref>. In fact, Dropout is equivalent to Blockout with k = 1 where dropped nodes correspond to those that do not belong to the single cluster. In this case, the resulting mask is a rank-one matrix. Similarly, the explicit parameter masks in DropConnect (shown in <ref type="figure" target="#fig_3">Figure 4c</ref>) are full-rank and can be equivalently represented by Blockout when the number of clusters is equal to the number of nodes in a layer. This allows each node to potentially belong to its own independent cluster resulting in a full-rank mask.</p><p>The full intuition behind why stochastic regularization approaches work and how best to select regularization hyper-parameters (e.g. Dropout probability) is lacking. On the other hand, Blockout gives a much clearer motivation: we assume that the output categories are hierarchically related, and so we approximate an ensemble only over hierarchical architectures. Furthermore, in Section 6 we show how the cluster probabilities for each node can be learned from data allowing for the interpretation of Blockout as model selection within this class of architectures.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Learning Hierarchies via Back-Propagation</head><p>The key difference between Blockout and other stochastic regularization techniques is that its hyper-parameters can be learned from data using simple back-propagation. To accomplish this, we replace the fixed, shared cluster probability p with learnable parameters P j ∈ [0, 1] dj ×k whose elements represent the probability that each node belongs to each cluster. Essentially, they are relaxations of the binary cluster assignments C j that can take on any value between zero and one and are implemented as real-valued variables followed by element-wise logistic activations. At each iteration of training, hard binary cluster assignments are drawn from Bernoulli distributions parametrized by these probabilities, i.e. C j ∼ B(1, P j ). During training, the forward computations are performed using random masked weight matrices from the set in Equation 4 for a different hierarchical architecture at each iteration. During inference, we again average over the cluster assignments to approximate an ensemble of hierarchical architectures. Since the cluster probabilities P j are now different for each node, we must rescale each parameter accordingly. Specifically, the adjusted weight matrix used during inference is:</p><formula xml:id="formula_4">E [ 1 k W j ⊙ C j C ⊺ j−1 ] = 1 k W j ⊙ P j P ⊺ j−1<label>(5)</label></formula><p>Note that this leads to the same computation as that of the training forward pass except with P j instead of C j . Thus, during inference, we simply skip the random cluster assign-ment step and use the soft clustering probabilities directly. The masked parameter matrix is represented as a function of three variables: the unconstrained weight matrix W j , the input cluster assignments C j−1 , and the output cluster assignments C j . As such, gradients can be passed to all of them following the typical back-propagation algorithm. Specifically, updating W j (e.g. using stochastic gradient descent) requires computation of the gradient of the loss function with respect to those parameters. Using the expression of a deep neural network as a composition of functions from Equation 1, this can be expressed using the chain rule as follows:</p><formula xml:id="formula_5">∂L ∂W j = ∂L ∂a m ∂a m ∂g m · · · ∂g j+1 ∂a j ∂a j ∂g j ∂g j W j = δ j ∂g j W j<label>(6)</label></formula><p>where δ is the product of all gradients from the loss function backwards down to the j th layer. Using simple linear algebra, the gradients with respect to a layer's input (i.e. the previous layers activations a j−1 ) are:</p><formula xml:id="formula_6">∂g j ∂a j−1 = W j = 1 k W j ⊙ C j C ⊺ j−1<label>(7)</label></formula><p>Similarly, the gradients with respect to all components of the weight matrix are computed as:</p><formula xml:id="formula_7">∂L ∂W j = δ j a ⊺ j−1 , ∂L ∂ W j = 1 k ∂L ∂W j ⊙ C j C ⊺ j−1 , (8) ∂L ∂C j = 1 k [ W j ⊙ ∂L ∂W j ] ⊺ C j−1 + 1 k [ W j+1 ⊙ ∂L ∂W j+1 ] C j+1</formula><p>Note that the cluster assignments for a set of nodes C j are shared between the two adjacent Blockout layers and hence its gradient contains components from each, acting as an additional form of regularization.</p><p>Recall that our goal is to learn the cluster probabilities P j that parametrize the cluster assignment random variables C j . Thus, to update the cluster probabilities, we simply use the cluster assignment gradients after masking them so that the gradients of unselected clusters are zero:</p><formula xml:id="formula_8">∂L ∂P j = ∂L ∂C j ⊙ C j<label>(9)</label></formula><p>This is similar to the technique used when back-propagating gradients through a Dropout layer. Finally, to update the real-valued cluster parameters, these gradients are then back-propagated through the logistic activation layer. The full training process is summarized in Algorithm 1. Modifying Equation 2, our final optimization problem can thus be written as follows:</p><formula xml:id="formula_9">arg min W,P 1 n n ∑ i=1 E C∼B(1,P) L ( y i , f (x i ; W) ) s.t. W j = 1 k W j ⊙ C j C ⊺ j−1<label>(10)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Algorithm 1 Blockout Training Iteration</head><p>Input: Mini-batch of training images</p><formula xml:id="formula_10">{x i } B i=1 , parameters from previous iteration W (t−1) j , P (t−1) j Output: Updated parameters W (t) j , P (t) j</formula><p>Forward Pass:</p><p>• Draw cluster assignments:</p><formula xml:id="formula_11">C j ∼ B(1, P (t−1) j ) • Mask parameters: W j = 1 k W (t−1) j ⊙ C j C ⊺ j−1 • Compute predictions:ŷ i = f (x i ; W j ) • Evaluate empirical risk: 1 B ∑ B i=1 L ( y i ,ŷ i )</formula><p>Backward Pass:</p><p>• Compute gradients according to Equations 8 and 9.</p><p>• Update parameters W</p><formula xml:id="formula_12">(t) j , P (t) j accordingly.</formula><p>For our implementation, the cluster probabilities P j are initialized to 0.5. Throughout training, there are a number of possible outcomes: (1) The probabilities could diverge, some towards one and others towards zero. This would result in a fixed clustering of nodes, giving high confidence to a particular learned hierarchical structure. (2) Alternatively, the gradients could be uninformative, averaging to zero and leading to unchanged probabilities. This could indicate that hierarchical architectures are helpful for regularization, but the particular grouping of nodes is arbitrary. <ref type="formula" target="#formula_2">(3)</ref> The probabilities could also all increase towards one, possibly demonstrating that hierarchical architectures are not beneficial and better performance could be achieved with single, fully-connected layers.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Experimental Results</head><p>To evaluate our approach, we apply Blockout to the standard image classification datasets CIFAR <ref type="bibr" target="#b11">[12]</ref> and Ima-geNet <ref type="bibr" target="#b16">[17]</ref>. As baselines, we use variations of the Inception architecture <ref type="bibr" target="#b22">[23]</ref>. Specifically, for ImageNet we use the same model described in <ref type="bibr" target="#b9">[10]</ref>, and for CIFAR we use a compacted version of this model with fewer layers and parameters. We also follow the same training details described in <ref type="bibr" target="#b9">[10]</ref> with standard data augmentation. These models have been hand-engineered to achieve very good, near stateof-the-art performance by themselves. Thus, our intention is to show how the addition of Blockout layers can easily improve performance without involved hyper-parameter tuning. Furthermore, we show that Blockout does indeed learn hierarchical network structures resulting in higher prediction accuracy and faster training.</p><p>Inception architectures are composed of multiple layers of parallel convolutional operations directly followed by softmax classification. However, it has been shown that fully-connected layers before classification act as a form of orderless pooling <ref type="bibr" target="#b15">[16]</ref> and have been used extensively <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b29">30,</ref><ref type="bibr" target="#b18">19]</ref> demonstrating improved model capacity leading to better performance. Thus, we add two fully- connected layers after the convolutional layers of our base architectures. Because our baselines already have high network capacity, doing this naively can lead to extreme overfitting and reduced performance, even with standard regularization techniques such as Dropout. However, using Blockout prevents this overfitting and leads to substantial performance improvements with a wide range of hyperparameter choices. The architectures compared in our experiments are shown in <ref type="figure" target="#fig_4">Figure 5</ref>.</p><p>To demonstrate the effectiveness of the different components of Blockout, we compare three variations of our proposed model. The first, indicated by (soft, learned) in the following experiments, omits random cluster selection by skipping the Bernoulli sampling step. This effectively removes the stochastic regularization effect of Blockout, instead using the relaxed soft clustering assignments directly by setting C j = P j . Without explicit zero-valued parameters, the same number of effective parameters are learned as with ordinary fully-connected layers, which could still potentially lead to over-fitting. However, the additional regularization provided by the shared cluster parameters often mitigates this, still resulting in improved performance. The second (hard, fixed) uses randomized hard cluster assignment during training, but uses fixed cluster probabilities of 0.5 instead of back-propagating gradients as described in Section 6. This shows the effects of stochastic regularization within the class of hierarchical architectures. Finally, the third (hard, learned) is our full proposed model.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.1.">CIFAR-100</head><p>CIFAR-100 is a challenging dataset comprising of 60k 32x32 color images (50k for training and 10k for testing) equally divided into 100 classes <ref type="bibr" target="#b11">[12]</ref>. <ref type="table" target="#tab_0">Table 1</ref> shows the performance of our model with 6 clusters and 512 nodes in each fully-connected layer. We compare against the baseline Inception model, the baseline with fully-connected lay-  ers, and the baseline with fully-connected layers followed by 30% Dropout. <ref type="figure" target="#fig_5">Figure 6</ref> shows the accuracy of these models throughout training, demonstrating faster convergence in comparison to Dropout. <ref type="table" target="#tab_0">Table 1</ref> also compares our full Blockout model (hard, learned) with a variety of hyperparameter selections, including the number of hidden nodes in each fully-connected layer and the number of clusters.</p><p>The best performance achieved by our method gave an accuracy of 66.71% with 6 clusters and 2048 nodes, showing a significant improvement over the baseline accuracy. Also note that, while other stochastic regularization methods like Dropout can still overfit if there are too many parameters or the Dropout probability is not set correctly, Blockout seems to adapt so that adding more nodes never reduces accuracy. Despite its minimal engineering effort, the results are comparable to state-of-the-art methods (e.g. 68.8% with <ref type="bibr" target="#b6">[7]</ref>, 67.76% with <ref type="bibr" target="#b21">[22]</ref>, 66.29% with <ref type="bibr" target="#b20">[21]</ref>, etc.)</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.2.">ImageNet</head><p>ImageNet is the standard dataset for large-scale image classification <ref type="bibr" target="#b16">[17]</ref>. We use the version of the dataset from the Imagenet Large Scale Visual Recognition Challenge (ILSVRC 2012), which has 1000 object categories, 1.2 million training images, and 50k validation images. <ref type="table" target="#tab_1">Table 2</ref> shows the top-1 prediction performance of our model with 6 clusters and 4096 nodes in each fully-connected layer. We compare to the baseline, the baseline with fully-connected layers, and the baseline with fully-connected layers followed by 50% Dropout. Because the baseline model was already carefully tuned to maximize performance on Ima- </p><formula xml:id="formula_13">P 0 P 1 P 2</formula><p>Step Number The iteration number varies along the x-axis with probability along the y-axis. Warmer colors indicate a higher density of cluster probabilities at a given iteration while the black line shows their median. With hard clustering, there is a clear separation towards higher confidence cluster assignments, especially in later layers.</p><p>geNet, adding fully-connected layers resulted in significant overfitting that could not be overcome with Dropout. However, Blockout was able to effectively remove these effects giving an improved final maximum performance of 74.95%. <ref type="figure" target="#fig_6">Figure 7</ref> shows the distribution of the learned cluster probabilities throughout training. Without random cluster selection, soft clustering causes all probabilities to increase towards one, which could indicate overfitting to the training data. On the other hand, stochastic regularization with hard clustering results in diverging probabilities giving higher confidence cluster membership assignments. This effect is also more prevalent in higher layers, agreeing with our intuition that more information should be shared in lower layers. <ref type="figure" target="#fig_7">Figure 8</ref> visualizes the k-dimensional cluster probability vectors for each node by projecting them to two dimensions using PCA. Because nodes can belong to multiple clusters with varying relative frequencies, the cluster probabilities can be interpreted as embeddings where nodes with similar probabilities indicate computations following similar paths in the hierarchical architecture. Again note that earlier layers tend to be less separated, especially with higher network capacity, allowing for more information to be shared between clusters. In addition, because this implicit node embedding is a side effect of maximizing prediction accuracy, the resulting clusters are less interpretable than an explicit clustering based on category or image similarity. For example, while nearly indistinguishable classes such as "great white shark" and "tiger shark" do share very similar cluster probabilities, so does the visually dissimilar and seemingly unrelated class "drum." Furthermore, while one might expect "hammerhead shark" to be close to the other sharks, it actually belongs to a completely different set of clusters. Despite this, the final cluster probabilities do seem to be fairly consistent across different choices of hyper-parameters. This could indicate that the node clusters are indeed a function of the training data, but incorporate more information than just visual similarity. <ref type="figure" target="#fig_8">Figure 9</ref> shows the expected number of clusters assigned to each output category. Again, notice the consistency across different hyper-parameter selections. While the me- dian number of clusters is around 1.5, some categories belong to close to 3 with many more parameters used in their predictions. These could correspond to categories that are more difficult to predict, perhaps due to natural camouflage (e.g. "zebra"), large variations in background appearance, or the small relative size of the subject (e.g. "rock beauty" and "monarch butterfly").</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="8.">Conclusion</head><p>Blockout is a novel generalization of stochastic regularization with parameters that can be learned during training, essentially allowing for automatic model selection within a class of hierarchical network structures. While our approach is not guaranteed to learn exact blockstructured weight matrices, we demonstrated experimentally that Blockout consistently converges to an implicit clustering of the output categories with branches sharing similar representations. While further work is required to completely understand and interpret the learned clusters, Blockout results in substantial improvements in prediction accuracy and faster convergence in comparison to baseline methods. As a first step towards fully-automatic model selection, Blockout emphasizes the importance of the careful parametrization of deep network architectures and should inspire a family of similar approaches adapted to other application domains.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Example deep network architectures for multi-class classification that can be learned using Blockout. Input and output nodes are shown in green, groups of layers are shown in blue, and arrows indicate connections between them. (a) Traditional architectures make use of a combined model that computes a single feature vector for predicting a large number of diverse categories. (b) Hierarchical architectures instead partition the output categories into clusters and learn separate, high-level feature vectors for each of them. (c) Unlike previous approaches, Blockout allows for endto-end learning of more complex hierarchical architectures.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>An illustration of the equivalence between single layers with block-structured parameter matrices (top) and parallel layers over subsets of nodes (bottom). Solid boxes indicate groups of nodes, dotted boxes represent the corresponding parameter matrices (where zero values are shown in black), and colors indicate cluster membership. (a) Independence between layers can be achieved when nodes only belong to a single cluster. When nodes belong to multiple clusters, hierarchical connections such as merging (b) and branching (c) can be achieved.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 :</head><label>3</label><figDesc>A summary of the types of basic high-level architecture components that can be represented with Blockout. For each (a-e), a single layer is shown where groups nodes are shown as solid boxes, cluster assignments as colors, and connections within clusters as arrows. These connections allow for a rich space of potential model architectures.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 :</head><label>4</label><figDesc>Example parameter masks that can be achieved with (a) Dropout, (b) Blockout, and (c) DropConnect. Note that Dropout and Blockout give block-structured, low-rank masks up to a permutation of the rows and columns while DropConnect is structureless, masking each parameter value independently.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 5 :</head><label>5</label><figDesc>Block diagrams of the models compared in our experiments. (a) As baselines, we use variants of the Inception convolutional neural network architecture<ref type="bibr" target="#b22">[23]</ref>. (b) For comparison, we add an average pooling layer to reduce the bottleneck size followed by two fully-connected layers (potentially with Dropout) before the softmax classifier. (c) Our model replaces the last two FC layers with Blockout layers of the same size.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 6 :</head><label>6</label><figDesc>The convergence of our models in comparison to the baselines on the CIFAR-100 dataset, showing accuracy on the (a) training and (b) testing sets throughout training. Note that Blockout converges in about half the time as Dropout while still achieving a higher final accuracy.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 7 :</head><label>7</label><figDesc>A visualization of the distributions of each layer's cluster probabilities Pj throughout training on the ImageNet dataset.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 8 :</head><label>8</label><figDesc>(Top) A visualization of the node cluster probabilities Pj projected to two dimensions using PCA for models with (a) 4096 nodes and (b) 1024 nodes. Dots indicate nodes while color indicates the cluster with the highest probability. Some example output categories (1-4) are also shown. (Bottom) The associated categories along with sample images. Despite the somewhat nonintuitive structure, there are clear, consistent groupings of nodes, especially in later layers and with fewer nodes.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_8"><head>Figure 9 :</head><label>9</label><figDesc>(Top) The expected number of clusters assigned to each of the ImageNet output categories for (a) 4096 nodes and (b) 1024 nodes. The solid black line shows the median number of clusters while the dotted black lines show the 25th and 75th percentiles. Also shown are 3 example categories with a relatively high expected number of clusters. (Bottom) Sample images from the indicated categories, showing classification challenges such as camouflage, varied background appearance, and small relative size.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="true"><head>Table 1 :</head><label>1</label><figDesc>Cifar-100 Test Accuracy. Left: Comparison with baseline methods. Right: Variable clusters with 512 nodes (top) and variable nodes with 6 clusters (bottom).</figDesc><table>Method 
+Acc. (%) 
+Baseline 
+61.56 
+Baseline + FC 
+62.66 
+Baseline + FC + Dropout 
+64.32 
+Blockout (soft, learned) 
+63.57 
+Blockout (hard, fixed) 
+65.62 
+Blockout (hard, learned) 
+65.66 
+
+Clusters Acc. (%) 
+2 
+64.54 
+4 
+65.93 
+6 
+65.66 
+
+Nodes 
+Acc. (%) 
+512 
+65.66 
+1024 
+66.69 
+2048 
+66.71 
+
+0 
+2 
+4 
+6 
+8 
+10 
+
+x 10 
+
+5 
+
+0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1 
+
+Step Number 
+Training Accuracy 
+
+Baseline + FC 
+Baseline + FC + Dropout 
+Blockout (Fixed) 
+Blockout (Learned) 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 2 :</head><label>2</label><figDesc>ImageNet Evaluation Accuracy. Left: Comparison with baseline methods. Right: Variable clusters with 4096 nodes (top) and variable nodes with 6 clusters (bottom).</figDesc><table>Method 
+Acc. (%) 
+Baseline 
+73.43 1 
+Baseline + FC 
+68.06 
+Baseline + FC + Dropout 
+73.88 
+Blockout (soft, learned) 
+72.43 
+Blockout (hard, fixed) 
+74.44 
+Blockout (hard, learned) 
+74.83 
+
+Clusters Acc. (%) 
+2 
+73.78 
+6 
+74.83 
+15 
+74.19 
+
+Nodes 
+Acc. (%) 
+1024 
+74.16 
+2048 
+74.47 
+4096 
+74.83 
+8192 
+74.95 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">This is the accuracy of our implementation of the model in<ref type="bibr" target="#b9">[10]</ref>, which reported a maximum accuracy of 74.8%. This discrepancy is most likely due to a different learning rate decay schedule.</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Provable bounds for learning some deep representations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Arora</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bhaskara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Ma</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Random search for hyperparameter optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bergstra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">13</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="281" to="305" />
+			<date type="published" when="2012" />
+			<publisher>JMLR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Bird species categorization using pose normalized deep convolutional nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Branson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Van Horn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">British Machine Vision Conference (BMVC)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Emergence of objectselective features in unsupervised feature learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Coates</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Large-scale object classification using label relation graphs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Ding</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Frome</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Murphy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Neven</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Adam</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Desjardins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Pascanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<title level="m">Natural neural networks. In Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Graham</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.6071</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">Fractional max-pooling. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Delving deep into rectifiers: Surpassing human-level performance on imagenet classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Improving neural networks by preventing co-adaptation of feature detectors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1207.0580</idno>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Batch normalization: Accelerating deep network training by reducing internal covariate shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Fine-grained recognition without part annotations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Learning multiple layers of features from tiny images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">Gradientbased learning applied to document recognition. Proceedings of the IEEE</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Haffner</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1998" />
+			<biblScope unit="volume">86</biblScope>
+			<biblScope unit="page" from="2278" to="2324" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Convolutional deep belief networks for scalable unsupervised learning of hierarchical representations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Grosse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ranganath</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Bilinear cnn models for fine-grained visual recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Roychowdhury</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Maji</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">ImageNet Large Scale Visual Recognition Challenge</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Russakovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Satheesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bernstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">On random weights and unsupervised feature learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Saxe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">W</forename><surname>Koh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bhand</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Suresh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Practical bayesian optimization of machine learning algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Snoek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Larochelle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">P</forename><surname>Adams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Striving for simplicity: The all convolutional net</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Springenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dosovitskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Riedmiller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">K</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Greff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1507.06228</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">Training very deep networks. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Going deeper with convolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Semantic hierarchies for image annotation: A survey</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A.-M</forename><surname>Tousch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Herbin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-Y</forename><surname>Audibert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Pattern Recognition</title>
+		<imprint>
+			<biblScope unit="volume">45</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="333" to="345" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Dropout training as adaptive regularization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Wager</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">S</forename><surname>Liang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Regularization of neural networks using dropconnect</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zeiler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">L</forename><surname>Cun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Selfinformed neural network structure learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Warde-Farley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Hd-cnn: Hierarchical deep convolutional neural network for image classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Jagadeesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Decoste</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Di</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Piramuthu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">How transferable are features in deep neural networks?</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yosinski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Clune</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lipson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Visualizing and understanding convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">D</forename><surname>Zeiler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

@@ -1,0 +1,1879 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Loss Functions for Top-k Error: Analysis and Insights</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Maksim</forename><surname>Lapin</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Max Planck Institute for Informatics</orgName>
+								<address>
+									<settlement>Saarbrücken</settlement>
+									<country key="DE">Germany</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Matthias</forename><surname>Hein</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="institution">Saarland University</orgName>
+								<address>
+									<settlement>Saarbrücken</settlement>
+									<country key="DE">Germany</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bernt</forename><surname>Schiele</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Max Planck Institute for Informatics</orgName>
+								<address>
+									<settlement>Saarbrücken</settlement>
+									<country key="DE">Germany</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Loss Functions for Top-k Error: Analysis and Insights</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:43+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>In order to push the performance on realistic computer vision tasks, the number of classes in modern benchmark datasets has significantly increased in recent years. This increase in the number of classes comes along with increased ambiguity between the class labels, raising the question if top-1 error is the right performance measure. In this paper, we provide an extensive comparison and evaluation of established multiclass methods comparing their top-k performance both from a practical as well as from a theoretical perspective. Moreover, we introduce novel top-k loss functions as modifications of the softmax and the multiclass SVM losses and provide efficient optimization schemes for them. In the experiments, we compare on various datasets all of the proposed and established methods for top-k error optimization. An interesting insight of this paper is that the softmax loss yields competitive top-k performance for all k simultaneously. For a specific top-k error, our new topk losses lead typically to further improvements while being faster to train than the softmax.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>The number of classes is rapidly growing in modern computer vision benchmarks <ref type="bibr" target="#b36">[37,</ref><ref type="bibr" target="#b51">52]</ref>. Typically, this also leads to ambiguity in the labels as classes start to overlap. Even for humans, the error rates in top-1 performance are often quite high (≈ 30% on SUN 397 <ref type="bibr" target="#b49">[50]</ref>). While previous research focuses on minimizing the top-1 error, we address top-k error optimization in this paper. We are interested in two cases: a) achieving small top-k error for all reasonably small k; and b) minimization of a specific top-k error.</p><p>While it is argued in <ref type="bibr" target="#b1">[2]</ref> that the one-versus-all (OVA) SVM scheme performs on par in top-1 and top-5 accuracy with the other SVM variations based on ranking losses, we have recently shown in <ref type="bibr" target="#b22">[23]</ref> that minimization of the top-k hinge loss leads to improvements in top-k performance compared to OVA SVM, multiclass SVM, and other ranking-based formulations. In this paper, we study topk error optimization from a wider perspective. On the one hand, we compare OVA schemes and direct multiclass losses in extensive experiments, and on the other, we present theoretical discussion regarding their calibration for the top-k error. Based on these insights, we suggest 4 new families of loss functions for the top-k error. Two are smoothed versions of the top-k hinge losses <ref type="bibr" target="#b22">[23]</ref>, and the other two are top-k versions of the softmax loss. We discuss their advantages and disadvantages, and for the convex losses provide an efficient implementation based on stochastic dual coordinate ascent (SDCA) <ref type="bibr" target="#b37">[38]</ref>.</p><p>We evaluate a battery of loss functions on 11 datasets of different tasks ranging from text classification to large scale vision benchmarks, including fine-grained and scene classification. We systematically optimize and report results separately for each top-k accuracy. One interesting message that we would like to highlight is that the softmax loss is able to optimize all top-k error measures simultaneously. This is in contrast to multiclass SVM and is also reflected in our experiments. Finally, we show that our new top-k variants of smooth multiclass SVM and the softmax loss can further improve top-k performance for a specific k.</p><p>Related work. Top-k optimization has recently received revived attention with the advent of large scale problems <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b22">23,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b24">25]</ref>. The top-k error in multiclass classification, which promotes good ranking of class labels for each example, is closely related to the precision@k metric in information retrieval, which counts the fraction of positive instances among the top-k ranked examples. In essence, both approaches enforce a desirable ranking of items <ref type="bibr" target="#b22">[23]</ref>.</p><p>The classic approaches optimize pairwise ranking with SVM struct <ref type="bibr" target="#b19">[20,</ref><ref type="bibr" target="#b42">43]</ref>, RankNet <ref type="bibr" target="#b9">[10]</ref>, and LaRank <ref type="bibr" target="#b5">[6]</ref>. An alternative direction was proposed by Usunier et al. <ref type="bibr" target="#b43">[44]</ref>, who described a general family of convex loss functions for ranking and classification. One of the loss functions that we consider (top-k SVM β <ref type="bibr" target="#b22">[23]</ref>) also falls into that family. Weston et al. <ref type="bibr" target="#b48">[49]</ref> then introduced Wsabie, which optimizes an approximation of a ranking-based loss from <ref type="bibr" target="#b43">[44]</ref>. A Bayesian approach was suggested by <ref type="bibr" target="#b40">[41]</ref>.</p><p>Recent works focus on the top of the ranked list <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b35">36]</ref>, scalability to large datasets <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b22">23,</ref><ref type="bibr" target="#b23">24]</ref>, explore transductive learning <ref type="bibr" target="#b24">[25]</ref> and prediction of tuples <ref type="bibr" target="#b34">[35]</ref>. We let a yf (x) (binary one-vs-all); a (fj(x) − fy(x))j∈Y , c 1 − ey (multiclass); π : aπ 1 ≥ . . . ≥ aπ m . Contributions. We study the problem of top-k error optimization on a diverse range of learning tasks. We consider existing methods as well as propose 4 novel loss functions for minimizing the top-k error. A brief overview of the methods is given in <ref type="table" target="#tab_1">Table 1</ref>. For the proposed convex top-k losses, we develop an efficient optimization scheme based on SDCA 1 , which can also be used for training with the softmax loss. All methods are evaluated empirically in terms of the top-k error and, whenever possible, in terms of classification calibration. We discover that the softmax loss and the proposed smooth top-1 SVM are astonishingly competitive in all top-k errors. Further small improvements can be obtained with the new top-k losses.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Loss Functions for Top-k Error</head><p>We consider multiclass problems with m classes where the training set (x i , y i ) n i=1 consists of n examples x i ∈ R d along with the corresponding labels y i ∈ Y {1, . . . , m}. We use π and τ to denote a permutation of (indexes) Y. Unless stated otherwise, a π reorders components of a vector a ∈ R m in descending order, i.e. a π1 ≥ a π2 ≥ . . . ≥ a πm . While we consider linear classifiers in our experiments, all loss functions below are formulated in the general setting where a function f : X → R m is learned and prediction at test time is done via arg max y∈Y f y (x), resp. the top-k predictions. For the linear case, all predictors f y have the form f y (x) = w y , x . Let W ∈ R d×m be the stacked weight matrix, L : Y × R m → R be a convex loss function, and λ &gt; 0 be a regularization parameter. We consider the following multiclass optimization problem</p><formula xml:id="formula_0">min W 1 n n i=1 L(y i , W ⊤ x i ) + λ W 2 F .</formula><p>1 Code available at: https://github.com/mlapin/libsdca We use the Iverson bracket notation P , defined as P = 1 if P is true, 0 otherwise; and introduce a shorthand p y (x) Pr(Y = y | X = x). We generalize the standard zero-one error and allow k guesses instead of one. Formally, the top-k zero-one loss (top-k error) is</p><formula xml:id="formula_1">err k (y, f (x)) f π k (x) &gt; f y (x) .<label>(1)</label></formula><p>Note that for k = 1 we recover the standard zero-one error.</p><p>Top-k accuracy is defined as 1 minus the top-k error. All proofs and technical details are in the supplement.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Bayes Optimality and Top-k Calibration</head><p>In this section, we establish the best achievable top-k error, determine when a classifier achieves it, and define a notion of top-k calibration.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Lemma 1. The Bayes optimal top-k error at x is</head><formula xml:id="formula_2">min g∈R m E Y |X [err k (Y, g) | X = x] = 1 − k j=1 p τj (x), where p τ1 (x) ≥ p τ2 (x) ≥ . . . ≥ p τm (x). A classifier f is top-k Bayes optimal at x if and only if y | f y (x) ≥ f π k (x) ⊂ y | p y (x) ≥ p τ k (x) , where f π1 (x) ≥ f π2 (x) ≥ . . . ≥ f πm (x).</formula><p>Optimization of the zero-one loss (and, by extension, the top-k error) leads to hard combinatorial problems. Instead, a standard approach is to use a convex surrogate loss which upper bounds the zero-one error. Under mild conditions on the loss function <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b41">42]</ref>, the optimal classifier w.r.t. the surrogate yields a Bayes optimal solution for the zero-one loss. Such loss is called classification calibrated, which is known in statistical learning theory as a necessary condition for a classifier to be universally Bayes consistent <ref type="bibr" target="#b2">[3]</ref>. We introduce now the notion of calibration for the top-k error.</p><formula xml:id="formula_3">Definition 1. A loss function L : Y × R m → R (or a re- duction scheme) is called top-k calibrated if for all possible data generating measures on R d × Y and all x ∈ R d arg min g∈R m E Y |X [L(Y, g) | X = x] ⊆ arg min g∈R m E Y |X [err k (Y, g) | X = x].</formula><p>If a loss is not top-k calibrated, it implies that even in the limit of infinite data, one does not obtain a classifier with the Bayes optimal top-k error from Lemma 1.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">OVA and Direct Multiclass Approaches</head><p>The standard multiclass problem is often solved using the one-vs-all (OVA) reduction into a set of m binary classification problems. Every class is trained versus the rest which yields m classifiers {f y } y∈Y .</p><p>Typically, the binary classification problems are formulated with a convex margin-based loss function L(yf (x)), where L : R → R and y = ±1. We consider in this paper:</p><formula xml:id="formula_4">L(yf (x)) = max{0, 1 − yf (x)},<label>(2)</label></formula><formula xml:id="formula_5">L(yf (x)) = log(1 + e −yf (x) ).<label>(3)</label></formula><p>The hinge (2) and logistic (3) losses correspond to the SVM and logistic regression respectively. We now show when the OVA schemes are top-k calibrated, not only for k = 1 (standard multiclass loss) but for all k simultaneously.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Lemma 2.</head><p>The OVA reduction is top-k calibrated for any 1 ≤ k ≤ m if the Bayes optimal function of the convex margin-based loss L(yf (x)) is a strictly monotonically increasing function of Pr(Y = 1 | X = x).</p><p>Next, we check if the one-vs-all schemes employing hinge and logistic regression losses are top-k calibrated.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Proposition 1. OVA SVM is not top-k calibrated.</head><p>In contrast, logistic regression is top-k calibrated.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Proposition 2. OVA logistic regression is top-k calibrated.</head><p>An alternative to the OVA scheme with binary losses is to use a multiclass loss L : Y ×R m → R directly. We consider two generalizations of the hinge and logistic losses below:</p><formula xml:id="formula_6">L(y, f (x)) = max j∈Y j = y + f j (x) − f y (x) ,<label>(4)</label></formula><formula xml:id="formula_7">L(y, f (x)) = log j∈Y exp(f j (x) − f y (x)) . (5)</formula><p>Both the multiclass hinge loss (4) of Crammer &amp; Singer <ref type="bibr" target="#b13">[14]</ref> and the softmax loss (5) are popular losses for multiclass problems. The latter is also known as the crossentropy or multiclass logistic loss and is often used as the last layer in deep architectures <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b39">40]</ref>. The multiclass hinge loss has been shown to be competitive in large-scale image classification <ref type="bibr" target="#b1">[2]</ref>, however, it is known to be not calibrated <ref type="bibr" target="#b41">[42]</ref> for the top-1 error. Next, we show that it is not top-k calibrated for any k.</p><formula xml:id="formula_8">Proposition 3. Multiclass SVM is not top-k calibrated.</formula><p>Again, a contrast between the hinge and logistic losses.</p><formula xml:id="formula_9">Proposition 4. The softmax loss is top-k calibrated.</formula><p>The implicit reason for top-k calibration of the OVA schemes and the softmax loss is that one can estimate the probabilities p y (x) from the Bayes optimal classifier. Loss functions which allow this are called proper. We refer to <ref type="bibr" target="#b30">[31]</ref> and references therein for a detailed discussion.</p><p>We have established that the OVA logistic regression and the softmax loss are top-k calibrated for any k, so why should we be interested in defining new loss functions for the top-k error? The reason is that calibration is an asymptotic property as the Bayes optimal functions are obtained pointwise. The picture changes if we use linear classifiers, since they obviously cannot be minimized independently at each point. Indeed, most of the Bayes optimal classifiers cannot be realized by linear functions.</p><p>In particular, convexity of the softmax and multiclass hinge losses leads to phenomena where</p><formula xml:id="formula_10">err k (y, f (x)) = 0, but L(y, f (x)) ≫ 0. This happens if f π1 (x) ≫ f y (x) ≥ f π k (x)</formula><p>and adds a bias when working with "rigid" function classes such as linear ones. The loss functions which we introduce in the following are modifications of the above losses with the goal of alleviating that phenomenon.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.">Smooth Top-k Hinge Loss</head><p>Recently, we introduced two top-k versions of the multiclass hinge loss (4) in <ref type="bibr" target="#b22">[23]</ref>, where the second version is based on the family of ranking losses introduced earlier by <ref type="bibr" target="#b43">[44]</ref>. We use our notation from <ref type="bibr" target="#b22">[23]</ref> for direct comparison and refer to the first version as α and the second one as β. Let c = 1 − e y , where 1 is the all ones vector, e y is the y-th basis vector, and let a ∈ R m be defined componentwise as</p><formula xml:id="formula_11">a j w j , x − w y , x . The two top-k hinge losses are L(a) = max 0, 1 k k j=1 (a + c) πj top-k SVM α , (6) L(a) = 1 k k j=1 max 0, (a + c) πj top-k SVM β , (7)</formula><p>where (a) πj is the j-th largest component of a. It was shown in <ref type="bibr" target="#b22">[23]</ref> that (6) is a tighter upper bound on the top-k error than (7), however, both losses performed similarly in our experiments. In the following, we simply refer to them as the top-k hinge or the top-k SVM loss.</p><p>Both losses reduce to the multiclass hinge loss (4) for k = 1. Therefore, they are unlikely to be top-k calibrated, even though we can currently neither prove nor disprove this for k &gt; 1. The multiclass hinge loss is not calibrated as it is non-smooth and does not allow to estimate the class conditional probabilities p y (x). Our new family of smooth top-k hinge losses is based on the Moreau-Yosida regularization <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b25">26]</ref>. This technique has been used in <ref type="bibr" target="#b37">[38]</ref> to smooth the binary hinge loss <ref type="bibr" target="#b1">(2)</ref>. Interestingly, smooth binary hinge loss fulfills the conditions of Lemma 2 and leads to a top-k calibrated OVA scheme. The hope is that the smooth top-k hinge loss becomes top-k calibrated as well.</p><p>Smoothing works by adding a quadratic term to the conjugate function 2 , which then becomes strongly convex.</p><p>Smoothness of the loss, among other things, typically leads to much faster optimization as we discuss in Section 3.</p><formula xml:id="formula_12">Proposition 5. OVA smooth hinge is top-k calibrated.</formula><p>Next, we introduce the multiclass smooth top-k hinge losses, which extend the top-k hinge losses <ref type="formula">(6)</ref> and <ref type="formula">(7)</ref>. We define the top-k simplex (α and β) of radius r as</p><formula xml:id="formula_13">∆ α k (r) x | 1, x ≤ r, 0 ≤ x i ≤ 1 k 1, x , ∀i , (8) ∆ β k (r) x | 1, x ≤ r, 0 ≤ x i ≤ 1 k r, ∀i .<label>(9)</label></formula><p>We also let ∆ α</p><formula xml:id="formula_14">k ∆ α k (1) and ∆ β k ∆ β k (1).</formula><p>Smoothing applied to the top-k hinge loss (6) yields the following smooth top-k hinge loss (α). Smoothing of <ref type="formula">(7)</ref> is done similarly, but the set ∆ α k (r) is replaced with ∆ β k (r). Proposition 6. Let γ &gt; 0 be the smoothing parameter. The smooth top-k hinge loss (α) and its conjugate are</p><formula xml:id="formula_15">L γ (a) = 1 γ a + c, p − 1 2 p, p ,<label>(10)</label></formula><formula xml:id="formula_16">L * γ (b) = γ 2 b, b − c, b , if b ∈ ∆ α k , +∞ o/w, (11) where p = proj ∆ α k (γ) (a + c) is the Euclidean projection of (a + c) on ∆ α k (γ). Moreover, L γ (a) is 1/γ-smooth.</formula><p>There is no analytic expression for (10) and evaluation requires computing a projection onto the top-k simplex ∆ α k (γ), which can be done in O(m log m) time as shown in <ref type="bibr" target="#b22">[23]</ref>. The non-analytic nature of smooth top-k hinge losses currently prevents us from proving their top-k calibration.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.4.">Top-k Entropy Loss</head><p>As shown in § 4 on synthetic data, top-1 and top-2 error optimization, when limited to linear classifiers, lead to completely different solutions. The softmax loss, primarily aiming at top-1 performance, produces a solution that is reasonably good in top-1 error, but is far from what can be achieved in top-2 error. That reasoning motivated us to adapt the softmax loss to top-k error optimization. Inspired by the conjugate of the top-k hinge loss, we introduce in this section the top-k entropy loss. <ref type="bibr" target="#b1">2</ref> The</p><formula xml:id="formula_17">convex conjugate of f is f * (x * ) = sup x { x * , x − f (x)}.</formula><p>Recall that the conjugate functions of multiclass SVM <ref type="bibr" target="#b13">[14]</ref> and the top-k SVM <ref type="bibr" target="#b22">[23]</ref> differ only in their effective domain 3 while the conjugate function is the same. Instead of the standard simplex, the conjugate of the top-k hinge loss is defined on a subset, the top-k simplex.</p><p>This suggests a way to construct novel losses with specific properties by taking the conjugate of an existing loss function, and modifying its essential domain in a way that enforces the desired properties. The motivation for doing so comes from the interpretation of the dual variables as forces with which every training example pushes the decision surface in the direction given by the ground truth label. The absolute value of the dual variables determines the magnitude of these forces and the optimal values are often attained at the boundary of the feasible set (which coincides with the essential domain of the loss). Therefore, by reducing the feasible set we can limit the maximal contribution of a given training example.</p><p>We begin with the conjugate of the softmax loss. Let a \y be obtained by removing the y-th coordinate from a. <ref type="formula">(5)</ref> is</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Proposition 7. The convex conjugate of</head><formula xml:id="formula_18">L * (v) =      j =y v j log v j + (1 + v y ) log(1 + v y ), if 1, v = 0 and v \y ∈ ∆, +∞ otherwise,<label>(12)</label></formula><p>where ∆</p><p>x</p><formula xml:id="formula_19">| 1, x ≤ 1, 0 ≤ x j ≤ 1, ∀j .</formula><p>The conjugate of the top-k entropy loss is obtained by replacing ∆ in (12) with ∆ α k . A β version could be obtained using the ∆ β k instead, which defer to future work. There is no closed-form solution for the primal top-k entropy loss for k &gt; 1, but we can evaluate it as follows.</p><formula xml:id="formula_20">Proposition 8. Let u j f j (x) − f y (x) for all j ∈ Y.</formula><p>The top-k entropy loss is defined as</p><formula xml:id="formula_21">L(u) = max u \y , x − (1 − s) log(1 − s) − x, log x | x ∈ ∆ α k , 1, x = s .<label>(13)</label></formula><p>Moreover, we recover the softmax loss (5) if k = 1.</p><p>We show in the supplement how this problem can be solved efficiently. The non-analytic nature of the loss for k &gt; 1 does not allow us to check if it is top-k calibrated.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.5.">Truncated Top-k Entropy Loss</head><p>A major limitation of the softmax loss for top-k error optimization is that it cannot ignore the highest scoring predictions, which yields a high loss even if the top-k error is zero. This can be seen by rewriting <ref type="formula">(5)</ref> as</p><formula xml:id="formula_22">L(y, f (x)) = log 1 + j =y exp(f j (x) − f y (x)) . (14) 3 The effective domain of f is dom f = {x ∈ X | f (x) &lt; +∞}.</formula><p>If there is only a single j such that f j (x) − f y (x) ≫ 0, then L(y, f (x)) ≫ 0 even though err 2 (y, f (x)) = 0.</p><p>This problem is is also present in all top-k hinge losses considered above and is an inherent limitation due to their convexity. The origin of the problem is the fact that ranking based losses <ref type="bibr" target="#b43">[44]</ref> are based on functions such as</p><formula xml:id="formula_23">φ(f (x)) = 1 m j∈Y α j f πj (x) − f y (x).</formula><p>The function φ is convex if the sequence (α j ) is monotonically non-increasing <ref type="bibr" target="#b8">[9]</ref>. This implies that convex ranking based losses have to put more weight on the highest scoring classifiers, while we would like to put less weight on them.</p><p>To that end, we drop the first (k − 1) highest scoring predictions from the sum in <ref type="bibr" target="#b13">(14)</ref>, sacrificing convexity of the loss, and define the truncated top-k entropy loss as follows</p><formula xml:id="formula_24">L(y, f (x)) = log 1 + j∈Jy exp(f j (x) − f y (x)) ,<label>(15)</label></formula><p>where J y are the indexes corresponding to the (m − k) smallest components of (f j (x)) j =y . This loss can be seen as a smooth version of the top-k error (1), as it is small whenever the top-k error is zero. Below, we show that this loss is top-k calibrated.</p><p>Proposition 9. The truncated top-k entropy loss is top-s calibrated for any k ≤ s ≤ m.</p><p>As the loss (15) is nonconvex, we use solutions obtained with the softmax loss (5) as initial points and optimize them further via gradient descent. However, the resulting optimization problem seems to be "mildly nonconvex" as the same-quality solutions are obtained from different initializations. In Section 4, we show a synthetic experiment, where the advantage of discarding the highest scoring classifier in the loss becomes apparent.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Optimization Method</head><p>In this section, we briefly discuss how the proposed smooth top-k hinge losses and the top-k entropy loss can be optimized efficiently within the SDCA framework of <ref type="bibr" target="#b37">[38]</ref>. Further implementation details are given in the supplement.</p><p>The primal and dual problems. Let X ∈ R d×n be the matrix of training examples x i ∈ R d , K = X ⊤ X the corresponding Gram matrix, W ∈ R d×m the matrix of primal variables, A ∈ R m×n the matrix of dual variables, and λ &gt; 0 the regularization parameter. The primal and Fenchel dual <ref type="bibr" target="#b6">[7]</ref> objective functions are given as</p><formula xml:id="formula_25">P (W ) = + 1 n n i=1 L y i , W ⊤ x i + λ 2 tr W ⊤ W , D(A) = − 1 n n i=1 L * (y i , −λna i ) − λ 2 tr AKA ⊤ ,<label>(16)</label></formula><p>where L * is the convex conjugate of L. SDCA proceeds by randomly picking a variable a i (which in our case is a vector of dual variables over all m classes for a sample x i ) and modifying it to achieve maximal increase in the dual objective D(A). It turns out that this update step is equivalent to a proximal problem, which can be seen as a regularized projection onto the essential domain of L * . The update step for top-k SVM α γ . Let a \y be obtained by removing the y-th coordinate from vector a. We show that performing an update step for the smooth top-k hinge loss is equivalent to projecting a certain vector b, computed from the prediction scores W ⊤ x i , onto the essential domain of L * , the top-k simplex, with an added regularization ρ 1, x 2 , which biases the solution to be orthogonal to 1. </p><formula xml:id="formula_26">min x { x − b 2 + ρ 1, x 2 | x ∈ ∆ α k ( 1 λn )},<label>(17)</label></formula><formula xml:id="formula_27">where b = 1 xi,xi +γnλ q \yi + (1 − q yi )1 , q = W ⊤ x i − x i , x i a i , and ρ = xi,xi xi,xi +γnλ .</formula><p>Note that setting γ = 0, we recover the update step for the non-smooth top-k hinge loss <ref type="bibr" target="#b22">[23]</ref>. It turns out that we can employ their projection procedure for solving <ref type="bibr" target="#b16">(17)</ref> with only a minor modification of b and ρ.</p><p>The update step for the top-k SVM β γ loss is derived similarly using the set ∆ β k in (17) instead of ∆ α k . The resulting projection problem is a biased continuous quadratic knapsack problem, which is discussed in the supplement of <ref type="bibr" target="#b22">[23]</ref>.</p><p>Smooth top-k hinge losses converge significantly faster than their nonsmooth variants as we show in the scaling experiments below. This can be explained by the theoretical results of <ref type="bibr" target="#b37">[38]</ref> on the convergence rate of SDCA. They also had similar observations for the smoothed binary hinge loss.</p><p>The update step for top-k Ent. We now discuss the optimization of the proposed top-k entropy loss in the SDCA framework. Note that the top-k entropy loss reduces to the softmax loss for k = 1. Thus, our SDCA approach can be used for gradient-free optimization of the softmax loss without having to tune step sizes or learning rates.</p><p>Proposition 11. Let L in <ref type="bibr" target="#b15">(16)</ref> be the top-k Ent loss <ref type="bibr" target="#b12">(13)</ref> and L * be its convex conjugate as in <ref type="bibr" target="#b11">(12)</ref> </p><formula xml:id="formula_28">with ∆ replaced by ∆ α k . The update max ai {D(A) | 1, a i = 0} is equiva- lent with the change of variables x ↔ −λna \yi i to solving min x∈∆ α k α 2 ( x, x + 1, x 2 ) − b, x + x, log x + (1 − 1, x ) log(1 − 1, x )<label>(18)</label></formula><p>where α = xi,xi</p><formula xml:id="formula_29">λn , b = q \yi −q yi 1, q = W ⊤ x i − x i , x i a i .</formula><p>Note that this optimization problem is similar to <ref type="bibr" target="#b16">(17)</ref>, but is more difficult to solve due to the presence of logarithms in the objective. We propose to tackle this problem using the Lambert W function introduced below.</p><p>Lambert W function. The Lambert W function is defined to be the inverse of the function w → we w and is widely used in many fields <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b44">45]</ref>. Taking logarithms on both sides of the defining equation z = W e W , we obtain log z = W (z) + log W (z). Therefore, if we are given an equation of the form x + log x = t for some t ∈ R, we can directly "solve" it in closed-form as x = W (e t ). The crux of the problem is that the function V (t)</p><p>W (e t ) is transcendental <ref type="bibr" target="#b16">[17]</ref> just like the logarithm and the exponent. There exist highly optimized implementations for the latter and we argue that the same can be done for the Lambert W function. In fact, there is already some work on this topic <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b44">45]</ref>, which we also employ in our implementation.  Runtime. We compare the wall-clock runtime of the top-1 multiclass SVM <ref type="bibr" target="#b22">[23]</ref> (SVM Multi ) with our smooth multiclass SVM (smooth SVM Multi ) and the softmax loss (LR Multi ) objectives in <ref type="figure" target="#fig_2">Figure 1</ref>. We plot the relative duality gap (P (W ) − D(A))/P (W ) and the validation accuracy versus time for the best performing models on ILSVRC 2012. We obtain substantial improvement of the convergence rate for smooth top-1 SVM compared to the nonsmooth baseline. Moreover, top-1 accuracy saturates after a few passes over the training data, which justifies the use of a fairly loose stopping criterion (we used 10 −3 ). For LR Multi , the cost of each epoch is significantly higher compared to the top-1 SVMs, which is due to the difficulty of solving <ref type="bibr" target="#b17">(18)</ref>. This suggests that one can use the smooth top-1 SVM α 1 and obtain competitive performance (see § 5) at a lower training cost.</p><p>Gradient-based optimization. Finally, we note that the proposed smooth top-k hinge and the truncated top-k entropy losses are easily amenable to gradient-based optimization, in particular, for training deep architectures. The computation of the gradient of (15) is straightforward, while for the smooth top-k hinge loss <ref type="bibr" target="#b9">(10)</ref> we have [7, § 3, Ex. 12.d] ∇L γ (a) = 1 γ proj ∆ α k (γ) (a + c). </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Synthetic Example</head><p>In this section, we demonstrate in a synthetic experiment that our proposed top-2 losses outperform the top-1 losses when one aims at optimal top-2 performance. The dataset with three classes is shown in the inner circle of <ref type="figure" target="#fig_3">Figure 2</ref>. The description of the distribution from which we sample can be found in the supplement. Samples of different classes are plotted next to each other for better visibility as there is significant class overlap. We visualize top-1/2 predictions with two colored circles (outside the black circle). We sample 200/200/200K points for training/validation/testing and tune the C = 1 λn parameter in the range 2 −18 to 2 18 . Results are in <ref type="table" target="#tab_3">Table 2</ref>.</p><p>Circle (synthetic)  In each column we provide the results for the model that optimizes the corresponding top-k accuracy, which is in general different for top-1 and top-2. First, we note that all top-1 baselines perform similar in top-1 performance, except for SVM Multi and top-1 SVM 1 which show better results. Next, we see that our top-2 losses improve the top-2 accuracy and the improvement is most significant for the nonconvex top-2 Ent tr loss, which is close to the optimal solution for this dataset. This is because top-2 Ent tr is a tight bound on the top-2 error and ignores top-1 errors in the loss. Unfortunately, similar significant improvements were not observed on the real-world data sets that we tried. Method <ref type="table" target="#tab_1">Top-1 Top-3 Top-5 Top-10 Top-1 Top-3 Top-5 Top-10 Top-1 Top-3 Top-5 Top-10 Top-1 Top-3 Top-5 Top-</ref>  <ref type="table">Table 3</ref>: Top-k accuracy (%) on various datasets. The first line is a reference to the state-of-the-art on each dataset and reports top-1 accuracy except when the numbers are aligned with Top-k. We compare the one-vs-all and multiclass baselines with the top-k SVM α <ref type="bibr" target="#b22">[23]</ref> as well as the proposed smooth top-k SVM α γ , top-k Ent, and the nonconvex top-k Ent tr .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experimental Results</head><p>The goal of this section is to provide an extensive empirical evaluation of the top-k performance of different losses in multiclass classification. To this end, we evaluate the loss functions introduced in § 2 on 11 datasets (500 to 2.4M training examples, 10 to 1000 classes), from various problem domains (vision and non-vision; fine-grained, scene and general object classification). The detailed statistics of the datasets is given in <ref type="table" target="#tab_7">Table 4</ref>  Please refer to <ref type="table" target="#tab_1">Table 1</ref> for an overview of the methods and our naming convention. Due to space constraints, we only report a limited selection of all the results we obtained. Please refer to the supplement for a complete report. As other ranking based losses did not perform well in <ref type="bibr" target="#b22">[23]</ref>, we do no further comparison here.</p><p>Solvers. We use LibLinear <ref type="bibr" target="#b15">[16]</ref> for the one-vs-all baselines SVM OVA and LR OVA ; and our code from <ref type="bibr" target="#b22">[23]</ref> for top-k SVM. We extended the latter to support the smooth top-k SVM γ and top-k Ent. The multiclass loss baselines SVM Multi and LR Multi correspond respectively to top-1 SVM and top-1 Ent. For the nonconvex top-k Ent tr , we use the LR Multi solution as an initial point and perform gradient descent with line search. We cross-validate hyperparameters in the range 10 −5 to 10 3 , extending it when the optimal value is at the boundary.</p><p>Features. For ALOI, Letter, and News20 datasets, we use the features provided by the LibSVM <ref type="bibr" target="#b10">[11]</ref> datasets. For ALOI, we randomly split the data into equally sized training and test sets preserving class distributions. The Letter dataset comes with a separate validation set, which we used for model selection only. For News20, we use PCA to reduce dimensionality of sparse features from 62060 to 15478 preserving all non-singular PCA components <ref type="bibr" target="#b3">4</ref> .</p><p>For Caltech101 Silhouettes, we use the features and the train/val/test splits provided by <ref type="bibr" target="#b40">[41]</ref>.</p><p>For CUB, Flowers, FMD, and ILSVRC 2012, we use MatConvNet <ref type="bibr" target="#b45">[46]</ref> to extract the outputs of the last fully connected layer of the imagenet-vgg-verydeep-16 model which is pre-trained on ImageNet <ref type="bibr" target="#b14">[15]</ref> and achieves state-of-the-art results in image classification <ref type="bibr" target="#b39">[40]</ref>. <ref type="bibr" target="#b3">4</ref> The top-k SVM solvers that we used were designed for dense inputs.</p><p>For Indoor 67, SUN 397, and Places 205, we use the Places205-VGGNet-16 model by <ref type="bibr" target="#b47">[48]</ref> which is pretrained on Places 205 <ref type="bibr" target="#b51">[52]</ref> and outperforms the ImageNet pre-trained model on scene classification tasks <ref type="bibr" target="#b47">[48]</ref>. Further results can be found in the supplement. In all cases we obtain a similar behavior in terms of the ranking of the considered losses as discussed below.</p><p>Discussion. The experimental results are given in <ref type="table">Table 3</ref>. There are several interesting observations that one can make. While the OVA schemes perform quite similar to the multiclass approaches (logistic OVA vs. softmax, hinge OVA vs. multiclass SVM), which confirms earlier observations in <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b32">33]</ref>, the OVA schemes performed worse on ALOI and Letter. Therefore it seems safe to recommend to use multiclass losses instead of the OVA schemes.</p><p>Comparing the softmax vs. multiclass SVM losses, we see that there is no clear winner in top-1 performance, but softmax consistently outperforms multiclass SVM in top-k performance for k &gt; 1. This might be due to the strong property of softmax being top-k calibrated for all k. Please note that this trend is uniform across all datasets, in particular, also for the ones where the features are not coming from a convnet. Both the smooth top-k hinge and the top-k entropy losses perform slightly better than softmax if one compares the corresponding top-k errors. However, the good performance of the truncated top-k loss on synthetic data does not transfer to the real world datasets. This might be due to a relatively high dimension of the feature spaces, but requires further investigation. We also report a number of fine-tuning experiments 5 in the supplementary material.</p><p>We conclude that a safe choice for multiclass problems seems to be the softmax loss as it yields competitive results in all top-k errors. An interesting alternative is the smooth top-k hinge loss which is faster to train (see Section 3) and achieves competitive performance. If one wants to optimize directly for a top-k error (at the cost of a higher top-1 error), then further improvements are possible using either the smooth top-k SVM or the top-k entropy losses.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>We have done an extensive experimental study of top-k performance optimization. We observed that the softmax loss and the smooth top-1 hinge loss are competitive across all top-k errors and should be considered the primary candidates in practice. Our new top-k loss functions can further improve these results slightly, especially if one is targeting a particular top-k error as the performance measure. Finally, we would like to highlight our new optimization scheme based on SDCA for the top-k entropy loss which also includes the softmax loss and is of an independent interest.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Proposition 10 .</head><label>10</label><figDesc>Let L and L * in (16) be respectively the top-k SVM α γ loss and its conjugate as in Proposition 6. The update max ai {D(A) | 1, a i = 0} is equivalent with the change of variables x ↔ −a \yi i to solving</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 1 :</head><label>1</label><figDesc>SDCA convergence with LR Multi , SVM Multi , and top-1 SVM α 1 objectives on ILSVRC 2012.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 2 :</head><label>2</label><figDesc>Synthetic data on the unit circle in R 2 (inside black circle) and visualization of top-1 and top-2 predictions (outside black circle). (a) Smooth top-1 SVM 1 optimizes top-1 error which impedes its top-2 error. (b) Trunc. top-2 entropy loss ignores top-1 scores and optimizes directly top-2 errors leading to a much better top-2 result.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Note that SVM Multi ≡ top-1 SVM α ≡ top-1 SVM β and LR Multi ≡ top-1 Ent ≡ top-1 Enttr.</figDesc><table>Method 
+
+Name 
+Loss function 
+Conjugate SDCA update Top-k calibrated Convex 
+
+SVM OVA 
+One-vs-all (OVA) SVM 
+max{0, 1 − a} 
+[38] 
+[38] 
+no 1 (Prop. 1) 
+
+yes 
+
+LR OVA 
+OVA logistic regression 
+log(1 + e −a ) 
+yes (Prop. 2) 
+
+SVM Multi 
+Multiclass SVM 
+max 0, (a + c)π 1 
+[23, 38] 
+[23, 38] 
+no (Prop. 3) 
+
+LR Multi 
+Softmax (maximum entropy) 
+log 
+j∈Y exp(aj) 
+Prop. 7 
+Prop. 11 
+yes (Prop. 4) 
+
+top-k SVM α Top-k hinge (α) 
+max 0, 1 
+
+k 
+
+k 
+
+j=1 (a + c)π j 
+[23] 
+[23] 
+open 
+
+question 
+
+for k &gt; 1 
+
+top-k SVM β Top-k hinge (β) 
+
+1 
+k 
+
+k 
+
+j=1 max 0, (a + c)π j 
+top-k SVM α 
+
+γ 
+
+Smooth top-k hinge (α)  *  
+Eq. (10) w/ ∆ α 
+
+k 
+
+Prop. 6 
+Prop. 10 
+top-k SVM β 
+
+γ 
+
+Smooth top-k hinge (β)  *  
+Eq. (10) w/ ∆ β 
+
+k 
+
+top-k Ent 
+Top-k entropy  *  
+Prop. 8 
+Eq. (12) 
+Prop. 11 
+
+top-k Enttr 
+Truncated top-k entropy  *  
+Eq. (15) 
+-
+-
+yes (Prop. 9) 
+no 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 1 :</head><label>1</label><figDesc>Overview of the methods we consider and our contributions. * Novel loss. 1 But smoothed one is (Prop. 5).</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 2 :</head><label>2</label><figDesc></figDesc><table>Top-k accuracy (%) on synthetic data. Left: Base-
+lines methods. Right: Top-k SVM (nonsmooth / smooth) 
+and top-k softmax losses (convex and nonconvex). 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_5" validated="false"><head></head><label></label><figDesc><ref type="bibr" target="#b9">10</ref> </figDesc><table>SVM OVA 
+82.4 89.5 91.5 
+93.7 
+63.0 82.0 88.1 
+94.6 
+84.3 95.4 97.9 
+99.5 
+61.8 76.5 80.8 
+86.6 
+LR OVA 
+86.1 93.0 94.8 
+96.6 
+68.1 86.1 90.6 
+96.2 
+84.9 96.3 97.8 
+99.3 
+63.2 80.4 84.4 
+89.4 
+
+SVM Multi 
+90.0 95.1 96.7 
+98.1 
+76.5 89.2 93.1 
+97.7 
+85.4 94.9 97.2 
+99.1 
+62.8 77.8 82.0 
+86.9 
+LR Multi 
+89.8 95.7 97.1 
+98.4 
+75.3 90.3 94.3 
+98.0 
+84.5 96.4 98.1 
+99.5 
+63.2 81.2 85.1 
+89.7 
+
+top-3 SVM 
+89.2 95.5 97.2 
+98.4 
+74.0 91.0 94.4 
+97.8 
+85.1 96.6 98.2 
+99.3 
+63.4 79.7 83.6 
+88.3 
+top-5 SVM 
+87.3 95.6 97.4 
+98.6 
+70.8 91.5 95.1 
+98.4 
+84.3 96.7 98.4 
+99.3 
+63.3 80.0 84.3 
+88.7 
+top-10 SVM 
+85.0 95.5 97.3 
+98.7 
+61.6 88.9 96.0 
+99.6 
+82.7 96.5 98.4 
+99.3 
+63.0 80.5 84.6 
+89.1 
+
+top-1 SVM1 
+90.6 95.5 96.7 
+98.2 
+76.8 89.9 93.6 
+97.6 
+85.6 96.3 98.0 
+99.3 
+63.9 80.3 84.0 
+89.0 
+top-3 SVM1 
+89.6 95.7 97.3 
+98.4 
+74.1 90.9 94.5 
+97.9 
+85.1 96.6 98.4 
+99.4 
+63.3 80.1 84.0 
+89.2 
+top-5 SVM1 
+87.6 95.7 97.5 
+98.6 
+70.8 91.5 95.2 
+98.6 
+84.5 96.7 98.4 
+99.4 
+63.3 80.5 84.5 
+89.1 
+top-10 SVM1 85.2 95.6 97.4 
+98.7 
+61.7 89.1 95.9 
+99.7 
+82.9 96.5 98.4 
+99.5 
+63.1 80.5 84.8 
+89.1 
+
+top-3 Ent 
+89.0 95.8 97.2 
+98.4 
+73.0 90.8 94.9 
+98.5 
+84.7 96.6 98.3 
+99.4 
+63.3 81.1 85.0 
+89.9 
+top-5 Ent 
+87.9 95.8 97.2 
+98.4 
+69.7 90.9 95.1 
+98.8 
+84.3 96.8 98.6 
+99.4 
+63.2 80.9 85.2 
+89.9 
+top-10 Ent 
+86.0 95.6 97.3 
+98.5 
+65.0 89.7 96.2 
+99.6 
+82.7 96.4 98.5 
+99.4 
+62.5 80.8 85.4 
+90.1 
+
+top-3 Enttr 
+89.3 95.9 97.3 
+98.5 
+63.6 91.1 95.6 
+98.8 
+83.4 96.4 98.3 
+99.4 
+60.7 81.1 85.2 
+90.2 
+top-5 Enttr 
+87.9 95.7 97.3 
+98.6 
+50.3 87.7 96.1 
+99.4 
+83.2 96.0 98.2 
+99.4 
+58.3 79.8 85.2 
+90.2 
+top-10 Enttr 
+85.2 94.8 97.1 
+98.5 
+46.5 80.9 93.7 
+99.6 
+82.9 95.7 97.9 
+99.4 
+51.9 78.4 84.6 
+90.2 
+
+Indoor 67 
+CUB 
+Flowers 
+FMD 
+
+State-of-the-art 
+82.0 [48] 
+62.8 [12] / 76.37 [51] 
+86.8 [30] 
+77.4 [12] / 82.4 [12] 
+
+Method 
+Top-1 Top-3 Top-5 Top-10 Top-1 Top-3 Top-5 Top-10 Top-1 Top-3 Top-5 Top-10 Top-1 Top-3 Top-5 
+
+SVM OVA 
+81.9 94.3 96.5 
+98.0 
+60.6 77.1 83.4 
+89.9 
+82.0 91.7 94.3 
+96.8 
+77.4 92.4 96.4 
+LR OVA 
+82.0 94.9 97.2 
+98.7 
+62.3 80.5 87.4 
+93.5 
+82.6 92.2 94.8 
+97.6 
+79.6 94.2 98.2 
+
+SVM Multi 
+82.5 95.4 97.3 
+99.1 
+61.0 79.2 85.7 
+92.3 
+82.5 92.2 94.8 
+96.4 
+77.6 93.8 97.2 
+LR Multi 
+82.4 95.2 98.0 
+99.1 
+62.3 81.7 87.9 
+93.9 
+82.9 92.4 95.1 
+97.8 
+79.0 94.6 97.8 
+
+top-3 SVM 
+81.6 95.1 97.7 
+99.0 
+61.3 80.4 86.3 
+92.5 
+81.9 92.2 95.0 
+96.1 
+78.8 94.6 97.8 
+top-5 SVM 
+79.9 95.0 97.7 
+99.0 
+60.9 81.2 87.2 
+92.9 
+81.7 92.4 95.1 
+97.8 
+78.4 94.4 97.6 
+top-10 SVM 
+78.4 95.1 97.4 
+99.0 
+59.6 81.3 87.7 
+93.4 
+80.5 91.9 95.1 
+97.7 
+
+top-1 SVM1 
+82.6 95.2 97.6 
+99.0 
+61.9 80.2 86.9 
+93.1 
+83.0 92.4 95.1 
+97.6 
+78.6 93.8 98.0 
+top-3 SVM1 
+81.6 95.1 97.8 
+99.0 
+61.9 81.1 86.6 
+93.2 
+82.5 92.3 95.2 
+97.7 
+79.0 94.4 98.0 
+top-5 SVM1 
+80.4 95.1 97.8 
+99.1 
+61.3 81.3 87.4 
+92.9 
+82.0 92.5 95.1 
+97.8 
+79.4 94.4 97.6 
+top-10 SVM1 78.3 95.1 97.5 
+99.0 
+59.8 81.4 87.8 
+93.4 
+80.6 91.9 95.1 
+97.7 
+
+top-3 Ent 
+81.4 95.4 97.6 
+99.2 
+62.5 81.8 87.9 
+93.9 
+82.5 92.0 95.3 
+97.8 
+79.8 94.8 98.0 
+top-5 Ent 
+80.3 95.0 97.7 
+99.0 
+62.0 81.9 88.1 
+93.8 
+82.1 92.2 95.1 
+97.9 
+79.4 94.4 98.0 
+top-10 Ent 
+79.2 95.1 97.6 
+99.0 
+61.2 81.6 88.2 
+93.8 
+80.9 92.1 95.0 
+97.7 
+
+top-3 Enttr 
+79.8 95.0 97.5 
+99.1 
+62.0 81.4 87.6 
+93.4 
+82.1 92.2 95.2 
+97.6 
+78.4 95.4 98.2 
+top-5 Enttr 
+76.4 94.3 97.3 
+99.0 
+61.4 81.2 87.7 
+93.7 
+81.4 92.0 95.0 
+97.7 
+77.2 94.0 97.8 
+top-10 Enttr 
+72.6 92.8 97.1 
+98.9 
+59.7 80.7 87.2 
+93.4 
+77.9 91.1 94.3 
+97.3 
+
+SUN 397 (10 splits) 
+Places 205 (val) 
+ILSVRC 2012 (val) 
+
+State-of-the-art 
+66.9 [48] 
+60.6 
+88.5 
+[48] 
+76.3 
+93.2 
+[40] 
+
+Method 
+Top-1 
+Top-3 
+Top-5 
+Top-10 
+Top-1 Top-3 Top-5 Top-10 Top-1 Top-3 Top-5 Top-10 
+
+SVM Multi 
+65.8 ± 0.1 
+85.1 ± 0.2 
+90.8 ± 0.1 
+95.3 ± 0.1 
+58.4 
+78.7 
+84.7 
+89.9 
+68.3 
+82.9 
+87.0 
+91.1 
+LR Multi 
+67.5 ± 0.1 87.7 ± 0.2 92.9 ± 0.1 96.8 ± 0.1 
+59.0 
+80.6 
+87.6 
+94.3 
+67.2 
+83.2 
+87.7 
+92.2 
+
+top-3 SVM 
+66.5 ± 0.2 
+86.5 ± 0.1 
+91.8 ± 0.1 
+95.9 ± 0.1 
+58.6 
+80.3 
+87.3 
+93.3 
+68.2 
+84.0 
+88.1 
+92.1 
+top-5 SVM 
+66.3 ± 0.2 
+87.0 ± 0.2 
+92.2 ± 0.2 
+96.3 ± 0.1 
+58.4 
+80.5 
+87.4 
+94.0 
+67.8 
+84.1 
+88.2 
+92.4 
+top-10 SVM 
+64.8 ± 0.3 
+87.2 ± 0.2 
+92.6 ± 0.1 
+96.6 ± 0.1 
+58.0 
+80.4 
+87.4 
+94.3 
+67.0 
+83.8 
+88.3 
+92.6 
+
+top-1 SVM1 
+67.4 ± 0.2 
+86.8 ± 0.1 
+92.0 ± 0.1 
+96.1 ± 0.1 
+59.2 
+80.5 
+87.3 
+93.8 
+68.7 
+83.9 
+88.0 
+92.1 
+top-3 SVM1 
+67.0 ± 0.2 
+87.0 ± 0.1 
+92.2 ± 0.1 
+96.2 ± 0.0 
+58.9 
+80.5 
+87.6 
+93.9 
+68.2 
+84.1 
+88.2 
+92.3 
+top-5 SVM1 
+66.5 ± 0.2 
+87.2 ± 0.1 
+92.4 ± 0.2 
+96.3 ± 0.0 
+58.5 
+80.5 
+87.5 
+94.1 
+67.9 
+84.1 
+88.4 
+92.5 
+top-10 SVM1 
+64.9 ± 0.3 
+87.3 ± 0.2 
+92.6 ± 0.2 
+96.6 ± 0.1 
+58.0 
+80.4 
+87.5 
+94.3 
+67.1 
+83.8 
+88.3 
+92.6 
+
+top-3 Ent 
+67.2 ± 0.2 
+87.7 ± 0.2 92.9 ± 0.1 96.8 ± 0.1 
+58.7 
+80.6 
+87.6 
+94.2 
+66.8 
+83.1 
+87.8 
+92.2 
+top-5 Ent 
+66.6 ± 0.3 
+87.7 ± 0.2 92.9 ± 0.1 96.8 ± 0.1 
+58.1 
+80.4 
+87.4 
+94.2 
+66.5 
+83.0 
+87.7 
+92.2 
+top-10 Ent 
+65.2 ± 0.3 
+87.4 ± 0.1 
+92.8 ± 0.1 
+96.8 ± 0.1 
+57.0 
+80.0 
+87.2 
+94.1 
+65.8 
+82.8 
+87.6 
+92.1 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_6" validated="false"><head></head><label></label><figDesc>.</figDesc><table>Dataset 
+m 
+n 
+d 
+Dataset 
+m 
+n 
+d 
+
+ALOI [34] 
+1K 54K 128 Indoor 67 [28] 
+67 5354 4K 
+Caltech 101 Sil [41] 101 4100 784 Letter [19] 
+26 10.5K 16 
+CUB [47] 
+202 5994 4K News 20 [22] 
+20 15.9K 16K 
+Flowers [27] 
+102 2040 4K Places 205 [52] 205 2.4M 4K 
+FMD [39] 
+10 500 4K SUN 397 [50] 397 19.9K 4K 
+ILSVRC 2012 [37] 1K 1.3M 4K 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_7" validated="false"><head>Table 4 :</head><label>4</label><figDesc>Statistics of the datasets used in the experiments (m -# classes, n -# training examples, d -# features).</figDesc><table></table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="5">Code: https://github.com/mlapin/caffe/tree/topk</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">The infinite push: A new support vector ranking algorithm that directly optimizes accuracy at the absolute top of the list</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SDM</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="839" to="850" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Good practice in large-scale learning for image classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Akata</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Perronnin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Harchaoui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="page" from="507" to="520" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Convexity, classification and risk bounds</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">L</forename><surname>Bartlett</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">I</forename><surname>Jordan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">D</forename><surname>Mcauliffe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of the American Statistical Association</title>
+		<imprint>
+			<biblScope unit="volume">101</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Smoothing and first order methods, a unified framework</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Beck</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Teboulle</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">SIAM Journal on Optimization</title>
+		<imprint>
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="557" to="580" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Learning deep architectures for AI. Foundations and Trends in Machine Learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page" from="1" to="127" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Solving multiclass support vector machines with LaRank</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bordes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Gallinari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Weston</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="page" from="89" to="96" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Convex Analysis and Nonlinear Optimization: Theory and Examples</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Borwein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">S</forename><surname>Lewis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Cms Books in Mathematics Series</title>
+		<imprint>
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">6</biblScope>
+			<date type="published" when="2000" />
+			<publisher>Springer Verlag</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Accuracy at the top</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Boyd</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Cortes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mohri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Radovanovic</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="953" to="961" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Convex Optimization. Cambridge University Press</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Boyd</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Vandenberghe</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Learning to rank using gradient descent</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Burges</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Shaked</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Renshaw</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lazier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Deeds</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Hamilton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hullender</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="89" to="96" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">LIBSVM: A library for support vector machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-C</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-J</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Intelligent Systems and Technology</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1" to="27" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Deep filter banks for texture recognition and segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cimpoi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Maji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">On the lambert W function</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">M</forename><surname>Corless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">H</forename><surname>Gonnet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">E</forename><surname>Hare</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Jeffrey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">E</forename><surname>Knuth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Advances in Computational Mathematics</title>
+		<imprint>
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="329" to="359" />
+			<date type="published" when="1996" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">On the algorithmic implementation of multiclass kernel-based vector machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Crammer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Singer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Imagenet: A large-scale hierarchical image database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Dong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L.-J</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="248" to="255" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">LIBLINEAR: A library for large linear classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R.-E</forename><surname>Fan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K.-W</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-J</forename><surname>Hsieh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X.-R</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-J</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1871" to="1874" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Precise and fast computation of Lambert Wfunctions without transcendental function evaluations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Fukushima</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Computational and Applied Mathematics</title>
+		<imprint>
+			<biblScope unit="volume">244</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="77" to="89" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Training highly multiclass classifiers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">R</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Weston</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">15</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="1461" to="1492" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">A comparison of methods for multiclass support vector machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-W</forename><surname>Hsu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-J</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Networks</title>
+		<imprint>
+			<biblScope unit="volume">13</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="415" to="425" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">A support vector method for multivariate performance measures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Joachims</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="377" to="384" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1106" to="1114" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Newsweeder: Learning to filter netnews</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Lang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="1995" />
+			<biblScope unit="page" from="331" to="339" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Top-k multiclass SVM</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Lapin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Top rank optimization in linear time</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Jin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z.-H</forename><surname>Zhou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="1502" to="1510" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">Transductive optimization of top k precision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">G</forename><surname>Dietterich</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhou</surname></persName>
+		</author>
+		<idno>abs/1510.05976</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Smooth minimization of non-smooth functions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Nesterov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Mathematical Programming</title>
+		<imprint>
+			<biblScope unit="volume">103</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="127" to="152" />
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Automated flower classification over a large number of classes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-E</forename><surname>Nilsback</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICVGIP</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="722" to="729" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Recognizing indoor scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Quattoni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Sparse support vector infinite push</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rakotomamonjy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1335" to="1342" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">CNN features off-the-shelf: an astounding baseline for recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">S</forename><surname>Razavian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Azizpour</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sullivan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Carlsson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPRW, DeepVision workshop</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Composite binary losses</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Reid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Williamson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+		<title level="m" type="main">Improving multi-class text classification with naive bayes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">D</forename><surname>Rennie</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+		<respStmt>
+			<orgName>Massachusetts Institute of Technology</orgName>
+		</respStmt>
+	</monogr>
+	<note type="report_type">Technical report</note>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">In defense of one-vs-all classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Rifkin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Klautau</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="101" to="141" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Multiclass from binary: Expanding one-versus-all, one-versus-one and ecocbased approaches</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rocha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Klein Goldenstein</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Networks and Learning Systems</title>
+		<imprint>
+			<biblScope unit="volume">25</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="289" to="302" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note>IEEE Transactions on</note>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Learning policies for contextual submodular prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ross</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Dey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Bagnell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1364" to="1372" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">The p-norm push: A simple convex ranking algorithm that concentrates at the top of the list</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rudin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="2233" to="2271" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Russakovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Satheesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bernstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<imprint/>
+	</monogr>
+	<note>ImageNet Large Scale Visual Recognition Challenge, 2014. 1, 8</note>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Accelerated proximal stochastic dual coordinate ascent for regularized loss minimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Shalev-Shwartz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Mathematical Programming</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="1" to="41" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Material perception: What can you see in a brief glance</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Sharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Rosenholtz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Adelson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Vision</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="784" to="784" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<monogr>
+		<title level="m" type="main">Very deep convolutional networks for large-scale image recognition. CoRR, abs/1409.1556</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Probabilistic n-choose-k models for classification and ranking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Swersky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">J</forename><surname>Frey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tarlow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Zemel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">P</forename><surname>Adams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="page" from="3050" to="3058" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">On the consistency of multiclass classification methods</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Tewari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Bartlett</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">8</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Large margin methods for structured and interdependent output variables</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Tsochantaridis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Joachims</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Hofmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Altun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="1453" to="1484" />
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Ranking with ordered weighted pairwise classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Usunier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Buffoni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Gallinari</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Lambert W function for applications in physics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Veberič</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computer Physics Communications</title>
+		<imprint>
+			<biblScope unit="volume">183</biblScope>
+			<biblScope unit="issue">12</biblScope>
+			<biblScope unit="page" from="2622" to="2628" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Matconvnet -convolutional neural networks for matlab</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Lenc</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceeding of the ACM Int. Conf. on Multimedia</title>
+		<meeting>eeding of the ACM Int. Conf. on Multimedia</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<monogr>
+		<title level="m" type="main">The Caltech-UCSD Birds-200-2011 dataset</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wah</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Branson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Welinder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+		<respStmt>
+			<orgName>California Institute of Technology</orgName>
+		</respStmt>
+	</monogr>
+	<note type="report_type">Technical report</note>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<monogr>
+		<title level="m" type="main">Places205-vggnet models for scene recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Qiao</surname></persName>
+		</author>
+		<idno>abs/1508.01667</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CoRR</publisher>
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">Wsabie: scaling up to large vocabulary image annotation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Weston</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Usunier</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCAI</title>
+		<imprint>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="2764" to="2770" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">SUN database: Large-scale scene recognition from abbey to zoo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">A</forename><surname>Ehinger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">Partbased rcnn for fine-grained detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<analytic>
+		<title level="a" type="main">Learning deep features for scene recognition using places database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lapedriza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

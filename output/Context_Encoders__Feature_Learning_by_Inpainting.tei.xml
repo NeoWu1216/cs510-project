@@ -1,0 +1,1073 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Context Encoders: Feature Learning by Inpainting</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Deepak</forename><surname>Pathak</surname></persName>
+							<email>pathak@cs.berkeley.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">University of California</orgName>
+								<address>
+									<settlement>Berkeley</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Philipp</forename><surname>Krähenbühl</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">University of California</orgName>
+								<address>
+									<settlement>Berkeley</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeff</forename><surname>Donahue</surname></persName>
+							<email>jdonahue@cs.berkeley.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">University of California</orgName>
+								<address>
+									<settlement>Berkeley</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Trevor</forename><surname>Darrell</surname></persName>
+							<email>trevor@cs.berkeley.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">University of California</orgName>
+								<address>
+									<settlement>Berkeley</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexei</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+							<email>efros@cs.berkeley.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">University of California</orgName>
+								<address>
+									<settlement>Berkeley</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Context Encoders: Feature Learning by Inpainting</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:38+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We present an unsupervised visual feature learning algorithm driven by context-based pixel prediction. By analogy with auto-encoders, we propose Context Encoders -a convolutional neural network trained to generate the contents of an arbitrary image region conditioned on its surroundings. In order to succeed at this task, context encoders need to both understand the content of the entire image, as well as produce a plausible hypothesis for the missing part(s). When training context encoders, we have experimented with both a standard pixel-wise reconstruction loss, as well as a reconstruction plus an adversarial loss. The latter produces much sharper results because it can better handle multiple modes in the output. We found that a context encoder learns a representation that captures not just appearance but also the semantics of visual structures. We quantitatively demonstrate the effectiveness of our learned features for CNN pre-training on classification, detection, and segmentation tasks. Furthermore, context encoders can be used for semantic inpainting tasks, either stand-alone or as initialization for non-parametric methods.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Our visual world is very diverse, yet highly structured, and humans have an uncanny ability to make sense of this structure. In this work, we explore whether state-of-the-art computer vision algorithms can do the same. Consider the image shown in <ref type="figure">Figure 1a</ref>. Although the center part of the image is missing, most of us can easily imagine its content from the surrounding pixels, without having ever seen that exact scene. Some of us can even draw it, as shown on <ref type="bibr">Figure</ref> 1b. This ability comes from the fact that natural images, despite their diversity, are highly structured (e.g. the regular pattern of windows on the facade). We humans are able to understand this structure and make visual predictions even when seeing only parts of the scene. In this paper, we show The supplementary material, trained models and code are available at the author's website.  <ref type="figure">Figure 1</ref>: Qualitative illustration of the task. Given an image with a missing region (a), a human artist has no trouble inpainting it (b). Automatic inpainting using our context encoder trained with L2 reconstruction loss is shown in (c), and using both L2 and adversarial losses in (d).</p><p>that it is possible to learn and predict this structure using convolutional neural networks (CNNs), a class of models that have recently shown success across a variety of image understanding tasks.</p><p>Given an image with a missing region (e.g., <ref type="figure">Fig. 1a</ref>), we train a convolutional neural network to regress to the missing pixel values <ref type="figure">(Fig. 1d)</ref>. We call our model context encoder, as it consists of an encoder capturing the context of an image into a compact latent feature representation and a decoder which uses that representation to produce the missing image content. The context encoder is closely related to autoencoders <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b19">20]</ref>, as it shares a similar encoder-decoder architecture. Autoencoders take an input image and try to reconstruct it after it passes through a low-dimensional "bottleneck" layer, with the aim of obtaining a compact feature representation of the scene. Unfortunately, this feature representation is likely to just compresses the image content without learning a semantically meaningful representation. Denoising autoencoders <ref type="bibr" target="#b37">[38]</ref> address this issue by corrupting the input image and requiring the network to undo the damage. However, this corruption process is typically very localized and low-level, and does not require much semantic information to undo. In contrast, our context encoder needs to solve a much harder task: to fill in large missing areas of the image, where it can't get "hints" from nearby pixels. This requires a much deeper semantic understanding of the scene, and the ability to synthesize high-level features over large spatial extents. For example, in <ref type="figure">Figure 1a</ref>, an entire window needs to be conjured up "out of thin air." This is similar in spirit to word2vec <ref type="bibr" target="#b29">[30]</ref> which learns word representation from natural language sentences by predicting a word given its context.</p><p>Like autoencoders, context encoders are trained in a completely unsupervised manner. Our results demonstrate that in order to succeed at this task, a model needs to both understand the content of an image, as well as produce a plausible hypothesis for the missing parts. This task, however, is inherently multi-modal as there are multiple ways to fill the missing region while also maintaining coherence with the given context. We decouple this burden in our loss function by jointly training our context encoders to minimize both a reconstruction loss and an adversarial loss. The reconstruction (L2) loss captures the overall structure of the missing region in relation to the context, while the the adversarial loss <ref type="bibr" target="#b15">[16]</ref> has the effect of picking a particular mode from the distribution. <ref type="figure">Figure 1</ref> shows that using only the reconstruction loss produces blurry results, whereas adding the adversarial loss results in much sharper predictions.</p><p>We evaluate the encoder and the decoder independently. On the encoder side, we show that encoding just the context of an image patch and using the resulting feature to retrieve nearest neighbor contexts from a dataset produces patches which are semantically similar to the original (unseen) patch. We further validate the quality of the learned feature representation by fine-tuning the encoder for a variety of image understanding tasks, including classification, object detection, and semantic segmentation. We are competitive with the state-of-the-art unsupervised/selfsupervised methods on those tasks. On the decoder side, we show that our method is often able to fill in realistic image content. Indeed, to the best of our knowledge, ours is the first parametric inpainting algorithm that is able to give reasonable results for semantic hole-filling (i.e. large missing regions). The context encoder can also be useful as a better visual feature for computing nearest neighbors in nonparametric inpainting methods.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related work</head><p>Computer vision has made tremendous progress on semantic image understanding tasks such as classification, object detection, and segmentation in the past decade. Recently, Convolutional Neural Networks (CNNs) <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b26">27]</ref> have greatly advanced the performance in these tasks <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b27">28]</ref>. The success of such models on image classification paved the way to tackle harder problems, including unsupervised understanding and generation of natural images. We briefly review the related work in each of the sub-fields pertaining to this paper.</p><p>Unsupervised learning CNNs trained for ImageNet <ref type="bibr" target="#b36">[37]</ref> classification with over a million labeled examples learn features which generalize very well across tasks <ref type="bibr" target="#b8">[9]</ref>. However, whether such semantically informative and generalizable features can be learned from raw images alone, without any labels, remains an open question. Some of the earliest work in deep unsupervised learning are autoencoders <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b19">20]</ref>. Along similar lines, denoising autoencoders <ref type="bibr" target="#b37">[38]</ref> reconstruct the image from local corruptions, to make encoding robust to such corruptions. While context encoders could be thought of as a variant of denoising autoencoders, the corruption applied to the model's input is spatially much larger, requiring more semantic information to undo.</p><p>Weakly-supervised and self-supervised learning Very recently, there has been significant interest in learning meaningful representations using weakly-supervised and self-supervised learning. One useful source of supervision is to use the temporal information contained in videos. Consistency across temporal frames has been used as supervision to learn embeddings which perform well on a number of tasks <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b33">34]</ref>. Another way to use consistency is to track patches in frames of video containing task-relevant attributes and use the coherence of tracked patches to guide the training <ref type="bibr" target="#b38">[39]</ref>. Ego-motion read off from non-vision sensors has been used as supervisory signal to train visual features et al. <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b20">21]</ref>.</p><p>Most closely related to the present paper are efforts at exploiting spatial context as a source of free and plentiful supervisory signal. Visual Memex <ref type="bibr" target="#b28">[29]</ref> used context to nonparametrically model object relations and to predict masked objects in scenes, while <ref type="bibr" target="#b5">[6]</ref> used context to establish correspondences for unsupervised object discovery. However, both approaches relied on hand-designed features and did not perform any representation learning. Recently, Doersch et al. <ref type="bibr" target="#b6">[7]</ref> used the task of predicting the relative positions of neighboring patches within an image as a way to train an unsupervised deep feature representations. We share the same high-level goals with Doersch et al. but fundamentally differ in the approach: whereas <ref type="bibr" target="#b6">[7]</ref> are solving a discriminative task (is patch A above patch B or below?), our context encoder solves a pure prediction problem (what pixel intensities should go in the hole?). Interestingly, similar distinction exist in using language context to learn word embeddings: Collobert and Weston <ref type="bibr" target="#b4">[5]</ref> advocate a discriminative approach, whereas word2vec <ref type="bibr" target="#b29">[30]</ref> formulate it as word prediction. One important benefit of our approach is that our supervisory signal is much richer: a context encoder needs to predict roughly 15,000 real values per training example, compared to just 1 option among 8 choices in <ref type="bibr" target="#b6">[7]</ref>. Likely due in part to this difference, our context encoders take far less time to train than <ref type="bibr" target="#b6">[7]</ref>. Moreover, context based prediction is also harder to "cheat" since low-level image features, such as chromatic aberration, do not provide any meaningful information, in contrast to <ref type="bibr" target="#b6">[7]</ref> where chromatic aberration partially solves the task. On the other hand, it is not yet clear if requiring faithful pixel generation is necessary for learning good visual features.</p><p>Image generation Generative models of natural images have enjoyed significant research interest <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b34">35]</ref>. Recently, Radford et al. <ref type="bibr" target="#b32">[33]</ref> proposed new convolutional architectures and optimization hyperparameters for Generative Adversarial Networks (GAN) <ref type="bibr" target="#b15">[16]</ref> producing encouraging results. We train our context encoders using an adversary jointly with reconstruction loss for generating inpainting results. We discuss this in detail in Section 3.2.</p><p>Dosovitskiy et al. <ref type="bibr" target="#b9">[10]</ref> and Rifai et al. <ref type="bibr" target="#b35">[36]</ref> demonstrate that CNNs can learn to generate novel images of particular object categories (chairs and faces, respectively), but rely on large labeled datasets with examples of these categories. In contrast, context encoders can be applied to any unlabeled image database and learn to generate images based on the surrounding context.</p><p>Inpainting and hole-filling It is important to point out that our hole-filling task cannot be handled by classical inpainting <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b31">32]</ref> or texture synthesis <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b10">11]</ref> approaches, since the missing region is too large for local non-semantic methods to work well. In computer graphics, filling in large holes is typically done via scene completion <ref type="bibr" target="#b18">[19]</ref>, involving a cut-paste formulation using nearest neighbors from a dataset of millions of images. However, scene completion is meant for filling in holes left by removing whole objects, and it struggles to fill arbitrary holes, e.g. amodal completion of partially occluded objects. Furthermore, previous completion relies on a hand-crafted distance metric, such as Gist <ref type="bibr" target="#b30">[31]</ref> for nearest-neighbor computation which is inferior to a learned distance metric. We show that our method is often able to inpaint semantically meaningful content in a parametric fashion, as well as provide a better feature for nearest neighbor-based inpainting methods. <ref type="figure">Figure 2</ref>: Context Encoder. The context image is passed through the encoder to obtain features which are connected to the decoder using channel-wise fully-connected layer as described in Section 3.1. The decoder then produces the missing regions in the image.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Context encoders for image generation</head><p>We now introduce context encoders: CNNs that predict missing parts of a scene from their surroundings. We first give an overview of the general architecture, then provide details on the learning procedure and finally present various strategies for image region removal.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Encoder-decoder pipeline</head><p>The overall architecture is a simple encoder-decoder pipeline. The encoder takes an input image with missing regions and produces a latent feature representation of that image. The decoder takes this feature representation and produces the missing image content. We found it important to connect the encoder and the decoder through a channelwise fully-connected layer, which allows each unit in the decoder to reason about the entire image content. <ref type="figure">Figure 2</ref> shows an overview of our architecture.</p><p>Encoder Our encoder is derived from the AlexNet architecture <ref type="bibr" target="#b25">[26]</ref>. Given an input image of size 227×227, we use the first five convolutional layers and the following pooling layer (called pool5) to compute an abstract 6 × 6 × 256 dimensional feature representation. In contrast to AlexNet, our model is not trained for ImageNet classification; rather, the network is trained for context prediction "from scratch" with randomly initialized weights.</p><p>However, if the encoder architecture is limited only to convolutional layers, there is no way for information to directly propagate from one corner of the feature map to another. This is so because convolutional layers connect all the feature maps together, but never directly connect all locations within a specific feature map. In the present architectures, this information propagation is handled by fullyconnected or inner product layers, where all the activations are directly connected to each other. In our architecture, the latent feature dimension is 6 × 6 × 256 = 9216 for both encoder and decoder. This is so because, unlike autoen-coders, we do not reconstruct the original input and hence need not have a smaller bottleneck. However, fully connecting the encoder and decoder would result in an explosion in the number of parameters (over 100M!), to the extent that efficient training on current GPUs would be difficult. To alleviate this issue, we use a channel-wise fully-connected layer to connect the encoder features to the decoder, described in detail below.</p><p>Channel-wise fully-connected layer This layer is essentially a fully-connected layer with groups, intended to propagate information within activations of each feature map. If the input layer has m feature maps of size n × n, this layer will output m feature maps of dimension n × n. However, unlike a fully-connected layer, it has no parameters connecting different feature maps and only propagates information within feature maps. Thus, the number of parameters in this channel-wise fully-connected layer is mn 4 , compared to m 2 n 4 parameters in a fully-connected layer (ignoring the bias term). This is followed by a stride 1 convolution to propagate information across channels.</p><p>Decoder We now discuss the second half of our pipeline, the decoder, which generates pixels of the image using the encoder features. The "encoder features" are connected to the "decoder features" using a channel-wise fullyconnected layer.</p><p>The channel-wise fully-connected layer is followed by a series of five up-convolutional layers <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b39">40]</ref> with learned filters, each with a rectified linear unit (ReLU) activation function. A up-convolutional is simply a convolution that results in a higher resolution image. It can be understood as upsampling followed by convolution (as described in <ref type="bibr" target="#b9">[10]</ref>), or convolution with fractional stride (as described in <ref type="bibr" target="#b27">[28]</ref>). The intuition behind this is straightforward -the series of up-convolutions and non-linearities comprises a non-linear weighted upsampling of the feature produced by the encoder until we roughly reach the original target size.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Loss function</head><p>We train our context encoders by regressing to the ground truth content of the missing (dropped out) region. However, there are often multiple equally plausible ways to fill a missing image region which are consistent with the context. We model this behavior by having a decoupled joint loss function to handle both continuity within the context and multiple modes in the output. The reconstruction (L2) loss is responsible for capturing the overall structure of the missing region and coherence with regards to its context, but tends to average together the multiple modes in predictions. The adversarial loss <ref type="bibr" target="#b15">[16]</ref>, on the other hand, tries to make prediction look real, and has the effect of picking a particular mode from the distribution. For each ground truth image x, our context encoder F produces an output F (x). LetM be a binary mask corresponding to the dropped image region with a value of 1 wherever a pixel was dropped and 0 for input pixels. During training, those masks are automatically generated for each image and training iterations, as described in Section 3.3. We now describe different components of our loss function.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Reconstruction Loss</head><p>We use a masked L2 distance as our reconstruction loss function, L rec ,</p><formula xml:id="formula_0">L rec (x) = M ⊙ (x − F ((1 −M ) ⊙ x)) 2 ,<label>(1)</label></formula><p>where ⊙ is the element-wise product operation. We experimented with both L1 and L2 losses and found no significant difference between them. While this simple loss encourages the decoder to produce a rough outline of the predicted object, it often fails to capture any high frequency detail (see <ref type="figure">Fig. 1c</ref>). This stems from the fact that the L2 (or L1) loss often prefer a blurry solution, over highly accurate textures. We believe this happens because it is much "safer" for the L2 loss to predict the mean of the distribution, because this minimizes the mean pixel-wise error, but results in a blurry averaged image. We alleviated this problem by adding an adversarial loss.</p><p>Adversarial Loss Our adversarial loss is based on Generative Adversarial Networks (GAN) <ref type="bibr" target="#b15">[16]</ref>. To learn a generative model G of a data distribution, GAN proposes to jointly learn an adversarial discriminative model D to provide loss gradients to the generative model. G and D are parametric functions (e.g., deep networks) where G : Z → X maps samples from noise distribution Z to data distribution X . The learning procedure is a two-player game where an adversarial discriminator D takes in both the prediction of G and ground truth samples, and tries to distinguish them, while G tries to confuse D by producing samples that appear as "real" as possible. The objective for discriminator is logistic likelihood indicating whether the input is real sam- This method has recently shown encouraging results in generative modeling of images <ref type="bibr" target="#b32">[33]</ref>. We thus adapt this framework for context prediction by modeling generator by context encoder; i.e., G F . To customize GANs for this task, one could condition on the given context information; i.e., the maskM ⊙ x. However, conditional GANs don't train easily for context prediction task as the adversarial discriminator D easily exploits the perceptual discontinuity in generated regions and the original context to easily classify predicted versus real samples. We thus use an alternate formulation, by conditioning only the generator (not the discriminator) on context. We also found results improved when the generator was not conditioned on a noise vector. The GAN objective for our context encoders is as follows Hence the adversarial loss for context encoders, L adv , is</p><formula xml:id="formula_1">L adv = max D E x∈X [log(D(x)) + log(1 − D(F ((1 −M ) ⊙ x)))],<label>(2)</label></formula><p>where, in practice, both F and D are optimized jointly using alternating SGD. Note that this objective encourages the entire output of the context encoder to look realistic, not just the missing regions as in Equation <ref type="formula" target="#formula_0">(1)</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Joint Loss</head><p>We define the overall loss function as</p><formula xml:id="formula_2">L = λ rec L rec + λ adv L adv .<label>(3)</label></formula><p>Currently, we use adversarial loss only for inpainting experiments as AlexNet <ref type="bibr" target="#b25">[26]</ref> architecture training diverged with joint adversarial loss. Details follow in Sections 5.1, 5.2.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Region masks</head><p>The input to a context encoder is an image with one or more of its regions "dropped out"; i.e., set to zero, assuming zero-centered inputs. The removed regions could be of any shape, we present three different strategies here:</p><p>Central region The simplest such shape is the central square patch in the image, as shown in <ref type="figure" target="#fig_1">Figure 3a</ref>. While this works quite well for inpainting, the network learns low level image features than latch on to the boundary of the central mask. Those low level image features tend not to generalize well to images without masks, hence the features learned are not very general.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Input Context</head><p>Context Encoder Content-Aware Fill <ref type="figure">Figure 5</ref>: Comparison with Content-Aware Fill (Photoshop feature based on <ref type="bibr" target="#b1">[2]</ref>). Our method works better in semantic cases (top row) and works slightly worse in textured settings (bottom row).</p><p>Random block To prevent the network from latching on the the constant boundary of the masked region, we randomize the masking process. Instead of choosing a single large mask at a fixed location, we remove a number of smaller possibly overlapping masks, covering up to <ref type="bibr">1 4</ref> of the image. An example of this is shown in <ref type="figure" target="#fig_1">Figure 3b</ref>. However, the random block masking still has sharp boundaries convolutional features could latch onto.</p><p>Random region To completely remove those boundaries, we experimented with removing arbitrary shapes from images, obtained from random masks in the PASCAL VOC 2012 dataset <ref type="bibr" target="#b11">[12]</ref>. We deform those shapes and paste in arbitrary places in the other images (not from PASCAL), again covering up to <ref type="bibr">1 4</ref> of the image. Note that we completely randomize the region masking process, and do not expect or want any correlation between the source segmentation mask and the image. We merely use those regions to prevent the network from learning low-level features corresponding to the removed mask. See example in <ref type="figure" target="#fig_1">Figure 3c</ref>.</p><p>In practice, we found region and random block masks produce a similarly general feature, while significantly outperforming the central region features. We use the random region dropout for all our feature based experiments.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Implementation details</head><p>The pipeline was implemented in Caffe <ref type="bibr" target="#b21">[22]</ref> and Torch. We used the recently proposed stochastic gradient descent solver, ADAM <ref type="bibr" target="#b22">[23]</ref> for optimization. The missing region in the masked input image is filled with constant mean value. Hyper-parameter details are discussed in Sections 5.1, 5.2.</p><p>Pool-free encoders We experimented with replacing all pooling layers with convolutions of the same kernel size and stride. The overall stride of the network remains the same, but it results in finer inpainting. Intuitively, there is no reason to use pooling for reconstruction based networks.  In classification, pooling provides spatial invariance, which may be detrimental for reconstruction-based training. To be consistent with prior work, we still use the original AlexNet architecture (with pooling) for all feature learning results.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Evaluation</head><p>We now evaluate the encoder features for their semantic quality and transferability to other image understanding tasks. We experiment with images from two datasets: Paris StreetView <ref type="bibr" target="#b7">[8]</ref> and ImageNet <ref type="bibr" target="#b36">[37]</ref> without using any of the accompanying labels. In Section 5.1, we present visualizations demonstrating the ability of the context encoder to fill in semantic details of images with missing regions. In Section 5.2, we demonstrate the transferability of our learned features to other tasks, using context encoders as a pretraining step for image classification, object detection, and semantic segmentation. We compare our results on these tasks with those of other unsupervised or self-supervised methods, demonstrating that our approach outperforms previous methods.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Semantic Inpainting</head><p>We train context encoders with the joint loss function defined in Equation <ref type="formula" target="#formula_2">(3)</ref> for the task of inpainting the missing region. The encoder and discriminator architecture is similar to that of discriminator in <ref type="bibr" target="#b32">[33]</ref>, and decoder is similar to generator in <ref type="bibr" target="#b32">[33]</ref>. However, the bottleneck is of 4000 units (in contrast to 100 in <ref type="bibr" target="#b32">[33]</ref>); see supplementary material. We used the default solver hyper-parameters suggested in <ref type="bibr" target="#b32">[33]</ref>. We use λ rec = 0.999 and λ adv = 0.001. However, a few things were crucial for training the model. We did not condition the adversarial loss (see Section 3.2) nor did we add noise to the encoder. We use a higher learning rate for context encoder (10 times) to that of adversarial discriminator. To further emphasize the consistency of prediction with the context, we predict a slightly larger patch that overlaps with the context (by 7px). During training, we use higher weight (10×) for the reconstruction loss in this overlapping region.</p><p>The qualitative results are shown in <ref type="figure" target="#fig_2">Figure 4</ref>. Our model performs generally well in inpainting semantic regions of an image. However, if a region can be filled with lowlevel textures, texture synthesis methods, such as <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b10">11]</ref>, can often perform better (e.g. <ref type="figure">Figure 5</ref>). For semantic inpainting, we compare against nearest neighbor inpainting (which forms the basis of Hays et al. <ref type="bibr" target="#b18">[19]</ref>) and show that our reconstructions are well-aligned semantically, as seen on <ref type="figure" target="#fig_3">Figure 6</ref>. It also shows that joint loss significantly improves the inpainting over both reconstruction and adversarial loss alone. Moreover, using our learned features in a nearest-neighbor style inpainting can sometimes improve results over a hand-designed distance metrics. <ref type="table" target="#tab_1">Table 1</ref> reports quantitative results on StreetView Dataset.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Feature Learning</head><p>For consistency with prior work, we use the AlexNet <ref type="bibr" target="#b25">[26]</ref> architecture for our encoder. Unfortunately, we did not manage to make the adversarial loss converge with AlexNet, so we used just the reconstruction loss. The networks were trained with a constant learning rate of 10 −3 for the center-region masks. However, for random region corruption, we found a learning rate of 10 −4 to perform better. We apply dropout with a rate of 0.5 just for the channel-wise fully connected layer, since it has more parameters than other layers and might be prone to overfitting. The training process is fast and converges in about 100K iterations: 14 hours on a Titan X GPU. <ref type="figure" target="#fig_4">Figure 7</ref> shows inpainting results for context encoder trained with random region corruption using reconstruction loss. To evaluate the quality of features, we find nearest neighbors to the masked part of image just by using the features from the context, see <ref type="figure">Figure 8</ref>. Note that none of the methods ever see the center part of any image, whether a query or dataset image. Our features retrieve decent nearest neighbors just from context, even though actual prediction is blurry with L2 loss. AlexNet features also perform decently as they were trained with 1M labels for semantic tasks, HOG on the other hand fail to get the semantics.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.1">Classification pre-training</head><p>For this experiment, we fine-tune a standard AlexNet classifier on the PASCAL VOC 2007 <ref type="bibr" target="#b11">[12]</ref> from a number of supervised, self-supervised and unsupervised initializations. We train the classifier using random cropping, and then evaluate it using 10 random crops per test image. We average the classifier output over those random crops. <ref type="table" target="#tab_3">Table 2</ref> shows the standard mean average precision (mAP) score for all compared methods.</p><p>A random initialization performs roughly 25% below an ImageNen-trained model; however, it does not use any labels. Context encoders are competitive with concurrent self-supervised feature learning methods <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b38">39]</ref> and significantly outperform autoencoders and Agrawal et al. <ref type="bibr" target="#b0">[1]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.2">Detection pre-training</head><p>Our second set of quantitative results involves using our features for object detection. We use Fast R-CNN <ref type="bibr" target="#b13">[14]</ref> framework (FRCN). We replace the ImageNet pre-trained network with our context encoders (or any other baseline model). In particular, we take the pre-trained encoder weights up to the pool5 layer and re-initialize the fully-Ours Ours HOG HOG AlexNet AlexNet <ref type="figure">Figure 8</ref>: Context Nearest Neighbors. Center patches whose context (not shown here) are close in the embedding space of different methods (namely our context encoder, HOG and AlexNet). Note that the appearance of these center patches themselves was never seen by these methods. But our method brings them close just from their context.   <ref type="bibr" target="#b17">[18]</ref>, and removing overlapping images from the validation set <ref type="bibr" target="#b27">[28]</ref>.</p><p>connected layers. We then follow the training and evaluation procedures from FRCN and report the accuracy (in mAP) of the resulting detector.</p><p>Our results on the test set of the PASCAL VOC 2007 <ref type="bibr" target="#b11">[12]</ref> detection challenge are reported in <ref type="table" target="#tab_3">Table 2</ref>. Context encoder pre-training is competitive with the existing methods achieving significant boost over the baseline. Recently, Krähenbühl et al. <ref type="bibr" target="#b24">[25]</ref> proposed a data-dependent method for rescaling pre-trained model weights. This significantly improves the features in Doersch et al. <ref type="bibr" target="#b6">[7]</ref> up to 65.3% for classification and 51.1% for detection. However, this rescaling doesn't improve results for other methods, including ours.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.3">Semantic Segmentation pre-training</head><p>Our last quantitative evaluation explores the utility of context encoder training for pixel-wise semantic segmentation. Fully convolutional networks <ref type="bibr" target="#b27">[28]</ref> (FCNs) were proposed as an end-to-end learnable method of predicting a semantic label at each pixel of an image, using a convolutional network pre-trained for ImageNet classification. We replace the classification pre-trained network used in the FCN method with our context encoders, afterwards following the FCN training and evaluation procedure for direct comparison with their original CaffeNet-based result.</p><p>Our results on the PASCAL VOC 2012 <ref type="bibr" target="#b11">[12]</ref> validation set are reported in <ref type="table" target="#tab_3">Table 2</ref>. In this setting, we outperform a randomly initialized network as well as a plain autoencoder which is trained simply to reconstruct its full input.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>Our context encoders trained to generate images conditioned on context advance the state of the art in semantic inpainting, at the same time learn feature representations that are competitive with other models trained with auxiliary supervision.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 3 :</head><label>3</label><figDesc>An example of image x with our different region masksM applied, as described in Section 3.3.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 4 :</head><label>4</label><figDesc>Semantic Inpainting results for context encoder trained jointly using reconstruction and adversarial loss. First four rows contain examples from Paris StreetView Dataset, and bottom row contains examples from ImageNet. ple or predicted one: min G max D E x∈X [log(D(x))] + E z∈Z [log(1 − D(G(z)))]</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 6 :</head><label>6</label><figDesc>Semantic Inpainting using different methods. Context Encoder with just L2 are well aligned, but not sharp. Using adversarial loss, results are sharp but not coherent. Joint loss alleviate the weaknesses of each of them. The last two columns are the results if we plug-in the best nearest neighbor (NN) patch in the masked region.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 7 :</head><label>7</label><figDesc>Arbitrary region inpainting for context encoder trained with reconstruction loss.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 1 :</head><label>1</label><figDesc>Semantic Inpainting accuracy for Paris StreetView</figDesc><table>dataset on held-out images. NN inpainting is basis for [19]. 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 2 :</head><label>2</label><figDesc>Quantitative comparison for classification, detection and semantic segmentation. Classification and Fast-RCNN Detection results are on the PASCAL VOC 2007 test set. Semantic segmentation results are on the PASCAL VOC 2012 validation set from the FCN evaluation described in Section 5.2.3, using the additional training data from</figDesc><table></table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements The authors would like to thank Amanda Buster for the artwork on </p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Learning to see by moving</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Agrawal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Carreira</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICCV</title>
+		<imprint>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Patchmatch: A randomized correspondence algorithm for structural image editing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Barnes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shechtman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Finkelstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Goldman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics</title>
+		<imprint>
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">6</biblScope>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Learning deep architectures for ai. Foundations and trends in Machine Learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Image inpainting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bertalmio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Sapiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Caselles</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Ballester</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer graphics and interactive techniques</title>
+		<imprint>
+			<date type="published" when="2000" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">A unified architecture for natural language processing: Deep neural networks with multitask learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Collobert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Weston</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Context as supervisory signal: Discovering objects with predictable context</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Doersch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Unsupervised visual representation learning by context prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Doersch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICCV</title>
+		<imprint>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">What makes paris look like paris?</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Doersch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Singh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Efros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics</title>
+		<imprint>
+			<biblScope unit="issue">6</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Decaf: A deep convolutional activation feature for generic visual recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hoffman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Tzeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICML</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Learning to generate chairs with convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dosovitskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Springenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">CVPR</title>
+		<imprint>
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Texture synthesis by nonparametric sampling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Efros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">K</forename><surname>Leung</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="1999" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">The Pascal Visual Object Classes challenge: A retrospective. IJCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">A</forename><surname>Eslami</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Neocognitron: A self-organizing neural network model for a mechanism of pattern recognition unaffected by shift in position</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Fukushima</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Biological cybernetics</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="1980" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">Fast r-cnn. ICCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Rich feature hierarchies for accurate object detection and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Generative adversarial nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pouget-Abadie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mirza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Warde-Farley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ozair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Unsupervised learning of spatiotemporally coherent metrics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Goroshin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bruna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tompson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Eigen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICCV</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Semantic contours from inverse detectors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hariharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bourdev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Maji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Scene completion using millions of photographs. SIGGRAPH</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Reducing the dimensionality of data with neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Science</title>
+		<imprint>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Learning image representations tied to ego-motion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Jayaraman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Grauman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Caffe: Convolutional architecture for fast feature embedding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Karayev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Guadarrama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACM Multimedia</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Adam: A method for stochastic optimization. ICLR</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Auto-encoding variational bayes. ICLR</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krähenbühl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Doersch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<title level="m">Datadependent initializations of convolutional neural networks. ICLR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">ImageNet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">Backpropagation applied to handwritten zip code recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Boser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">S</forename><surname>Denker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Henderson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">E</forename><surname>Howard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Hubbard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">D</forename></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1989" />
+		</imprint>
+	</monogr>
+	<note>Neural computation</note>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Fully convolutional networks for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Beyond categories: The visual memex model for reasoning about object relationships</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Malisiewicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Efros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Distributed representations of words and phrases and their compositionality</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mikolov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">S</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Building the gist of a scene: The role of global image features in recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Progress in brain research</title>
+		<imprint>
+			<biblScope unit="issue">3</biblScope>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">An iterative regularization method for total variation-based image restoration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Osher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Burger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Goldfarb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Yin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Multiscale Modeling &amp; Simulation</title>
+		<imprint>
+			<biblScope unit="issue">3</biblScope>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+		<title level="m" type="main">Unsupervised representation learning with deep convolutional generative adversarial networks. ICLR</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Radford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Metz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chintala</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Learning temporal embeddings for complex video analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ramanathan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Mori</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICCV</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ranzato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Susskind</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<title level="m">Modeling natural images using gated mrfs. PAMI</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Disentangling factors of variation for facial expression recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Rifai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Vincent</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mirza</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Russakovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Satheesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bernstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note>Imagenet large scale visual recognition challenge</note>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Extracting and composing robust features with denoising autoencoders</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Vincent</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Larochelle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P.-A</forename><surname>Manzagol</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Unsupervised learning of visual representations using videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICCV</title>
+		<imprint>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Visualizing and understanding convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">D</forename><surname>Zeiler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

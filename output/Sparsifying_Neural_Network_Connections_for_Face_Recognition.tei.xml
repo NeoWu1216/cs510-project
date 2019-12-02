@@ -1,0 +1,913 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Sparsifying Neural Network Connections for Face Recognition</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yi</forename><surname>Sun</surname></persName>
+							<email>sunyi@sensetime.com</email>
+							<affiliation key="aff0">
+								<orgName type="laboratory">SenseTime Group</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaogang</forename><surname>Wang</surname></persName>
+							<email>xgwang@ee.cuhk.edu.hkxtang@ie.cuhk.edu.hk</email>
+							<affiliation key="aff1">
+								<orgName type="department">Department of Electronic Engineering</orgName>
+								<orgName type="institution">The Chinese University of Hong</orgName>
+								<address>
+									<settlement>Kong</settlement>
+								</address>
+							</affiliation>
+							<affiliation key="aff3">
+								<orgName type="department">Shenzhen Institutes of Advanced Technology</orgName>
+								<orgName type="institution">Chinese Academy of Sciences</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaoou</forename><surname>Tang</surname></persName>
+							<affiliation key="aff2">
+								<orgName type="department">Department of Information Engineering</orgName>
+								<orgName type="institution">The Chinese University of Hong</orgName>
+								<address>
+									<settlement>Kong</settlement>
+								</address>
+							</affiliation>
+							<affiliation key="aff3">
+								<orgName type="department">Shenzhen Institutes of Advanced Technology</orgName>
+								<orgName type="institution">Chinese Academy of Sciences</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Sparsifying Neural Network Connections for Face Recognition</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:46+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>This paper proposes to learn high-performance deep</head><p>ConvNets with sparse neural connections, referred to as sparse ConvNets, for face recognition. The sparse ConvNets are learned in an iterative way, each time one additional layer is sparsified and the entire model is re-trained given the initial weights learned in previous iterations. One important finding is that directly training the sparse Con-vNet from scratch failed to find good solutions for face recognition, while using a previously learned denser model to properly initialize a sparser model is critical to continue learning effective features for face recognition. This paper also proposes a new neural correlation-based weight selection criterion and empirically verifies its effectiveness in selecting informative connections from previously learned models in each iteration. When taking a moderately sparse structure (26%-76% of weights in the dense model), the proposed sparse ConvNet model significantly improves the face recognition performance of the previous state-of-theart DeepID2+ models given the same training data, while it keeps the performance of the baseline model with only 12% of the original parameters.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>The number of parameters in a deep neural network is restricted by the amount of training data. To reduce model parameters, we introduce a new weight sparsifying algorithm for deep convolutional neural networks, and the learned models are referred to as sparse ConvNets. The sparse ConvNet is derived from a baseline high-performance VGG-like deep neural network <ref type="bibr" target="#b20">[21]</ref>. When trained on the same approximately 300, 000 face images as DeepID2+ <ref type="bibr" target="#b23">[24]</ref>, the baseline VGG-like model achieves 98.95% face verification accuracy on LFW <ref type="bibr" target="#b11">[12]</ref> taking an entire face region (and its horizontally flipped counterpart) as input.</p><p>When the sparsity is introduced to this baseline model, we could significantly improve the performance from 98.95% to 99.30%, reducing the error rate by 33%. Moreover, there is a trade-off between model sizes and the performance, and the performance of our baseline model can be kept with only 12% of the original model sizes/parameters. A small model size is preferred on some platforms such as mobile devices.</p><p>The idea of reducing neural connections has been taken in designing GoogLeNet <ref type="bibr" target="#b24">[25]</ref>, which achieved great success on the ImageNet challenge <ref type="bibr" target="#b18">[19]</ref>. GoogLeNet reduced neural connections by using very small convolution kernels of sizes 1 × 1 and 3 × 3. We further improve the degree of sparsity by dropping connections in the already very small 3 × 3 convolution kernels in our base model and dropping across different input feature maps. Moreover, the degree of sparsity in our sparse ConvNets can be well controlled by a single sparsity parameter, which makes it easier to make the tradeoff between the performance and model sizes.</p><p>Inspired by the Hebbian rule that "neurons that fire together wire together" <ref type="bibr" target="#b0">[1]</ref>, we drop more connections between weekly correlated neurons than those between strongly correlated neurons. The correlation between two connected neurons are defined by the magnitude of the correlation between their neural activations. On the other hand, neurons in the previous layer which are more correlated (either positively or negatively) to a given neuron in the current layer are more helpful to predict the activities of the latter.</p><p>We first train the baseline convolutional model, and then dropping connections layer-wisely from the last to the previous layers, each time only one additional layer is sparsified and the entire model is re-trained. The previously trained models are used to calculate the neural correlations and initialize the subsequent sparser models. It is found that directly train a sparsely connected model is difficult and lead to inferior performance. We conjecture this is because without the help of denser models, a sparse model could easily get stuck to bad local minimums. A denser model with more parameters have more degrees of freedom to avoid such local minimums in the initial training stages. Therefore denser models could provide better initialization for sparser models.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related work</head><p>Removing unimportant parameters in deep neural networks was studied by LeCun et al. <ref type="bibr" target="#b6">[7]</ref> in their seminal work Optimal Brain Damage. They took a second derivativerelated criterion for removing parameters. The second derivatives of parameters are calculated efficiently (but approximately) by back-propagation. They reduced model parameters by four to eight times without loss of the prediction ability of the original model. Optimal Brain Surgeon <ref type="bibr" target="#b8">[9]</ref> and <ref type="bibr" target="#b21">[22]</ref> took an additional surgery step when a parameter is pruned to adjust the remaining parameters. In <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b5">6]</ref>, neural weights are regularized by l p norm (e.g., p = 0, 1, 2) and weights with small magnitudes are pruned. Blundell et al. <ref type="bibr" target="#b3">[4]</ref> treated neural weights as Gaussian random variables and estimated the means and variances of weights. Weights with small means and large variances are pruned. Neural networks in <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b3">4]</ref> did not need to be fine-tuned after pruning. In contrast to the previous studies, we investigate a new weight pruning criterion which explores correlations between neural activations. Through the study on the challenging face recognition problem, it is shown that neural correlations are better indicators of the significance of neural connections than weight magnitudes or second derivatives of weights. Another important finding is that learning an initial dense model is critical to the following learning of sparser models.</p><p>Orthogonal to weight pruning, <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b28">29</ref>] explored singular value decomposition and low rank approximation of neural layers for model compression. <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b9">10]</ref> proposed knowledge distillation, in which a small model (a single model) is trained to mimic the activations of a large model (an ensemble of models). Our weight pruning method may be combined with these techniques. For example, a small model may be first learned with knowledge distillation. Then weights in the small model is further pruned according to some significance criterion.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Baseline model</head><p>Our baseline model is similar to VGG net <ref type="bibr" target="#b20">[21]</ref> with every two convolutional layers following one max-pooling layer. One major difference is that the last two convolutional layers are replaced by two locally-connected layers. The aim is to learn different features in different face regions, since face is a structured object, and local connections increase the model fitting ability. The second locallyconnected layer is followed by a 512-dimensional fully-type patch size/ stride output size params connected layer. The feature representation in the fullyconnected layer is used for the following face recognition. Tab. 1 shows the detailed structure of our baseline model. Joint identification-verification supervisory signal <ref type="bibr" target="#b22">[23]</ref> is added to the last fully-connected layer to learn a feature representation discriminative to different face identities while consistent for face images of the same person. The same supervisory signal is also added to a few previous layers to enhance the supervision in previous feature learning stages <ref type="bibr" target="#b23">[24]</ref>. Rectified linear activation function <ref type="bibr" target="#b16">[17]</ref> is used for all convolutional, locally-connected, and fully-connected layers. Dropout learning <ref type="bibr" target="#b10">[11]</ref> with 30% and 50% dropout rates are used for the last locally-connected and fullyconnected layers, respectively, during training.</p><formula xml:id="formula_0">convolution (1a) 3 × 3/1 112 × 96 × 64 1.8K convolution (1b) 3 × 3/1 112 × 96 × 64 37K max pool 2 × 2/2 56 × 48 × 64 convolution (2a) 3 × 3/1 56 × 48 × 96 55K convolution (2b) 3 × 3/1 56 × 48 × 96 83K max pool 2 × 2/2 28 × 24 × 96 convolution (3a) 3 × 3/1 28 × 24 × 192 166K convolution (3b) 3 × 3/1 28 × 24 × 192 332K max pool 2 × 2/2 14 × 12 × 192 convolution (4a) 3 × 3/1 14 × 12 × 256 443K convolution (4b) 3 × 3/1 14 × 12 × 256 590K max pool 2 × 2/2 7 × 6 × 256 local connection (5a) 3 × 3/1 5 × 4 × 256 11.8M local connection (5b) 3 × 3/1 3 × 2 × 256 3.5M full connection (f) 512 786K</formula><p>When the training set is moderately large, our baseline model has achieved the highest face verification accuracy on LFW compared the state-of-the-art methods. For example, when trained on the same approximately 300, 000 training face images as DeepID2+ <ref type="bibr" target="#b23">[24]</ref>, our single baseline model taking the entire face region as input achieves 98.95% face verification accuracy on LFW <ref type="bibr" target="#b11">[12]</ref>, compared to 98.70% for a single DeepID2+ model <ref type="bibr" target="#b23">[24]</ref>. The improvement over DeepID2+ is mainly due to larger input dimensions (112 × 96 compared to 55 × 47) and increased model depth. While the recently proposed FaceNet <ref type="bibr" target="#b19">[20]</ref> has obtained the highest verification accuracy (99.63%) on LFW, it required around 200 million training samples (almost 700 times large than ours).The extremely large training data required makes it impossible to be reproduced by us, and we did not choose FaceNet as the baseline.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Sparse ConvNets</head><p>Our starting point is the high-performance well trained baseline model N 0 as described in Sec. 3. Then we delete connections in the baseline model in a layer-wise fashion, from the last fully-connected layer to the previous locally-connected and convolutional layers. When a layer L m is sparsified, a new model N m is re-trained initialized by its previous model N m−1 . Therefore, a sequence of models {N 1 , . . . , N M } with fewer and fewer connections are trained and N M is the final sparse ConvNet obtained. During the whole training process, the previously learned model is used to calculate the neural correlations and guide the connection dropping procedure. The weights learned by the denser model N m−1 are also good initialization of the sparser model N m to be further trained. We first delete connections in higher layers because the fully-and locallyconnected layers have the majority of parameters in the deep model. It is found that the large amount of parameters in these layers have a lot of redundancy. Parameters in these layers could be greatly reduced without degrading the performance.</p><p>The sparser model could be easily trained by existing deep learning tools such as Caffe <ref type="bibr" target="#b13">[14]</ref>. We use a binary matrix (referred to as dropping matrix) of 0s and 1s with the same size as the weight matrix of a layer to specify the dropped or reserved weights of the given layer. Each time before forward-propagation, weights in the given layer are first updated by dot-multiplying the dropping matrix. Then the following forward-and back-propagation operations could be done in the same way as a normal denser model, while the model would behave as a sparselyconnected one. The dropped weights being updated after back-propagation would be clipped to zero again before next forward-propagation. At the test stage, the code could be particularly optimized for the sparsely connected layers to actually speedup the computation and reduce the model size for storage, when the model is implemented in various platforms and devices. Even with the current implementation, the model size has already been largely reduced, since the storage of binary dropping matrices is much smaller than that of dropped real-valued weights.</p><p>The training algorithm is summarized in Tab. 2, in which the weight sparsifying criteria will be described in Sec. 4.1.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Sparsify connections</head><p>Given the degree of sparsity S (0 &lt; S &lt; 1), we sample S · |W | weights from the total number of weights |W |. The number of connections are proportional to the number of weights for all types of layers in our deep ConvNets. The sampling is based on neural correlations. In principle, we tend to keep connections (and the corresponding weights) where neurons connected have high correlations and drop connections between weakly correlated neurons. This is because neurons in one layer which have stronger correlations to neurons in the upper layer have stronger predictive power for the activities of the latter. Note that neurons with strong negative correlations are also useful in predicting input: network structure T ; layers to be sparsified L1, L2, ... ,LM ; degrees of sparsity SL 1 , SL 2 , ... ,SL M train baseline network N0 with structure T for m from 1 to M do calculate dropping matrix DL m of layer Lm according to the neural correlations in network Nm−1 and the sparsity degree SL m initialize network Nm with structure T and weights of network Nm−1 while not converge do update weights in layers L1, L2, ... ,Lm by dotmultiplying them with dropping matrices DL 1 , DL 2 , ... , DL m , respectively forward-and back-propagation one mini-batch of training samples in network Nm and update weights in network Nm end while end for output network NM with sparsified connections specified by dropping matrices DL 1 , DL 2 , ... ,DL M neural activations. If a neuron is viewed as a detector of a certain visual pattern, its positively correlated neurons in the lower layer provide evidence on the visual pattern, while its negatively correlated neurons help to reduce false alarms. In practice we find that keeping a small portion of connections to weakly correlated neurons is also helpful. We conjecture the reason might be that predictions from weakly correlated neurons are complementary to those from highly correlated neurons.</p><p>First consider fully-and locally-connected layers in which weights are not shared. Weights and connections are one-to-one mapped in these layers. Given a neuron a i in the current layer and its K connected neurons b i1 , b i2 , ... ,b iK in the previous layer, the correlation coefficient between a i to each of b ik for k = 1, 2, . . . , K is (for simplicity, when we refer to a neuron, we also mean its neural activations)</p><formula xml:id="formula_1">r ik = E[a i − µ ai ][b ik − µ b ik ] σ ai σ b ik ,<label>(1)</label></formula><p>where µ ai , µ b ik , σ ai , and σ b ik denote the mean and standard deviation of a i and b ik , respectively, which are evaluated on a separate training set. Since both positively and negatively correlated neurons are helpful for the predictions, we consider the corresponding connections respectively. From all r ik for k = 1, 2, . . . , K, we first take out all positive correlation coefficients and sort them in descending order, denoted as r + ik for k = 1, 2, . . . , K + . Then we randomly sample λSK + and (1−λ)SK + coefficients from the coefficients ranked in the first and the second half, respectively. Weights/connections corresponding to the sampled coefficients are reserved while others are deleted.</p><p>We take λ = 0.75 in all our experiments. In other words, connections from the half of higher correlations are three times as much as those from the half of lower correlations. The total kept connections/weights are SK + , which depends on the degree of sparsity S.</p><p>The negative correlation coefficients are processed in a similar way, except that we consider the absolute value of the coefficients and keep more coefficients (and the corresponding connections/weights) of higher absolute values. The total sampled negative coefficients are SK − , given K − negative coefficients from r ik for k = 1, 2, . . . , K. Connections from each of output neurons a i are processed in the same way. Suppose there are N output neurons a i for i = 1, 2, . . . , N . Then the total sampled weights/connections are SKN . The dropping matrix D are then created for training, in which 1 denotes reserved weights and 0 denotes deleted weights. D has the same degree of sparsity S.</p><p>For convolutional layers, the set of correlation coefficients between neurons with shared connecting weights are jointly considered to determine whether a weight (or a set of connections with shared weights) should be reserved or deleted. Let a im be the m-th neuron in the i-th feature map of the current layer, and it is connected to K neurons b mk in the previous layer for k = 1, 2, . . . , K. (K equals the filter size, e.g., 3×3, times the number of input channels.) The set of K neurons b mk are determined by the position m. There are a total of M neurons in the i-the output feature map as a im for m = 1, 2, . . . , M . They all share the same set of K weights, although connected to different sets of neurons in the previous layer b mk for m = 1, 2, . . . , M . Weights between a im and b mk are shared for m = 1, 2, . . . , M . We calculate the mean magnitude of the correlation coefficients between a im and b mk for m = 1, 2, . . . , M as</p><formula xml:id="formula_2">r ik M m=1 E[a im − µ aim ][b mk − µ b mk ] σ aim σ b mk .<label>(2)</label></formula><p>Similar to the case in the fully-and locally-connected layers, given the degree of sparsity S, we select SK mean correlation coefficients (and the corresponding weights) from the set of K coefficients r ik for k = 1, 2, . . . , K. We sort r ik in descending order and randomly choose λSK coefficients from the first half with higher values and (1 − λ)SK from the second half with lower values. Again we set λ = 0.75 in all our experiments. The set of K weights r ik for k = 1, 2, . . . , K are processed in the same way for all i = 1, 2, . . . , N (given N feature maps in the current layer). The total sampled weights are SKN . The dropping matrix D are created for training similar to that created in the fully-and locally-connected layers.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experiments</head><p>Our weight sparsifying algorithm is evaluated on the LFW dataset <ref type="bibr" target="#b11">[12]</ref>, the YouTube Faces (YTF) dataset <ref type="bibr" target="#b27">[28]</ref>, and the IJB-A dataset <ref type="bibr" target="#b14">[15]</ref>.All our models are trained on the same training set as has been used to train the previous state-of-the-art DeepID2+ models <ref type="bibr" target="#b23">[24]</ref>. Therefore our algorithm can be directly compared with DeepID2+. The training set has approximately 290, 000 face images from 12, 000 identities. It also has a separate validation set of approximately 47, 000 face images from 2000 identities for selecting the free parameters of algorithms such as learning rates and for other training uses. In testing we evaluated both the tasks of face verification and face identification on the LFW dataset, as well as face verification on the YTF and the IJB-A datasets. For face verification on LFW, 6000 pairs of face images specified by LFW are evaluated to tell whether they are from the same person <ref type="bibr" target="#b11">[12]</ref>. For face identification on LFW, we follow the open-and closed-set protocols specified and evaluated by <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b23">24]</ref>. We also follow the standard test protocol for face verification on the YTF and the IJB-A datasets. After the face representations of our deep models are learned, Joint Bayesian algorithm <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b22">23]</ref> is used to learn a final metric for face recognition. Videos in YTF and IJB-A are processed by individual frames as the static images in LFW. Joint Bayesian similarity scores of all pairs of frames taken from two compared videos are averaged and used as the similarity score of the two videos.</p><p>When training the baseline models, we use an initial learning rate of 0.01, which is slowly decreased to approximately 0.0067 after 140, 000 mini-batches of training. Then the model is fine-tuned for another 10, 000 mini-batches with ten-times smaller learning rates. There are 64 pairs of faces in each mini-batch. After the baseline model N 0 is trained, we continue to train the sparsified models N 1 , N 2 , ..., N M . As described in Tab. 2, each time only one additional layer are sparsified and the entire model are initialized by the previously learned model and re-trained. Since the model already has good initialization, we only retrain 70, 000 mini-batches when each time one additional layer is sparsified. The initial learning rate for re-training is the same as the that used to train the baseline model (0.01) but with a doubled decreasing rate. The last 10, 000 mini-batches among the 70, 000 mini-batches are also used for fine-tuning with ten times smaller learning rates. Joint identification-verification supervisory signals are used from the beginning of re-training.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Sparsity improves performance</head><p>We test the face verification performance of our sparse ConvNets on the LFW dataset <ref type="bibr" target="#b11">[12]</ref> with various sparsity configurations in the fully-connected layer f, the locallyconnected layers 5b and 5a, and the convolutional layer 4b (refer Tab 1 for the layer names). Our preliminary experiments show that the performance of a model is correlated with its total number of parameters from all layers. When the upper layers have already reduced a lot of the parameters, parameters in lower layers would become more critical and harder to reduce. The majority of parameters of our baseline model reside in the higher fully-and locally-connected layers. We reduce as many parameters as possible in these higher layers while the bottom convolutional layers are left untouched.</p><p>We use the degree of sparsity plus layer name to denote one sparsified layer of the model. For example, the fullyconnected layer f with a degree of sparsity 1/256 is denoted as 1/256-f. When there are multiple sparsified layers, the uppermost layer is first sparsified. After re-training, the second highest layer is sparsified, and so forth. Tab. 3 shows a few configurations of our sparsified deep ConvNet models, the corresponding face verification performance on LFW, and the compression ratio (the number of parameters divided by that of the baseline model). Each column of the table is one particular configuration in which the sparsified layers and their degrees of sparsity are specified in the table.</p><p>Layers not specified by the table are not sparsified and are leaved the same as those in the baseline model.</p><p>The second row of the table, in which the sparsity configurations are left blank, shows our baseline model with the face verification accuracy of 0.9895 and the compression ratio is 1. In rows 3-5, sparsity is gradually added from the topmost fully-connected layer f to the lower locally-connected layer 5b, and then to the convolutional layer 4b, with a consistent increasing of the face verification accuracy and decreasing of model parameters.</p><p>It is found that parameters in the fully-connected layer f and the locally-connected layer 5b are mostly redundant. The large number of parameters in these two layers actually hurt the model generalization ability. When parameters are dramatically reduced in these two layers (with extremely sparse 1/256 and 1/128 of the weights/connections of the baseline model, respectively), we improve the face verification performance of the original deep ConvNet from 0.9895 to 0.9923. When we further reduce half of parameters in the convolutional layer 4b, the accuracy further increases to 0.9930, which improves 0.9895 of the baseline model significantly, while the model parameters are reduced to 74% of the original parameters.</p><p>Parameters in the locally-connected layer 5a are more critical than those in the higher layers 5b and f, although it has the most parameters in our baseline model. We find that parameters in layer 5a can only be made moderately sparse. When removing half of the connections in the locallyconnected layer 5a (the second last row in Tab. <ref type="bibr" target="#b2">3</ref> to that of the baseline model, parameters in layer 5a could be reduced to 1/32 of the original, while the total number of parameters is only 12% of the original baseline model (the last row in Tab. 3).</p><p>Since the locally-connected layer 5a has a dominating number of parameters in our model, we study how the performance degrades with respect to the total number of parameters in our model by changing the degree of sparsity in layer 5a while keeping other layers fixed. In particular, we take a sparsity configuration of 1/256-f, 1/128-5b, and S-5a (1/256 and 1/128 degrees of sparsity in the fully-connected layer f and the locally-connected layer 5b, respectively, while changing the degree of sparsity S in layer 5a). As shown in Tab. 4, the performance almost keeps with 26% of the original parameters. It is still close to 99% accuracy with only 12% of the parameters.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Correlation guided weight selection</head><p>We compare the correlation based weight reduction process described in Sec. 4.1 to random weight reduction, which is equivalent to setting the free parameter λ (introduced in Sec. 4.1, which balances the proportion of high and low correlation connections) to 0.5. We have also investigated taking only connections (and the corresponding weights) with the highest correlations, by setting λ to 1, which is compared to the criteria adopted by our algorithm of selecting a majority of high correlation connections as well as a small portion of low correlation connections. We use additional letters r and h to denote random weight se-  <ref type="table">Table 5</ref>. column 1-2: comparison of the LFW face verification accuracy for models with different connection/weight selection criteria, i.e., selection of a majority of high correlation connections (by default), random selection (denoted by letter r), and selection of the high correlation connections only (denoted by letter h). The comparison is conducted on the latest/lowest sparsified layers. Column 3-4: mean absolute value of neural correlations on selected connections on the latest/lowest sparsified layer before and after re-training. lection and the selection of the high correlation connections only, respectively. The experimented sparse structures and the comparison of the face verification accuracies on LFW are shown in Tab. 5. Our proposed connection selection criterion performs better than the other two criteria for various sparsity configurations.</p><p>We find that the mean absolute value of the correlations between neurons on the selected connections tend to increase after re-training on the sparsified structures. We calculate the mean neural correlations on connections selected either randomly or by our criterion before and after re-training. As shown in the last two columns of Tab. 5, the neural correlations increase in various degrees after re-training. This implies that highly correlated neurons are more helpful for prediction and re-training increase such correlations. Note that high correlations include both positive and negative correlations here.</p><p>We verify that a small portion of randomly selected connections besides those with the highest correlations helps to increase the complementarity of the neural predictions in the lower layer. Given a neuron in the current layer (the locally-connected layer 5b is used in this experiment), we find all neurons in the previous layer to which it connected to and calculate the correlations of neural activations between all pairs of neurons in the previous layer which are connected to the given neuron in the current layer. Tab. 6 reports the mean correlations of neural activations averaged over all pairs of neurons in the previous layer which are connected to a common neuron in the current layer. Neural connections in Tab. 6 are pruned by the criteria of 1) selecting connections with the highest correlations between the connected neurons (the second column); 2) selecting a highest corr high corr random mean corr 0.0914 0.0860 0.0820 majority of connections with the highest correlations and a small portion of randomly selected connections as we proposed (the third column); and 3) selecting connections randomly (the last column). Lower mean correlations in Tab. 6 indicate higher complementarity of neural predictions in the previous layer.</p><p>As can be seen in Tab. 6, adding a small portion of randomly selected connections decreases the correlations between neural predictions in the previous layer, and therefore increases the prediction complementarity. However, further increasing the portion of randomly selected connections would hurt the performance due to the weakening of the predictive power of individual predictions.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">Why do we need a denser network?</head><p>The results presented so far are surprising and also raise questions. Sparse networks with much fewer parameters outperform the dense one. The third row in Tab. 5 shows that even after randomly removing most connections in the top fully-connected layer, the performance after re-training is comparable with the baseline model (0.9893 vs 0.9895). Then why do we need the denser baseline model?</p><p>To answer these questions, Tab. 7 reports the face verification accuracies of three sparse structures with random initializations being trained from scratch. It turns out that their performance is lower than the baseline model. The key difference is that our proposed algorithm adopts a layerwise training scheme as described in Sec. 4. Each time only one additional layer is sparsified and the entire model is re-trained. The initialization from weights learned in the baseline model is critical to continue learning the sparser models. Taking the same sparse structures, models learned from random initializations perform significantly worse than the properly initialized models, even much worse than our baseline model. This result is interesting and has inspired our conjecture on the behavior of deep neural networks. Although the learning capacity of a sparse network is large enough to fit the training data, it is easier to get stuck at a local minimum, while a denser network with many more connections could help to find good initial solutions.Once a good initialization is found by the denser network, sparsifying connections and re-training the network improve generalization. Tab. 7 also compares the training-set face verification errors of the three models when they have finished training. Models initialized randomly have much larger training errors than those initialized by previously learned models. This implies that, without any prior knowledge, it is hard for a sparse network to find a good solution even on the training set.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.4.">Method comparison</head><p>We compare our neural correlation based weight pruning strategy with other pruning strategies proposed previously, including optimal brain damage (OBD) <ref type="bibr" target="#b6">[7]</ref>, weight magnitude based pruning (which is the bases of many weight pruning algorithms <ref type="bibr" target="#b5">[6]</ref>), and Bayesian regularization and pruning (BRP) <ref type="bibr" target="#b26">[27]</ref>. Comparison is conducted on the sparsification of neural connections in the fully-connected layer f, the locally-connected layer 5b, and the convolutional layer 4b, respectively, with the pre-specified degrees of sparsity of 1/256, 1/128, and 1/2, respectively, as shown in the first column of Tab. 8. As did in Sec. 5.1 -5.3, when pruning the layer 5b (or 4b), its previous layer f (or layers f and 5b) has already been pruned by our correlation based weight pruning algorithm.</p><p>For OBD, parameters with the largest saliency values defined by the second order derivatives of parameters are reserved, and then the sparsified model is re-trained. For the magnitude bases weight pruning, given the degree of sparsity S, S · |W + | positive weights and S · |W − | negative weights with the largest absolute values are reserved, in which |W + | and |W − | denotes the number of positive and negative weights, respectively. For BRP, weights are pruned iteratively under the L1 regularization, and each time weights with the smallest absolute values (less than 10% of the mean absolute value in our implementation) are set to zero permanently. In the original implementation of BRP, learning rates are adaptable so that after each time of weight updating exactly one weight are vanished. However this is infeasible to large deep models as ours since there are too many weights to be pruned.</p><p>As shown in Tab. 8, our correlation based pruning strategy achieves the best performance for sparsifying layers 5b and 4b. Although OBD is better than our strategy in sparsifying layer f, its performance degrades significantly when pruning layers 5b and 4b, probably due to the difficulty of accurately estimating the second derivatives in  <ref type="table">Table 8</ref>. Comparison of different weight pruning strategies, including optimal brain damage (OBD) <ref type="bibr" target="#b6">[7]</ref>, weight magnitude based pruning (magnitude), Bayesian regularization and pruning (BRP) <ref type="bibr" target="#b26">[27]</ref>, and our proposed neural correlation based pruning (correlation), on various sparse structures for face verification on LFW.</p><p>lower layers. We investigate whether correlations between connected neurons and weights on connections are correlated by counting the rankings of weights selected by our neural correlation based weight selection algorithm. For example, each neuron in the locally-connected layer 5b is connected to 3 × 3 × 256 = 2304 neurons in the local regions of layer 5a. We rank the positive and negative weights on the 2304 connections, respectively, by their magnitudes (absolute values), and keep the rankings of the reserved weights after correlation based weight pruning. The frequency of the rankings of the reserved positive weights of all 3×2×256 = 1536 neurons in layer 5b is counted in <ref type="figure" target="#fig_0">Fig. 1</ref>. It can be seen that the rankings have a near uniform distribution, which means that large and small weights have equal chances of being reserved by our correlation based weight selection criterion. The rankings of the reserved negative weights have similar distributions. The same phenomenon is also found for layers 4b and f. The interesting phenomenon that neural networks with weights selected under a near uniform distribution of magnitude perform consistently better than weights selected with the largest magnitude indicates that weight magnitude is not a good indicator of the significance of neural connections.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.5.">Sparse ConvNet ensemble</head><p>We further verify our sparse ConvNet structures by training 25 deep ConvNets taking a variety of face regions in different scales, positions, and color channels. We take the same 25 face regions as used in <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b23">24]</ref>. The aim of training an ensemble of sparse ConvNets is to verify that the proposed sparse structure improves performance statistically, and also to construct a final high-performance face recognition system for evaluation.</p><p>We first train 25 baseline models on the 25 face regions. The model structures are the same as that shown in Tab. 1 except for the input dimensions. We take 112 × 96 input for rectangle face regions and 96 × 96 input for square regions. When input sizes change, feature map sizes in the following layers will change accordingly. After the baseline models are learned, we sequentially add 1/256, 1/128, and 1/2 degrees of sparsity to the fully-connected layer f, the locally-connected layer 5b, and the convolutional layer 4b, and refer the learned models as 1/256-f, 1/128-5b, and 1/2-4b, respectively. The final sparsity configuration of the 25 models is the same as that shown in the third last row in Tab. 3. Adding sparsity to the specified three layers improves the mean face verification accuracy of the 25 models by 0.18%, 0.17%, and 0.05%, respectively. The mean accuracy of the 25 baseline models is 97.26%, and our proposed sparse structures improve the mean accuracy to 97.66%. Note that our baseline models already perform much better than DeepID2+. The latter has a mean accuracy of 96.61% for 25 models.</p><p>When combining features learned from the 25 sparse ConvNets, we achieve 0.9955 ± 0.0010 face verification accuracy on LFW, which is better than 0.9947 from the previous state-of-the-art DeepID2+ ensemble <ref type="bibr" target="#b23">[24]</ref> given the same training data. FaceNet <ref type="bibr" target="#b19">[20]</ref> achieves an 0.9963 ± 0.0009 face verification accuracy on LFW with approximated 700 times the training data of ours. Given the face identification protocols adopted in <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b23">24]</ref>, we achieve 0.962 closed-set and 0.864 open-set face identification accuracies on LFW, respectively. Our result also improves the previous state-of-the-art 0.950 and 0.807 closed-and open-set face identification accuracies from DeepID2+ ensembles <ref type="bibr" target="#b23">[24]</ref>.</p><p>In our further evaluation on YouTube Faces (YTF) <ref type="bibr" target="#b27">[28]</ref>, our single sparse ConvNet achieves 92.7% face verification accuracy, which is better than the 91.9% face verification accuracy of a single DeepID2+ net <ref type="bibr" target="#b23">[24]</ref>. The ensemble of 25 sparse ConvNets achieves 93.5% face verification accuracy on YTF, which is better than the 93.2% face verification accuracy of the DeepID2+ ensemble <ref type="bibr" target="#b23">[24]</ref>. FaceNet <ref type="bibr" target="#b19">[20]</ref> and Deep Face Recognition <ref type="bibr" target="#b17">[18]</ref>   face verification accuracies than ours (95.1% and 97.3%, respectively) on YTF. YTF is a dataset harder than LFW due to the low quality video face images. There is a large domain gap between our training set, which contains highquality static web images of celebrities, and YouTube Faces videos. Nevertheless, we achieve competitive performance on YouTube Faces, which verified the good generalization ability of our models.</p><p>In addition, we test the face verification protocol on IJB-A <ref type="bibr" target="#b14">[15]</ref> using our sparse ConvNet and compare it to our baseline model. Only the single model taking the entire face region as input is tested due to the difficulty of extracting dense facial landmarks under extreme poses. The true accept rates (TAR) at false accept rates (FAR) of 0.1, 0.01, and 0.001 are compared in Tab. 9. Our baseline ConvNet has significantly outperformed the OpenBR <ref type="bibr" target="#b15">[16]</ref> and GOTS methods, while the sparse ConvNet shows further improvement over our baseline model.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>This paper has proposed to learn effective sparser deep ConvNet structures iteratively from the previously learned denser models with a neural correlation based weight selection criterion. The denser model helps to avoid bad local minimums and provides good initializations which are essential for the sparser models to continue learning effective face representations, while the sparser model itself failed to learn effective features from data without the help of denser models. Empirical studies verified the superiority of neural correlations over weight magnitude or second order derivatives for selecting informative neural connections. The proposed sparse ConvNet with a moderate degree of sparsity (26%-76% of weights in the dense model) significantly improved the performance of the original dense model, while the performance degrades slowly when the model further goes sparser. The effectiveness of the proposed sparse ConvNet models was validated on the popular LFW, YTF, and IJB-A datasets.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Distribution of weight magnitude rankings of weights selected by the proposed neural correlation based weight selection algorithm.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 .</head><label>1</label><figDesc>Baseline ConvNet structures.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 2 .</head><label>2</label><figDesc>The sparse ConvNets learning algorithm.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head></head><label></label><figDesc>), we achieve 0.9922 face verification accuracy with 43% of the original parameters. To achieve a performance comparable</figDesc><table>sparse structure 
+accuracy 
+compression 
+ratio 
+0.9895 
+1 
+1/256-f 
+0.9898 
+0.96 
+1/256-f 1/128-5b 
+0.9923 
+0.76 
+1/256-f 1/128-5b 1/2-4b 
+0.9930 
+0.74 
+1/256-f 1/128-5b 1/2-5a 
+0.9922 
+0.43 
+1/256-f 1/128-5b 1/32-5a 
+0.9898 
+0.12 
+
+Table 3. The LFW face verification accuracy and the number of 
+parameters (normalized by that of the baseline model) for models 
+with various sparsity configurations. 
+
+S-5a 
+compression 
+ratio 
+
+accuracy 
+
+1 
+0.76 
+0.9923 
+1/2 
+0.43 
+0.9922 
+1/4 
+0.26 
+0.9918 
+1/8 
+0.18 
+0.9908 
+1/16 
+0.14 
+0.9890 
+1/32 
+0.12 
+0.9898 
+
+Table 4. The LFW face verification accuracy when the sparsity of 
+layer 5a (therefore the total number of parameters) changes in the 
+model. 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head>Table 6 .</head><label>6</label><figDesc>Mean correlation of neural predictions in the previous layer. See text for the detailed descriptions.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_7" validated="false"><head></head><label></label><figDesc>achieved higher</figDesc><table>method 
+0.1FAR 
+0.01FAR 
+0.001FAR 
+OpenBR [16] 
+0.433 
+0.236 
+0.104 
+GOTS 
+0.627 
+0.406 
+0.198 
+Baseline ConvNet 
+0.915 
+0.694 
+0.445 
+Sparse ConvNet (proposed) 
+0.927 
+0.726 
+0.460 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_8" validated="false"><head>Table 9 .</head><label>9</label><figDesc>TAR at 0.1, 0.01, and 0.001 FAR of face verification on the IJB-A dataset.</figDesc><table></table></figure>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Provable bounds for learning some deep representations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Arora</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bhaskara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Ma</surname></persName>
+		</author>
+		<idno>abs/1310.6343</idno>
+		<imprint>
+			<date type="published" when="2013" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Do deep nets really need to be deep?</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Caruana</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. NIPS</title>
+		<meeting>NIPS</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Unconstrained face recognition: Identifying a person of interest from a media collection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Best-Rowden</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Otto</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Klare</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">K</forename><surname>Jain</surname></persName>
+		</author>
+		<idno>TR MSU- CSE-14-1</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Weight uncertainty in neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Blundell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Cornebise</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wierstra</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICML</title>
+		<meeting>ICML</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Bayesian face revisited: A joint formulation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Cao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Wen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ECCV</title>
+		<meeting>ECCV</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">D</forename><surname>Collins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<idno>abs/1412.1442</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Optimal brain damage</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">L</forename><surname>Cun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">S</forename><surname>Denker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">A</forename><surname>Solla</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. NIPS</title>
+		<meeting>NIPS</meeting>
+		<imprint>
+			<date type="published" when="1990" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Exploiting linear structure within convolutional networks for efficient evaluation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">L</forename><surname>Denton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zaremba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bruna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. NIPS</title>
+		<meeting>NIPS</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Second order derivatives for network pruning: Optimal brain surgeon</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hassibi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Stork</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">C R</forename><surname>Com</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. NIPS</title>
+		<meeting>NIPS</meeting>
+		<imprint>
+			<date type="published" when="1993" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">Distilling the knowledge in a neural network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+		<idno>ab- s/1503.02531</idno>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Improving neural networks by preventing co-adaptation of feature detectors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<idno>abs/1207.0580</idno>
+	</analytic>
+	<monogr>
+		<title level="j">CoR-R</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Labeled Faces in the Wild: A database for studying face recognition in unconstrained environments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">B</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ramesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Learned-Miller</surname></persName>
+		</author>
+		<idno>07-49</idno>
+		<imprint>
+			<date type="published" when="2007" />
+			<pubPlace>Amherst</pubPlace>
+		</imprint>
+		<respStmt>
+			<orgName>University of Massachusetts</orgName>
+		</respStmt>
+	</monogr>
+	<note type="report_type">Technical Report</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Speeding up convolutional neural networks with low rank expansions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jaderberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. BMVC</title>
+		<meeting>BMVC</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Karayev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Guadarrama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Caffe</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1408.5093</idno>
+		<title level="m">Convolutional architecture for fast feature embedding</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Pushing the frontiers of unconstrained face detection and recognition: IARPA Janus Benchmark A</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">F</forename><surname>Klare</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Klein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Taborsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Blanton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Cheney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Allen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Grother</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mah</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Burge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">K</forename><surname>Jain</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Open source biometric recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">C</forename><surname>Klontz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">F</forename><surname>Klare</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Klum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">K</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Burge</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Biometrics: Theory, Applications and Systems (BTAS)</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Rectified linear units improve restricted Boltzmann machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Nair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICML</title>
+		<meeting>ICML</meeting>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Deep face recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><forename type="middle">M</forename><surname>Parkhi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. BMVC</title>
+		<meeting>BMVC</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Russakovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Satheesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bernstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note>ImageNet Large Scale Visual Recognition Challenge. IJCV</note>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Facenet: A unified embedding for face recognition and clustering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Schroff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kalenichenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Philbin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.1556</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">Technical report</note>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Data-free parameter pruning for deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Srinivas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">V</forename><surname>Babu</surname></persName>
+		</author>
+		<idno>abs/1507.06149</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Deep learning face representation by joint identification-verification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. NIPS</title>
+		<meeting>NIPS</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Deeply learned face representations are sparse, selective, and robust</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Going deeper with convolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Webscale training for face identification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Taigman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ranzato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wolf</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Bayesian regularisation and pruning using a laplace prior</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">M</forename><surname>Williams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Computation</title>
+		<imprint>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="page" from="117" to="143" />
+			<date type="published" when="1994" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Face recognition in unconstrained videos with matched background similarity</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wolf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Hassner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Maoz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">Accelerating very deep convolutional networks for classification and detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<idno>abs/1505.06798</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

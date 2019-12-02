@@ -1,0 +1,863 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Noisy Label Recovery for Shadow Detection in Unfamiliar Domains</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tomás</forename><forename type="middle">F</forename><surname>Yago Vicente</surname></persName>
+							<email>tyagovicente@cs.stonybrook.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Stony Brook University</orgName>
+								<address>
+									<postCode>11794</postCode>
+									<settlement>Stony Brook</settlement>
+									<region>NY</region>
+									<country key="US">USA</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Minh</forename><surname>Hoai</surname></persName>
+							<email>minhhoai@cs.stonybrook.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Stony Brook University</orgName>
+								<address>
+									<postCode>11794</postCode>
+									<settlement>Stony Brook</settlement>
+									<region>NY</region>
+									<country key="US">USA</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dimitris</forename><surname>Samaras</surname></persName>
+							<email>samaras@cs.stonybrook.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Stony Brook University</orgName>
+								<address>
+									<postCode>11794</postCode>
+									<settlement>Stony Brook</settlement>
+									<region>NY</region>
+									<country key="US">USA</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Noisy Label Recovery for Shadow Detection in Unfamiliar Domains</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:43+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Recent shadow detection algorithms have shown initial success on small datasets of images from specific domains. However, shadow detection on broader image domains is still challenging due to the lack of annotated training data. This is due to the intense manual labor in annotating shadow data. In this paper we propose "lazy annotation", an efficient annotation method where an annotator only needs to mark the important shadow areas and some non-shadow areas. This yields data with noisy labels that are not yet useful for training a shadow detector. We address the problem of label noise by jointly learning a shadow region classifier and recovering the labels in the training set. We consider the training labels as unknowns and formulate the label recovery problem as the minimization of the sum of squared leave-one-out errors of a Least Squares SVM, which can be efficiently optimized. Experimental results show that a classifier trained with recovered labels achieves comparable performance to a classifier trained on the properly annotated data. These results suggest a feasible approach to address the task of detecting shadows in an unfamiliar domain: collecting and lazily annotating some images from the new domain for training. As will be demonstrated, this approach outperforms methods that rely on precisely annotated but less relevant datasets. Initial results suggest more general applicability.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>The problem of single image shadow detection has been widely studied. Early work such as the illumination invariant approaches <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b5">6]</ref> are based on physical modeling of the illumination and shadowing phenomena <ref type="bibr" target="#b19">[20,</ref><ref type="bibr" target="#b20">21]</ref>. These physics-based methods only work well with high quality images. In contrast, statistical learning approaches (e.g., <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b14">15,</ref><ref type="bibr" target="#b22">23,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b30">31]</ref>) have shown significant success in detecting shadows in consumer-grade photos and web quality images. The performance of these methods, however, depend on the quality and quantity of training images. Guo et al. <ref type="bibr" target="#b8">[9]</ref>, Zhu et al. <ref type="bibr" target="#b30">[31]</ref> were the firsts to collect sizable datasets of images with annotated shadows, which are referred to as the UCF and UIUC datasets respectively. These two publicly available datasets have been used to develop several shadow detection methods <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b28">29]</ref>, and staggering progress has been made in the past few years. However, these two datasets are small, and the methods trained on them do not generalize well to new domains (e.g., see <ref type="bibr" target="#b9">[10]</ref> for poor cross-dataset performance analysis). Unfortunately, there is no larger and publicly available shadow datasets; this is perhaps due to the huge effort required to properly annotate shadows in images.</p><p>In this paper we propose "lazy annotation", a method that allows a human annotator to quickly label images to create shadow datasets. The annotator needs to focus only on the most relevant shadows in an image and draw several strokes on the perceived important shadow and non-shadow areas of the image. We process the input strokes to segment shadow areas based on image features using the geodesic convexity image segmentation <ref type="bibr" target="#b7">[8]</ref>. <ref type="figure">Figure 1</ref> shows an example of this process, from the annotator's strokes to the generated binary shadow mask.</p><p>With lazy annotation, it is possible to quickly collect shadow annotation. The annotation, however, is imperfect. Due to the nature of the task, some shadow areas may be ignored, or imperfectly segmented, as shown in Figure 1.The resulting annotated data presents noticeable class label noise; we refer to shadow and non-shadow regions as positive and negative classes respectively. Label noise is asymmetric. The negative class contains "dirty negatives", corresponding to missed shadows, or poorly segmented regions that contain both shadow and non-shadow pixels. The positive class is significantly cleaner and more reliable, because the annotator is asked to label some shadows, so the shadow regions obtained are generally well segmented.</p><p>The presence of label noise in training data has huge impact on the performance of classifiers trained on the data (e.g., see <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b31">32]</ref>). To address the problem of noisy labels, we propose to jointly learn a shadow region classifier and recover the labels in the training set. Our objective is to reduce the level of label noise in the training set so as to minimize the generalization error of the learned classifier. Our framework is based on Least-Squares Support Vector Ma-(a) Annotator's strokes (b) Segmented shadows (c) Binary shadow mask <ref type="figure">Figure 1</ref>. Lazy annotation pipeline for efficient labeling of shadow images. a) An annotator is asked to draw some strokes on some (not all) shadow areas (white strokes) and non-shadow ares (red strokes). b) Automatically segmented shadow regions. c) Obtained shadow mask, mostly good with a few exceptions where some shadow regions are mis-labeled as non-shadow. Subsequently, the noisy labels are corrected using the label recovery method proposed in this paper. chines (LSSVM). LSSVM has a closed-form solution, and the leave-one-out error of LSSVM is a linear function of the training labels. To jointly learn the classifier and recover the labels, we consider the training labels as unknowns and formulate the problem as the minimization of the leave-oneout error. This leads to a binary quadratic programming problem where we can constrain the fraction of originally labeled positive and negative instances that are flipped.</p><p>To validate our approach, we "lazily annotated" the UIUC and UCF training sets. Experimental results show that a classifier trained with recovered labels achieved comparable performance to a classifier trained on the original, properly annotated datasets. Our label recovery method improves the accuracy of classifiers trained on "lazy" labels by 10% and 3%, in the UIUC and UCF datasets respectively. We show experimentally that label recovery is robust up to significant levels of label noise in the training set.</p><p>We also present here a new test set with carefully annotated shadow labels. We collected images from a wide variety of scene types, some of which, such as snow or beach, significantly differ from UCF and UIUC contents. As expected, cross dataset performance of models trained in UCF or UIUC is reduced in comparison to their respective test sets. We also collected a new training set that had some (but not all) similar scenes to the test set and obtained lazy labels for it. Experimental results show that the classifier trained on the lazily annotated set performs better than the models trained on UCF and UIUC datasets with more accurate labels. Using the recovered lazy labels further boosts the classifier performance by an extra 3.3%. We show some initial promising results that suggest that our method generalizes to other domains that suffer from label noise.</p><p>In summary, we make the following contributions: 1) Propose a new method for fast collection of reasonably good shadow annotations. 2) Propose a new framework that jointly recovers the true labels of imperfect annotations and learns a classifier.</p><p>3) Demonstrate that efficiently labeling a new training dataset is better than using models trained on accurately labeled datasets with different scene characteristics.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Previous Work</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Annotated shadow datasets</head><p>Annotated shadow datasets fostered work on shadow detection. However, there are only a few shadow datasets due to the cumbersome nature of the annotation process. Shadow annotation is painstaking: the human annotator has to first identify all the shadows in the image, and then properly delineate each shadow contour. It takes much time and attention for the many mouse clicks to create a polyline for each shadow. Free drawing to trace a shadow contour also takes considerable effort.</p><p>Guo et al. <ref type="bibr" target="#b8">[9]</ref> generated a shadow annotation mask by taking two photographs of the same scene: a photo is taken with an occluder blocking the light source and casting a shadow in the scene, then a photo is taken when the occluder is removed. The shadow mask is generated by comparing the two images. Alternatively, they take a second photo blocking the direct light source. The first approach is only applicable when the occluder is out of view and removable, whereas the second approach is limited to indoor environments with sufficient ambient light. Physically setting up the scene and taking the two shots is cumbersome, and this approach is not applicable to many scenes.</p><p>Existing publicly available shadow datasets are small, and the methods trained on them do not perform well on other datasets. Guo et al. <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b9">10]</ref> report the cross-dataset performance of their model for UIUC and UCF datasets. The results are alarming but not surprising: a model trained on UCF training set performs well on the UCF test set, but not on the UIUC test set (90.2% versus 81.5% accuracy), and a model for UIUC dataset has much less accuracy when tested on the UCF test set (10.7% reduction in accuracy).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Noisy label recovery</head><p>The presence of label noise lowers the performance of classification tasks <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b31">32]</ref>. Recent methods that address the problem of label noise in the data <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b24">25]</ref> aim to be robust to noisy labels, and focus on asymptotic behavior with unlimited training data. In contrast, as the training data is very limited for the shadow detection problem, we aim to make effective use of noisy labels. Furthermore, our method obviates the need of assumptions on the nature of the noise such as constant <ref type="bibr" target="#b23">[24]</ref>, class-dependent with fixed probablity <ref type="bibr" target="#b1">[2]</ref>, limited noise ratios <ref type="bibr" target="#b18">[19]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.">Review of Least Squares SVM</head><p>Our framework for recovering noisy annotation and training a classifier is based on Least-Squares Support Vector Machines (LSSVM) <ref type="bibr" target="#b25">[26]</ref>, which is also known as ridge regression <ref type="bibr" target="#b21">[22]</ref>. LSSVM has a closed-form solution, which is a computational advantage over SVM. Furthermore, once the LSSVM solution has been computed, the solution for a reduced training set, obtained by removing any training data point, can be found efficiently. This enables reusing training data for further calibration, e.g., <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b29">30]</ref>. This also enables using the training data for correcting the noisy labels, as proposed in Section 4. This section reviews LSSVM and the leave-one-out formula.</p><p>Given a training set of n data points {x i } n i=1 * and associated labels {y i |y i ∈ {0, 1}} n i=1 , LSSVM optimizes the following:</p><formula xml:id="formula_0">minimize w,b λ||w|| 2 + n i=1 s i (w T x i + b − y i ) 2 . (1)</formula><p>Here s i is the instance weight, allowing the assignment of different weights to different training instances. Let</p><formula xml:id="formula_1">X = [X; 1 T n ], w = [w, b],Ī = [I n×n , 0 n ; 0 T n , 0]. Eq. (1) is equivalent to: minimize w λw TĪ w + n i=1 s i (w T x i − y i ) 2 .<label>(2)</label></formula><p>This is an unconstrained convex quadratic problem, and the optimal solution is attained where the gradient is zero. The gradient of Eq. (2) with respect to w is:</p><formula xml:id="formula_2">2λIw + n i=1 2s i (w T x i − y i )x i (3)</formula><p>=2(Xdiag(s)X T + λI)w − 2Xdiag(s)y (4) * Bold uppercase letters denote matrices (e.g. K), bold lowercase letters denote column vectors (e.g. k). k i represents the i th column of the matrix K. k ij denotes the scalar in the row j th and column i th of the matrix K and the j th element of the column vector k i . Non-bold letters represent scalar variables. 1n ∈ ℜ n×1 is a column vector of ones, and 0n ∈ ℜ n×1 is a column vector of zeros.</p><p>Let C = (Xdiag(s)X T +λĪ) and d = Xdiag(s)y, the optimal solution can be found by setting the gradient to zero, leading to the close-form solution: w = C −1 d. Now, suppose we remove the training instance x i , let C (i) , d (i) , w (i) be the corresponding values for removing x i . We have:</p><formula xml:id="formula_3">w (i) = C −1 (i) d (i) , where C (i) = C − s i .x i x T i and d (i) = d − y i s i x i .</formula><p>Using the Sherman-Morrison formula, we have:</p><formula xml:id="formula_4">C −1 (i) = (C − s i .x i x T i ) −1 = C −1 + C −1 s i x i x T i C −1 1 − s i x T i C −1 x i .</formula><p>Substituting the above equation to w (i) = C −1 (i) d (i) and developing the derivation, we get:</p><formula xml:id="formula_5">w (i) = w + s i (C −1 x i ) −y i + x T i w 1 − s i x T i C −1 x i .<label>(5)</label></formula><p>Therefore, the LOO error is:</p><formula xml:id="formula_6">w T (i) x i − y i = w T x i − y i + s i x T i C −1 x i −y i + x T i w 1 − s i x T i C −1 x i = w T x i − y i 1 − s i x T i C −1 x i<label>(6)</label></formula><p>In summary, let M = C −1 X and H = M T X, then:</p><p>The weight vector : w = Mdiag(s)y</p><p>LOO weight vector:</p><formula xml:id="formula_8">w (i) = w + (w T x i − y i )s i 1 − s i h ii m i (8) LOO error = w T (i) x i − y i = w T x i − y i 1 − s i h ii<label>(9)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Lazy Annotation</head><p>Our objective is to obtain ground truth shadow annotation with minimal effort and time. Generating good annotation typically requires manually segmenting all the shadows in an image. This task is a painstaking process with a heavy burden on the annotator. We simplify the annotation task by redefining its goal. Rather than aiming to segment all shadows, we instruct the annotator to focus on at least one shadow area of the image. This typically corresponds to the most prominent shadow area. We use a semi-automatic shadow segmentation scheme requiring minimal annotator input. The annotator only has to draw a few strokes on shadow areas and a few additional strokes on non shadow areas. The annotator strokes are processed with the segmentation method of Gulshan et al. <ref type="bibr" target="#b7">[8]</ref> to generate a binary mask.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Lazy annotation pipeline</head><p>We illustrate our lazy annotation pipeline with an example image in <ref type="figure" target="#fig_0">Figure 2</ref>. First, the annotator is instructed to draw a few strokes (2-3) on areas of the image she considers relevant shadows, see <ref type="figure" target="#fig_0">Figure 2</ref>.b. Then, the annotator draws a few strokes (2-3) on non shadow areas surrounding the shadow, see <ref type="figure" target="#fig_0">Figure 2</ref>.c. After that, a shadow segmentation based on the strokes is presented to the annotator, see <ref type="figure" target="#fig_0">Figure 2</ref>.d. Then, the annotator is able to add a few additional strokes to refine the shadow segmentation interactively. In <ref type="figure" target="#fig_0">Figure 2</ref>.e, the additional shadow stroke on the concrete ground grows the shadow region and even segments an extra shadow on the brick wall. The shadow mask resulting from the user annotation is depicted in <ref type="figure" target="#fig_0">Figure 2</ref>.f.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Annotation tool</head><p>We interactively segment the images using the method of Gulshan et al. <ref type="bibr" target="#b7">[8]</ref>. The method combines geodesic star convexity shape constraints with the Boykov-Jolly <ref type="bibr" target="#b2">[3]</ref> energy formulation for image segmentation based on user strokes denoting foreground and background. In our case, shadows correspond to foreground. We modify the publicly available tool <ref type="bibr" target="#b7">[8]</ref> to render a more streamlined user interface tailored for our task. Mouse interaction is only required for brush strokes. The remainder of the interface is commanded by keystrokes: Switching brush type (shadow or non shadow stroke), advancing to refinement interactive stage, and signaling completion. Furthermore, a batch of images is loaded consecutively one after the next. With this tool, an annotator is typically able to label an average of 3 images a minute.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Postprocessing</head><p>In this work, we frame shadow detection as a region classification problem. Hence, we need to generate region labels from the binary mask resulting from the lazy annotation. We followed the region segmentation process presented by Vicente et al. <ref type="bibr" target="#b27">[28]</ref> for shadow detection. First, we oversegment the image into SLIC <ref type="bibr" target="#b0">[1]</ref> superpixels (see <ref type="figure" target="#fig_2">Figure 3.a)</ref>. Then, we apply Mean-shift clustering in Lab space and merge connected superpixels in the same cluster into a larger region, see <ref type="figure" target="#fig_2">Figure 3</ref>.b.  We overlay the binary mask on the segmented regions <ref type="figure" target="#fig_2">(Figure 3</ref>.c). If a region contains a majority of shadow pixels it is labeled positive, otherwise it is labeled negative. Overall, the proposed annotation approach is able to generate reasonably good region labels. Regions labeled as shadows are generally reliable whereas negatively labeled regions may contain missed shadows. For example in <ref type="figure" target="#fig_2">Figure 3</ref>, a few small shadow regions on the brick wall in the top left corner of the image are labeled non shadow.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Noisy Label Recovery</head><p>We pose noisy label recovery as an optimization problem where the labels of some training examples can be flipped to minimize the sum of squared leave-one-out errors. Our formulation exploits the fact that the leave-out-out error of LSSVM (Sec. 2.3) is a linear function of the labels.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Formulation</head><p>Reconsider the formula for the leave-one-out error given in Eq. (9), substituting the formula for w given in Eq. <ref type="formula" target="#formula_7">(7)</ref>, the leave-one-out error is:</p><formula xml:id="formula_9">w T (i) x i − y i = x T i Mdiag(s)y − y i 1 − s i h ii<label>(10)</label></formula><p>Let P = diag(s)H and recall H = M T X (Section 2.3). The leave-one-out error can be shown to be:</p><formula xml:id="formula_10">w T (i) x i − y i = p T i y − y i 1 − p ii<label>(11)</label></formula><p>Let e i be the i th column of the identity matrix of size n, and let a i = pi−ei 1−pii , the leave-one-out error becomes: .</p><formula xml:id="formula_11">w T (i) x i − y i = p T i y − y i 1 − p ii = a T i y.<label>(12)</label></formula><p>Because the vector a i only depends on the data, the leaveone-out error is a linear function of the label vector y. Let P, N be the indexes of (noisy) positive and negative training instances respectively, i.e., P = {i|y i = 1} and N = {i|y i = 0}. Our noisy label recovery minimizes the sum of squared leave-one-out errors:</p><formula xml:id="formula_12">minimize y n i=1 (a T i y) 2<label>(13)</label></formula><formula xml:id="formula_13">s.t. i∈P y i ≥ α|P|,<label>(14)</label></formula><p>i∈N</p><formula xml:id="formula_14">y i ≤ (1 − β)|N |,<label>(15)</label></formula><formula xml:id="formula_15">y i ∈ {0, 1}.<label>(16)</label></formula><p>In the above |P|, |N | are the original number of positive and negative training instances respectively, and α, β are parameters of the formulation (0 ≤ α, β ≤ 1). Constraint <ref type="formula" target="#formula_13">(14)</ref> requires the proportion of original positive training instances that remain positive must be greater than or equal α. If α = 1 none of the positive instances can become negative. Similarly, Constraint <ref type="bibr" target="#b13">(14)</ref> limits the proportion of flipped negative data points to be at most 1 − β.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Optimization</head><p>The optimization problem in Eq. (13) is a quadratic program with linear constraints and binary variables, that can be optimized in two steps. First, we relax the binary constraints to find a relaxed solution for y where the entries are between 0 and 1 instead of being either 0 or 1. Second, starting from the relaxed solution, we perform block coordinate descent to find an optimal binary solution. In fact, even though the first step is a quadratic program with linear constraints, we also optimize it by block coordinate descent, as this is more efficient than solving the entire problem at once.</p><p>For the optimization problem in either Step 1 or Step 2 (with and without binary constraints), block coordinate descent works as follows. We run the optimization with multiple epochs, each epoch is a complete pass through all training data. For each epoch, we randomly divide the training data into multiple batches of a desired batch size. Considering each batch in turn, we optimize a sub problem that is obtained by fixing all the variables not in the batch. Once we have visited all batches, we recalculate the objective value and compare it with the objective obtained from the last epoch. If the objective value is not significantly reduced, we terminate the optimization procedure.</p><p>Block coordinate descent is guaranteed to converge, because each step of the optimization does not increase the objective value. The optimization problem in Step 1 is convex, and so block coordinate descent will converge to the global solution. The optimization problem in Step 2 is not convex, but the initial starting position is relatively good so it will likely converge to a reasonable solution.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experiments and Results</head><p>We conducted experiments on the UCF <ref type="bibr" target="#b30">[31]</ref> and the UIUC <ref type="bibr" target="#b8">[9]</ref> datasets. We also compiled a new dataset from publicly available images, which will we refer to as the SBU dataset. About half of the images come from the Microsoft COCO <ref type="bibr" target="#b17">[18]</ref> dataset, and the other half from the Web. The SBU dataset consists of 210 images depicting a wide variety of scenes such as: urban, roads, beach, snowy, horses, planes, people playing tennis, parks. We created a dataset for testing cross-dataset performance for multiple scene types. We split the dataset evenly into training and testing sets. The training set is labeled using the proposed lazy annotation approach, whereas the test set is carefully annotated. The dataset is available at http://www3.cs. stonybrook.edu/˜cvl/dataset.html.</p><p>On all of our experiments, the region classifier is a Least Squares SVM with a linear kernel. We use texture, color and intensity features. For each region, we compute a texton histogram (using full MR8 filters <ref type="bibr" target="#b26">[27]</ref>), and a histogram on each component of the CIELAB color space. We measure the performance of the classification task in terms of Average Precision (AP). Since each data point corresponds to a region, we weight each region by its area in pixels to approximate pixel AP.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Shadow detection on a new domain</head><p>To study shadow detection on a new domain, we train a shadow region classifier on the UCF and UIUC training sets. Notice that these sets contain carefully annotated labels. We then test the classifier on the newly collected SBU test set. In <ref type="table">Table 1</ref>, we present the testing performance measured by AP. The model trained on UIUC achieves a modest 55.1% AP. The model trained on UCF improves to 68.8%. This is expected as the training set of UCF is larger (120 images versus 32) and more diverse than UIUC's. Shadow detection on this new domain of images is challenging for models trained on existing datasets. However, a model trained on lazy labels from images of a similar domain, achieves AP of 77.5%, which is higher than the APs obtained by models trained on the UCF and UIUC datasets. Furthermore, if we apply the proposed label recovery method, and train with recovered labels, performance increases to 80.1%. Qualitative results shown in <ref type="figure">Figure 5</ref>. <ref type="figure" target="#fig_4">Figure 4</ref> shows some examples of recovered labels. Initial shadow masks from lazy annotation are overlaid in blue. They correspond to the main image shadows. Recovered shadow regions are shown with yellow contours. These shadows were missed by the annotator. Missed shadows are often less prominent, e.g., the shadow of the smaller brown column in the top right corner of the top-row image.  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Noisy labels and benefits of label recovery</head><p>For the set of controlled experiments that follow, we relabeled the UCF and UIUC training sets using lazy annotation. We train a classifier using the lazy labels and measure classification performance in the respective test sets. <ref type="table">Table 2</ref> shows the classification performance in terms of AP. For UIUC, the performance of the model trained on lazy labels deteriorates by 10% compared to training with the original labels (79.5% vs 88.5%). However, the model trained on recovered lazy labels achieves comparable AP of 87.2%. Qualitive results shown in <ref type="figure">Figure 6</ref>. For UCF, train-ing with lazy labels is slightly worse than training with original labels, 73.5% versus 74.5%. Interestingly, label recovery improves the classification performance to 75.6%, outperforming the model trained on the original labels. These experiments suggest that we can achieve similar results with recovered lazy labels as with carefully annotated labels, at a small fraction of the annotation effort. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">Analysis of label noise</head><p>It is well established that label noise degrades classification performance. To gain more insight on the effects of label noise in the shadow detection task we perform a series of controlled experiments and deliberately corrupt the labels of the training data of UIUC and UCF. We train the classifier with different levels of label noise and then test the resulting models. Hereafter, we refer to shadow labels as positives and non shadow labels as negatives.</p><p>We first focus on corrupted positive labels. We randomly flip negative training samples to positive thus polluting the positive label class (dirty positives). In these experiments, we fix the ratio of dirty negatives and then increasingly pollute the positive class. We measure the classification performance for: (i) A completely clean negative class, (ii) a class with 10% dirty negatives and (iii) a class with 20% dirty negatives. In each of the 3 experiments, we progressively increase the level of label noise for the positive class ("dirty positives"). Results are in <ref type="figure" target="#fig_6">Figure 7</ref>. We then perform the same analysis for noise in the negative labels, with a set of 3 symmetric experiments where the positive and negative sets are reversed. Results are in <ref type="figure" target="#fig_7">Figure 8</ref>.</p><p>The classifier performance is more sensitive to the amount of dirty negatives than dirty positives. This is due to the smaller size of the positive class, so the effect of erroneously flipping positives is more pronounced. We observe that the effect of dirty negatives is more pronounced in the UIUC dataset. This explains why performance dropped so much when using "lazy" annotation and had a large improvement after label recovery.</p><p>In <ref type="figure" target="#fig_8">Figure 9</ref>, we show the performance of our label recovery approach as the levels of dirty positives and dirty  negatives vary. The subfigure on the left shows the results of label recovery for increasingly higher levels of positive noise (at fixed 10% negative label noise). The label recovery method improves classification performance when there is up to 30% of positive label noise. Similarly, the right plot shows the results of our label recovery for increasingly higher levels of negative noise (at fixed 10% positive label noise). The label recovery method improves classification performance when the level of noise in negative labels is 50% or less. In both cases label recovery is robust up to significant levels of label noise in the training set.  . Label recovery on polluted labels. Left: Classification performance at fixed 10% of dirty negatives and increasing levels of positive pollution (x-axis). The dash black line is performance without label recovery. The solid red line shows the performance of label recovery. The label recovery improves the performance when the level of positive noise is 30% or less. Right: Symmetric analysis as the left subfigure. Classification performance at fixed 10% of dirty positives. The label recovery improves the performance when the level of negative noise is 50% or less.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.4.">Comparison to other noise-tolerant methods</head><p>We implemented the noise-tolerant C-SVM method <ref type="bibr" target="#b18">[19]</ref>. On the noisy UIUC and UCF datasets, it achieved an average precision of 81.5 and 74.3, respectively. These are significantly worse than results of our method (87.2 and 75.6 respectively). We also tested our method for noisy labels on the UCI datasets used in <ref type="bibr" target="#b18">[19]</ref>, and found that it is effective in leveraging noisy labels, as reported in <ref type="table">Table 3</ref>, suggesting a more general applicability of our method. <ref type="table">Table 3</ref>. Classification accuracy of our method and several others on noisy UCI datasets. ρ+, ρ− are the portions of noisy positive and negative labels, respectively. Our method achieves highest or close to the highest accuracy for most datasets and noise levels. Entries within 1% from the best in each row are printed in bold.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusions</head><p>We have introduced lazy annotation, a framework for efficient collection of annotated shadow datasets. We have shown how to leverage the noisy labels through a label recovery process. This process is efficient as it is based on minimizing the leave-one-out error of Least Squares SVM. Our experiments show that when training with recovered labels, the performance penalty is small. We have also shown the advantage of quickly annotating an appropriate dataset when faced with the task of detecting shadows in a new image domain. We will create large scale shadow datasets with relatively good annotation. We can also adapt the method to combine datasets collected under different annotation methodologies. Such datasets would contribute to the progress of shadow detection and scene understanding. We will explore generalizing label recovery to other domains.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 2 .</head><label>2</label><figDesc>Lazy annotation pipeline. a) Input image. b) Annotator's shadow strokes in white. c) Annotator's non shadow strokes in red. d) Initial shadow segmentation in green (outer side) and red (inner side). e) Refined shadow segmentation with a final shadow stroke in the lower center of the image. f) Resulting binary mask.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 .</head><label>3</label><figDesc>From lazy shadow mask to region labels. a) Initial SLIC superpixels. b) Regions obtained by merging superpixels. c) Lazy mask overlaid on regions. d) Final region ground-truth.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 4 .</head><label>4</label><figDesc>Example of label recovery. a) Input image b) Lazy annotation shadow mask overlaid in blue, outer contour in green, inner contour in red. c) Recovered regions with flipped shadow label are shown with yellow contours.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 5 .Figure 6 .</head><label>56</label><figDesc>Shadow detection on a new domain. Qualitative comparison of detection results for a model trained on UCF with good labels and a model trained on SBU training set with lazy labels that have been recovered. a) Input image. b) Ground truth mask. c) Detection results from classifier trained on UCF overlaid in yellow. d) Detection results from classifier trained with lazy recovered labels overlaid in yellow. Shadow detection comparison between models trained with lazy labels and recovered labels on UIUC. a) Input image. b) Provided manual shadow mask. c) Detection results from model trained on lazy labels overlaid in yellow. d) Detection results from model trained on recovered lazy labels overlaid in yellow.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 7 .</head><label>7</label><figDesc>Effects of positive pollution. Classification performance at fixed levels of negative noise. Curves show the performance as a function of the proportion of dirty positives, at a fixed level of dirty negatives, either 0%, 10%, or 20%.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 8 .</head><label>8</label><figDesc>Effects of negative pollution. Classification performance at fixed levels of positive noise. Curves show the classification performance as a function of the proportion of dirty negatives, at a fixed level of dirty positives, either 0%, 10%, or 20%.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_8"><head>Figure 9</head><label>9</label><figDesc>Figure 9. Label recovery on polluted labels. Left: Classification performance at fixed 10% of dirty negatives and increasing levels of positive pollution (x-axis). The dash black line is performance without label recovery. The solid red line shows the performance of label recovery. The label recovery improves the performance when the level of positive noise is 30% or less. Right: Symmetric analysis as the left subfigure. Classification performance at fixed 10% of dirty positives. The label recovery improves the performance when the level of negative noise is 50% or less.</figDesc></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgments. Partially supported by NSF IIS-1161876, FRA DTFR5315C00011, the Stony Brook SensonCAT, the Subsample project from DIGITEO Institute, France.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Slic superpixels compared to state-of-the-art superpixel methods</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Achanta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Shaji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Smith</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lucchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Susstrunk</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="2274" to="2281" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Support vector machines under adversarial label noise</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Biggio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Nelson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Laskov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACML</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="97" to="112" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Interactive graph cuts for optimal boundary &amp; region segmentation of objects in n-d images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">Y</forename><surname>Boykov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-P</forename><surname>Jolly</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the International Conference on Computer Vision</title>
+		<meeting>the International Conference on Computer Vision</meeting>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Learning via gaussian herding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Crammer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">D</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">On the removal of shadows from images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Finlayson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hordley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Drew</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="59" to="68" />
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Entropy minimization for shadow removal</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Finlayson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Drew</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Lu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">85</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="35" to="57" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Classification in the presence of label noise: A survey. Neural Networks and Learning Systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Frenay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Verleysen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">25</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2014-05" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Geodesic star convexity for interactive image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Gulshan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Criminisi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Blake</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Single-image shadow detection and removal using paired regions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Paired regions for shadow detection and removal</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">12</biblScope>
+			<biblScope unit="page" from="2956" to="2967" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Regularized max pooling for image categorization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hoai</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the British Machine Vision Conference</title>
+		<meeting>the British Machine Vision Conference</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Improving human action recognition using score distribution and ranking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hoai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Asian Conference on Computer Vision</title>
+		<meeting>the Asian Conference on Computer Vision</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">What characterizes a shadow boundary under the sun and sky?</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tumblin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Williams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the International Conference on Computer Vision</title>
+		<meeting>the International Conference on Computer Vision</meeting>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Shadow detection based on colour segmentation and estimated illumination</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Jiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Schofield</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wyatt</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">bmvc</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="page" from="87" to="88" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Automatic feature learning for robust shadow detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Khan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bennamoun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Sohel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Togneri</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Noise tolerant variants of the perceptron algorithm</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Khardon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Wachman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Jounal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">8</biblScope>
+			<biblScope unit="page" from="227" to="248" />
+			<date type="published" when="2007-05" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Detecting ground shadows in outdoor consumer photographs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-F</forename><surname>Lalonde</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">G</forename><surname>Narasimhan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the European Conference on Computer Vision</title>
+		<meeting>the European Conference on Computer Vision</meeting>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Microsoft coco: Common objects in context</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Maire</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">eccv</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Learning with noisy labels</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Natarajan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><forename type="middle">S</forename><surname>Dhillon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">K</forename><surname>Ravikumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Tewari</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Robust shadow and illumination estimation using a mixture model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Panagopoulos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Samaras</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Paragios</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Simultaneous cast shadows, illumination and geometry inference using hypergraphs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Panagopoulos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Samaras</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Paragios</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="437" to="449" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Ridge regression learning algorithm in dual variables</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Saunders</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gammerman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vovk</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the International Conference on Machine Learning</title>
+		<meeting>the International Conference on Machine Learning</meeting>
+		<imprint>
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Shadow optimization from structured deep edge detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">W</forename><surname>Chua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Leman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Learning kernel perceptrons on noisy data using random projections</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Stempfel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ralaivola</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Algorithmic Learning Theory</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page" from="328" to="342" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Learning svms from sloppily labeled data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Stempfel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ralaivola</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Artificial Neural Networks ICANN 2009</title>
+		<editor>C. Alippi, M. Polycarpou, C. Panayiotou, and G. Ellinas</editor>
+		<meeting><address><addrLine>Berlin Heidelberg</addrLine></address></meeting>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">5768</biblScope>
+			<biblScope unit="page" from="884" to="893" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Least squares support vector machine classifiers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">A K</forename><surname>Suykens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Vandewalle</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Processing Letters</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="293" to="300" />
+			<date type="published" when="1999" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Classifying images of materials: Achieving viewpoint and illumination independence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Varma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the European Conference on Computer Vision</title>
+		<meeting>the European Conference on Computer Vision</meeting>
+		<imprint>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Single image shadow detection using multiple cues in a supermodular MRF</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">F Y</forename><surname>Vicente</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-P</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Samaras</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the British Machine Vision Conference</title>
+		<meeting>the British Machine Vision Conference</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Leave-one-out kernel optimization for shadow detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">Y</forename><surname>Vicente</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hoai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Samaras</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the International Conference on Computer Vision</title>
+		<meeting>the International Conference on Computer Vision</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Region ranking svms for image classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hoai</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Learning to recognize shadows in monochromatic natural images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Samuel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Masood</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Tappen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Class noise vs. attribute noise: A quantitative study</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Artificial Intelligence Review</title>
+		<imprint>
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

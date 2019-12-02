@@ -1,0 +1,1023 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Structured Feature Learning for Pose Estimation</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiao</forename><surname>Chu</surname></persName>
+							<email>xchu@ee.cuhk.edu.hkwlouyang@ee.cuhk.edu.hkhsli@ee.cuhk.edu.hk</email>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Electronic Engineering</orgName>
+								<orgName type="institution">The Chinese University of Hong Kong</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wanli</forename><surname>Ouyang</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Electronic Engineering</orgName>
+								<orgName type="institution">The Chinese University of Hong Kong</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hongsheng</forename><surname>Li</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Electronic Engineering</orgName>
+								<orgName type="institution">The Chinese University of Hong Kong</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaogang</forename><surname>Wang</surname></persName>
+							<email>xgwang@ee.cuhk.edu.hk</email>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Electronic Engineering</orgName>
+								<orgName type="institution">The Chinese University of Hong Kong</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Structured Feature Learning for Pose Estimation</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:46+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>In this paper, we propose a structured feature learning framework to reason the correlations among body joints at the feature level in human pose estimation. Different from existing approaches of modeling structures on score maps or predicted labels, feature maps preserve substantially richer descriptions of body joints. The relationships between feature maps of joints are captured with the introduced geometrical transform kernels, which can be easily implemented with a convolution layer. Features and their relationships are jointly learned in an end-to-end learning system. A bi-directional tree structured model is proposed, so that the feature channels at a body joint can well receive information from other joints. The proposed framework improves feature learning substantially. With very simple post processing, it reaches the best mean PCP on the LSP and FLIC datasets. Compared with the baseline of learning features at each joint separately with ConvNet, the mean PCP has been improved by 18% on FLIC. The code is released to the public. 1</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Human pose estimation is to estimate the locations of body joints from images. It can assist a variety of vision tasks such as action recognition <ref type="bibr" target="#b28">[29,</ref><ref type="bibr" target="#b32">33]</ref>, tracking <ref type="bibr" target="#b5">[6]</ref>, person re-identification <ref type="bibr" target="#b31">[32]</ref>, and human computer interaction. Despite the long history of efforts, it is still a challenging problem. The large variation in limb orientation, clothing, viewpoints, background clutters, truncation, and occlusion make localization of body joints difficult.</p><p>Independent prediction of body joint locations from appearance score maps can be refined by modeling the spatial relationship among correlated body joints <ref type="bibr" target="#b34">[35,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b18">19]</ref>. On score maps, the information at a location is summarized <ref type="bibr" target="#b0">1</ref> The code can be found at http://www.ee.cuhk.edu.hk/ xgwang/projectpage_structured_feature_pose.html. For more technical details, please contact the corresponding authors Wanli Ouyang and Xiaogang Wang <ref type="bibr">(</ref>  into a single probability value, indicating the likelihood of the existence of the corresponding body joint. For example, if a location on the score map of elbow has a large response, we can only reach the conclusion that this location may belong to elbow, but cannot tell the in-plane and out-plane rotation of the elbow, the orientations of the upper arm and the lower arm associated with it, whether it is covered with clothes, and its occlusion status. Such detailed information is valuable for predicting the locations of other body joints, but is missed from the score maps, which makes structural learning among body joints much less effective. We observe that these types of information are well preserved at the feature level, where hierarchical feature representations are learned with Convolutional Networks (Con-vNets) <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b35">36,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b22">23,</ref><ref type="bibr" target="#b23">24]</ref>. <ref type="figure">Fig. 1</ref> shows the responses of feature maps of elbow and lower arm for different input images. Given the V-shaped elbow covered with clothes in I1, the feature channel e5 has the largest response as shown in (I1, c). In the meanwhile, the feature channel h2 for lower arm has the largest response in (I1, e). Given the straight elbow uncovered with clothes in I2, the feature channels e4 and h6 have the largest responses to elbow and lower arm respectively. It indicates that different feature channels are activated for different visual patterns. The feature maps of different joints also have strong correlations. In <ref type="figure">Fig. 1</ref>, e5 is positively correlated with h2 and anti-correlated with h6. Both the spatial distribution of the responses and the semantic meaningful description of body joints are encoded at the feature maps by activating different channels.</p><p>Some existing works <ref type="bibr" target="#b34">[35,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b18">19]</ref> employed mixtures clustered from spatial configuration among neighboring body joints. However, the number of mixtures for each body joint (fewer than 20) is incomparable to hundreds of feature channels from ConvNets, which not only include spatial configuration of body joints, but also other information such as occlusion status and clothing. Hence, we propose to exploit the structure information of body joints at the feature level. Our proposed approach shows that the spatial and co-occurrence relationship among feature maps can be modeled by a set of geometrical transform kernels. These kernels can be implemented with convolution and the relationships can be learned in and end-to-end learning system.</p><p>It is important to design proper information flow between body joints, so that features at a joint can be optimized by receiving messages from highly correlated joints and will not be disturbed by less correlated joints in distance. A bi-directional tree-structured model is proposed. The proposed model connects correlated joints and passes messages in both directions along the tree. Therefore, every joint can receive information from all the neighboring joints.</p><p>The contributions of this work are summarized as threefold. First, it proposes an end-to-end learning framework to capture rich structural information among body joints at the feature level for pose estimation. Second, it is shown that the relationships among feature maps of neighboring body joints can be learned by the introduced geometrical transform kernels and can be easily implemented with convolutional layers. Third, a bi-directional tree-structured model is proposed, so that each joint can receive information from all the correlated joints and optimize its features.</p><p>Experimental results show that the proposed approach can improve feature learning substantially. Compared with learning features at each joint separately with ConvNet, it improves the mean PCP by 18% on the FLIC dataset. It also reaches the highest mean PCP 80.8% on the LSP dataset and 95.2% on the FLIC dataset. This work focuses on feature learning and only adopts very simple post processing. It already outperforms the state-of-the-art method which employed sophisticated post processing techniques with a large margin.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Works</head><p>Previous pose estimation works can be divided into two groups. The first is to model the geometrical distribution of body joints <ref type="bibr" target="#b34">[35,</ref><ref type="bibr" target="#b29">30,</ref><ref type="bibr" target="#b30">31,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b5">6,</ref><ref type="bibr" target="#b0">1,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b1">2,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b33">34,</ref><ref type="bibr" target="#b6">7]</ref> which can be viewed as post processing on detection score maps and prediction labels. They are mainly based on handcrafted features. The Pictorial Structure Model <ref type="bibr" target="#b10">[11]</ref> defined pairwise terms to represent relationship between body joint locations. Later, Yang et al. <ref type="bibr" target="#b34">[35]</ref> proposed the flexible mixture-of-parts model to combine part detection results with a tree-structured model, which provided simple and exact inference. Nevertheless, it is believed that the treestructured model is "oversimplified". In light of this, many works introduced more complex structures, and researchers have obtained improvement in performance. Loopy structure <ref type="bibr" target="#b30">[31]</ref>, latent variable <ref type="bibr" target="#b24">[25]</ref>, poselet <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b30">31]</ref> and strong appearance <ref type="bibr" target="#b19">[20]</ref> modeled structural information at different levels. They investigated different structures to model the spatial constraints among body joints on score maps. In our work, a bi-directional tree is used to model the correlation among feature maps. In the future, the investigations on structures in previous works can be incorporated in our framework to guide the message passing at the feature level.</p><p>The second group focus on more powerful feature generators such as ConvNets <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b9">10,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b9">10]</ref>. The use of deep models brings large progress <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b17">18]</ref>. Deep-Pose <ref type="bibr" target="#b27">[28]</ref> used ConvNet to regress joint locations with multiple steps. Chen et al. <ref type="bibr" target="#b4">[5]</ref> used ConvNet features and built up image-dependent pairwise relations to measure relationship among body joints. Fan et al. <ref type="bibr" target="#b9">[10]</ref> combined local and global features to jointly predict joint locations. Tompson et al. <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b25">26]</ref> implemented the multi-resolution deep model and Markov random field within an end-to-end joint training framework. Carreira and Malik <ref type="bibr" target="#b3">[4]</ref> proposed to build up dependency among input and output spaces. In order to iteratively refine prediction results, they concatenated the body joint location predictions at the previous steps with the image as the input of current step. However, existing ConvNet models either learned the pair-wise relationship among body joints from score maps or did not learn pairwise relationship. Learning relationship among parts at the feature level was not investigated.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Structural Feature Learning</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Feature maps of body joints</head><p>ConvNets employ multiple layers to learn hierarchical feature representations of input images. Features in lower layers capture low-level information, while those in higher layers can represent more abstract concepts, such as poses, attributes and object categories. Widely used ConvNets (e.g. AlexNet <ref type="bibr" target="#b15">[16]</ref>, Clarifai <ref type="bibr" target="#b35">[36]</ref>, Overfeat <ref type="bibr" target="#b21">[22]</ref>, GoogleNet <ref type="bibr" target="#b23">[24]</ref>, and VGG <ref type="bibr" target="#b22">[23]</ref>) employ fully connected (fc) layers fol- lowing convolutional layers to capture the global information. In fully convolutional nets (fcn), 1 × 1 convolution is used to replace fc layers. In this work, we use fully convolutional VGG net <ref type="bibr" target="#b22">[23]</ref> as the base model and extract feature maps in the fcn7 layer.</p><formula xml:id="formula_0">(a1) (a2) (b1) (b2) (c1) (c2)</formula><p>Each body joint has a separate set of 128 feature maps. All the joints share lower layers up to the fcn6 layer, which has 4, 096 feature channels. Denote h f cn6 (x, y) as the feature vector obtained at location (x, y) in the fcn6 layer and it is a 4, 096 dimensional vector. The 128 dimensional feature vector for body joint k at (x, y) in the fcn7 layer is computed as</p><formula xml:id="formula_1">h k f cn7 (x, y) = f (h f cn6 (x, y) ⊗ w k f cn7 + b f cn6 ), (1)</formula><p>where ⊗ denotes convolution, f is a nonlinear function, w k f cn7 is the filter bank for joint k including 128 filters, b f cn6 is the bias, and h k f cn7 is the feature tensor contains 128 feature maps for joint k.</p><p>The feature maps of body joints contain rich information and detailed descriptions of human poses and appearance. <ref type="figure" target="#fig_1">Fig. 2</ref> shows the response maps of different images to the same feature channels. In (a1) and (a2), a feature channel for the neck is chosen. All the images in (a1) have high responses to this feature channel and the highest responding regions locate on necks. Persons in these images all look to the left with similar 3D orientations of head. Images in (a2) have much lower responses to this feature channel and their highest responding regions distribute randomly. Persons in these images have various head orientations different than those in (a1). Therefore, this feature channel captures specific head orientations. Similarly, the feature channel for the left wrist in (b) describes left wrists occluding left shoulders when persons hold cups or cell phones. The feature channel in (c) can effectively localize downward lower arms without clothes covered.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Information passing</head><p>Since spatial distributions and semantic meaning of feature maps obtained at different joints are highly correlated, passing the rich information contained in feature maps between joints can effectively improve features learned at each joint. In previous works, messages could be passed by distance transfer <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b34">35,</ref><ref type="bibr" target="#b17">18]</ref> and Conditional Random Field (CRF) <ref type="bibr" target="#b36">[37,</ref><ref type="bibr" target="#b14">15]</ref>. We show that under a fully convolutional neural network, messages can be passed between feature maps through the introduced geometrical transform kernels. The FCN filters and the kernels can be jointly learned. In order to illustrate the process of information passing, an example is shown in <ref type="figure" target="#fig_2">Figure 3</ref> (d)-(g). Given an input image in (d), its feature maps for elbow and lower arm are shown in (e) and (f). One of the lower-arm feature maps h m has high response, since its feature channel describes downward lower arm without clothes covered. Another elbow feature map e n also has high response and it is positively correlated with h m . One expects to use h m to reduce false alarms and enhance the responses on the right elbow. It is not suitable to directly add e n to h m , since there is a spatial mismatch between the two joints. Instead, we first shift h m towards the right elbow through the geometrical transform kernels and then add the transformed feature maps to e n . The refined feature maps in (h) have much better prediction. Since each feature map captures detailed pose information of the joint, the relative spatial distribution between the two maps is stable and the kernel can be easily learned. Since some elbow feature maps may be anti-correlated with h m , their kernels could have negative values to prevent unrelated feature channels from generating false alarms. (i)-(k) show more examples to demonstrate the effectiveness of information passing between joints on feature learning. The geometric constraints among body joints could be consolidated by shifting feature map of one body joint towards its nearby joints. The information passing described above can be easily implemented with convolution layers.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.1">Stacked transform kernels</head><p>The kernel size decides how far a feature map can be shifted. In order to reduce the number of parameters and also support the cases when neighboring joints are in distance, we employ successive convolutions geometrical transform kernels to approximate a large kernel. Each convolution is followed by a nonlinear transform. In our ap- proach, the neighbor joints are defined with a tree structure as shown in <ref type="figure" target="#fig_5">Fig. 4</ref>. According to the statistics on our datasets, the largest distance between neighbor joints is within 72 pixels on FLIC dataset, such target joint can be reached by three successive 7 × 7 geometrical transform kernels.</p><formula xml:id="formula_2">(f)$Feature$maps$for$down2 ward$lower$arm (e)$Feature$maps$for$elbow (h)$Updated$ feature$maps$for$ elbow (g)$Shifted$ feature$maps (d)$Input$image ⨁ ⨂ ⨂ (a)$Feature$ maps$ (c)$Transformed$ feature$maps (b)$Kernel ⨂ ⨂ (i) (j) (k) Learned$kernel$ ℎ $ % &amp;</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.2">Bi-directional tree</head><p>To optimize features obtained at a joint, one expect to receive information from all the other joints with a fully connected graph. It has two drawbacks. First, in order to directly model the relationship between feature maps of joints in distance, large transform kernels have to be introduced and they are difficult to learn. Second, the relationship between some joints (such as head and foot) are unstable. A better way is to propagate information between them through intermediate joints on a designed graph. The neighbor joints on the graph are close in distance and have relatively stable relationship in the graph. In this work, a tree structure shown in <ref type="figure" target="#fig_5">Fig. 4</ref> (2,a) and (2,b) is chosen. In <ref type="figure" target="#fig_1">Fig. 4 (2,a)</ref>, information flows from leaf joints to root joints. Let {A k } be the original feature maps directly obtained from the fcn6 layer. Here, {A k } is the concrete case of h k f cn6 in Eq. 1. k is the index of joint. The refined feature maps after message passing are denoted by {A ′ k }.</p><formula xml:id="formula_3">A k = f (h f cn6 ⊗ w a k ),<label>(2)</label></formula><p>where h f cn6 are the fcn6 feature maps, w a k is the filter bank for joint k, and f is the rectified linear unit. The process of refining features is explained below. Since A 5 and A 6 are at the leaf joints in the upward direction tree, they do not receive information from other joints, so the refined feature maps are the same as the original ones, i.e.</p><formula xml:id="formula_4">A ′ 5 = A 5 , A ′ 6 = A 6 .<label>(3)</label></formula><p>A 4 is updated by receiving information from A ′ 5 ,</p><formula xml:id="formula_5">A ′ 4 = f (A 4 + A ′ 5 ⊗ w a5,a4 ),<label>(4)</label></formula><p>where w a5,a4 is a collection of transform kernels between joint 5 and joint 4. A 3 is updated by receiving information from both A ′ 4 and A ′ 6 ,</p><formula xml:id="formula_6">A ′ 3 = f (A 3 + A ′ 4 ⊗ w a4,a3 + A ′ 6 ⊗ w a6,a3 ). (5)</formula><p>Feature maps of other joints are updated in a similar way.</p><p>To obtain complementary features, we design another branch with the same tree structure but opposite information flow in <ref type="figure" target="#fig_1">Fig. 4 (2,b)</ref>. The original feature maps {B k } are obtained in the same way as {A k }, but the refined feature maps {B ′ k } are updated in the opposite order as indicated by the arrows' direction in <ref type="figure" target="#fig_1">Fig. 4 (2,b)</ref>. The final feature maps at each node are obtained by concatenating the two sets of updated feature maps [A ′ k , B ′ k ]. The concatenated 256 channel feature tensor for joint k is used to predict the score map of joint k in a later step.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Model analysis</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.1">Enlarged receptive field</head><p>Researchers have done pose estimation at different levels: holistic (full body) <ref type="bibr" target="#b27">[28]</ref> level, poselet (combination of multiple body joints) level <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b30">31,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b18">19]</ref> and part (body joint) level <ref type="bibr" target="#b34">[35,</ref><ref type="bibr" target="#b10">11]</ref>. Latent structure <ref type="bibr" target="#b24">[25,</ref><ref type="bibr" target="#b29">30]</ref> and loop graph <ref type="bibr" target="#b30">[31]</ref> have been employed to combine information from different scales to boost the performance. Our proposed message passing method naturally obtains features whose receptive fields are in different sizes. In this sense, it combines features at multiple scales.</p><p>In the fcn7 layer of VGG, the receptive fields of feature maps are 188 × 188. When they are convolved with transform kernels, the receptive fields of the transformed features are 332 × 332. When the transformed features are added to     <ref type="table">Table 1</ref>. Details of our network settings and comparison with VGG-16 <ref type="bibr" target="#b22">[23]</ref>. fcn7 k is the filter bank for the k th part. ×37 represent for the 2 × 18 + 1 sets of filters for two directions and the background. msp1 k represents the first step of message passing layer for k th part. the original features at a neighbor joint, features at different scales are combined. When features at a root joint propagate to a leaf joint through multiple convolution layer at the intermediate joints, the receptive fields get even larger.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.2">Expressive power</head><p>The expressive power of our transform kernels is much larger than existing message passing methods on score maps <ref type="bibr" target="#b4">[5]</ref>. Taking the settings for LSP dataset as an example, there are 128 × 64 × 2 kernels between every pair of body joints while each kernel is a 7 by 7 matrix. The message passing process also increase the depth of model. The root joint have 34 layers with multiple intermediate supervision.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.3">Relation to recurrent neural network</head><p>Recurrent neural network (RNN) also passes information at the feature level. It is different from ours mainly in the way of sharing weights. RNN shares feature channels at different time steps and it requires the transfer matrix between features of successive time steps to be shared among all the time steps. In our model, body joints have their own feature channels and the geometrical transform kernels are not shared. This is because feature channels for each joints have different semantic meanings and the relationships between feature maps of neighbor joints are part specific.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Summary of Pipeline</head><p>The overall pipeline is shown in <ref type="figure" target="#fig_5">Fig. 4</ref>. The ImageNet pre-trained VGG-16 <ref type="bibr" target="#b22">[23]</ref> is used as the base model. In order to keep high resolution at the prediction map, the pool4 and pool5 layers are removed from VGG. Under this setting, the feaure maps in the fcn6 layer are only downsampled by 8 times. Given an 448 × 448 input image, the output score maps of joints are 56 × 56. Channel dropout <ref type="bibr" target="#b25">[26]</ref> after ReLU6 is employed to prevent overfitting. Details of the net structure are listed in <ref type="table">Table 1</ref>.</p><p>All the joints share layers up to fcn6. As shown in <ref type="figure" target="#fig_5">Fig. 4  (1)</ref>, in the fcn7 layer, every joint obtains its own set of 128 feature channels on each message passing direction by con-Test%image Score%map <ref type="figure">Figure 5</ref>. Test score map. On the left is the input image the right is the score map for shoulder on the left. volution. These feature maps are refined through message passing in a structured feature learning layer in <ref type="bibr" target="#b1">(2)</ref>. The dependency of feature maps of joints is modeled with a bidirectional tree. (2,a) and <ref type="bibr">(2,b)</ref> shows the information flows along opposite directions on the tree and the process of feature update. Complementary features are first obtained from different flow directions separately and then combined by concatenation. The score map z k of joint k is predicted from the combined feature maps through 1 × 1 convolution across feature maps,</p><formula xml:id="formula_7">z k = [A ′ k , B ′ k ] ⊗ w k pred .<label>(6)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Details on model training</head><p>The Conv1 1 to fcn6 used pre-trained weights as initialization and the all the other layers are random initialized. They are finetuned together. The lower layers used pretrained weights are finetuned with an initial learning rate of 0.001 and the newly initialized layers used an initial learning rate of 0.01.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Post-processing</head><p>A direct way of obtaining the location of a body joint is to search for the location with the maximum value on the score map for the joint. However, there is a problem when an input image has multiple persons as shown in <ref type="figure">Fig. 5</ref>. Although the score map is clear without false alarms, it has three high response regions on three shoulders of different persons. Directly searching for maximum values on score maps separately may link body joints of different persons. It cannot be solved at the feature level and needs structural reasoning on score maps. It indicates that structural learning at the feature level and the score level are complementary. A simple post-processing is used to handle this problem. We use the distance descriptor [(dx) 2 , (dy) 2 ] to constrain the distance among body joints. dx = (x i − x j − x r ) and dy = (y i − y j − y r ), where (x i , y i ) and (x j , y j ) are the locations for body joints i and j, and (x r , y r ) is the mean relative position between body joints i and j. The weights for the descriptor [dx 2 , dy 2 ] are fixed as [0.01, 0.01]. This score map post-processing is very simple comparing with the approaches in <ref type="bibr" target="#b34">[35,</ref><ref type="bibr" target="#b4">5]</ref>. <ref type="figure">Figure 6</ref>. Cross-data PDJ comparison of elbows and wrist on the FLIC dataset. The curves include results from MODECT <ref type="bibr" target="#b20">[21]</ref>, Deep pose <ref type="bibr" target="#b27">[28]</ref>, Tompson et al. <ref type="bibr" target="#b26">[27]</ref>, Chen&amp;Yuille <ref type="bibr" target="#b4">[5]</ref> and ours.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Training</head><p>In order to train the network, the localization of body joints is formulated as a classification problem. The supervision for an input image is a label tensor in size of 56 × 56 × 19. The first 18 channels represent for 18 human body joints and the 19 th channel represents for the background. Each pixel is assigned with a class label. The objective is to minimize the following function:</p><formula xml:id="formula_8">x y m(x, y) k t k (x, y)log( e z k (x,y) k ′ e z k ′ (x,y) )<label>(7)</label></formula><p>where {(x, y)} are locations, and k ∈ {1, 2, ...19} is the class index. t k (x, y) is the ground truth label at location (x, y). t k (x, y) = 1 if (x, y) belongs to class k, and 0 otherwise. z k (x, y) is the score value obtained in Eq. <ref type="bibr" target="#b5">(6)</ref>. Since the number of negative training samples is far larger than the positive ones, m is a binary mask only keep 0.05% negative samples by random selection.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Experimental Results</head><p>We show experimental results on two public human pose estimation benchmarks: the "Frames Labeled In Cinema" (FLIC) <ref type="bibr" target="#b20">[21]</ref> dataset and the "Leeds Sports Poses" (LSP) dataset <ref type="bibr" target="#b12">[13]</ref>. We also provide model components analysis based on the FLIC dataset. On the FLIC and the LSP datasets, the Percentage of Correct Parts (PCP), the most popular evaluation criterion, is employed. We also show results of elbow and hand using the percentage of detected body joints (PDJ) evaluation criteria on the FLIC dataset. For the evaluation metric PCP, there are several different interpretations, which lead to a large variance in the performance. Here, we use the strict PCP: only if both ends of a limb lie within 50% of the length of the ground-truth annotation, will this prediction be considered as correct.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.1.">Experimental results on FLIC dataset</head><p>The FLIC <ref type="bibr" target="#b20">[21]</ref> dataset contains 5002 images extracted from Hollywood movies with a person detector. Each person is annotated with 10 body joints on the upper body and  <ref type="bibr" target="#b7">[8]</ref> negative samples are also used in the training and validation data. In the testing stage, the person detection results are provided for evaluation. We return the highest prediction with neck lying in the person detection box region, which is the same as the method in Chen and Yuille <ref type="bibr" target="#b4">[5]</ref>. We linearly interpolate body joints from the 10 labeled joints to 18 joints.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.1.1">Overall results on FLIC</head><p>Comparison of our method with previous works under the PCP evaluation criterion is shown in Tab. 2. The work of Chen and Yuille <ref type="bibr" target="#b4">[5]</ref> and the work of Tompson et al. <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b25">26]</ref> are based on CNN features as well. Tompson et al. <ref type="bibr" target="#b25">[26]</ref> used 3-resolutions. Our method performs better than all previous works and improves the performance to 95.2%, 3.3 points higher than the previously best approach. It should be mentioned that any improvement gained based on 91.9 <ref type="bibr" target="#b4">[5]</ref> is hard. We also compare our results with previous works under the PDJ evaluation criteria . PDJ measures the performance with a curve. The horizontal axis is the normalized precision threshold. This threshold is normalized by groundtruth pose scale to make it sample invariant. The vertical axis is the percentage of correctly detected joints. Thus PDJ evaluates the number of body joints considered to be correct as a function of the precision threshold. <ref type="figure">Fig. 6</ref> shows cross method comparison of PDJ curves for elbows and wrists. Our method is denoted with the red line. It out-performs all previous methods on every normalized precision threshold.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.1.2">Investigation on the components in our approach</head><p>Model component analysis on the FLIC dataset is shown in Tab. 3. Baseline is the result that directly uses the ConvNet features without structured feature learning to obtain score maps and then use our simple post processing to obtain the final result. The result is 75.1. The effects of structured feature learning with message passing in single upward direction are shown in Tab .3, denoted by SD. The results for this model has mean 87.9%. Comparing SD with baseline, we observe that the PCP for each body joint in SD is higher than VGG-baseline and the mean PCP is improved by 13%. This improvement validates the effectiveness of building up structures at the feature level. By jointly learning structure and feature, the prediction of all body joints are better than the baseline. The improvement comes from not only the fact that the original feature maps receive extra information from other joints for further refinement, but also that feature channels themselves are better trained when structures are modeled.</p><p>Combination of the two directions leads to significant improvement. The results of bi-direct tree-structured model are denoted with Bi-direct in Tab. 3. The bi-direct model has PCP 93.4%, 5.4% improvement compared with the single branch model. Furthermore, the performance of each body joint is consistently improved compared to previous experiments.</p><p>The results discussed above use only one score map for a body joint in both training and testing. We can also produce multiple score maps for a single body joint by clustering the body joint into appearance mixtures. We use the approach in <ref type="bibr" target="#b34">[35]</ref> for obtaining appearance mixtures. For each joint, we calculate the relative location of the current joint to its parent node, and normalize this distance with head scale. And the relative location is used for clustering each body joint into 13 mixture types with k-means. The experimental results of model trained with multiple score maps of a body joint are shown in Tab. 3, denoted by Bi-direct+. The use of multiple score maps leads to 1.8% further improvement compared with the use of single score map per joint.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.2.">Experimental results on LSP dataset</head><p>LSP <ref type="bibr" target="#b12">[13]</ref> is a benchmark whose images are from sport activities with full body. It contains 2000 images, 1000 for training and 1000 for test. Persons in this dataset are annotated with full body joints. In the experiment, we interpolate joints on limbs and torso. Hence the total number of body joints used is 26. In the training data, 800 images are used for training and 200 images for validation. Given the small amounts of samples available and large amounts   <ref type="table">Table 4</ref>. Experimental results on the LSP dataset under the evaluation criteria strict PCP of weights to be learned, we do a large amount of data augmentation. As in <ref type="bibr" target="#b4">[5]</ref>, each training image is first flipped horizontally and then rotated by 360 degrees. We also use INRIA negative images as negative samples, which were also used the existing works. The resolution of images from the LSP dataset is smaller than FLIC, so we use a smaller size of input, i.e. 336 × 336, and the corresponding output score map is of size 42 × 42. The images are resized to have the longer side being 336. Given the smaller size of label map, the convolution kernel size is also changed. Each geometrical transform is implemented with two steps of convolutions with kernel size 7 × 7 on LSP.</p><p>PCP results are shown in Tab. 4. The work of Chen and Yuille <ref type="bibr" target="#b4">[5]</ref> also used the deep model. The other works were based on hand-crafted features. We do not compare with DeepPose <ref type="bibr" target="#b27">[28]</ref> because their work used person-centric training and evaluation, while all the works mentioned in Tab. 4 including ours are observe-centric. Our method outperforms previous state-of-the-art by 5.8%. It also obtains the best result on every body part evaluated.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Conclusion</head><p>We propose the idea of modeling correlations among feature maps of body joints for pose estimation. Feature level information passing delivers more detailed descriptions about body joints than score maps. It is implemented with geometrical transform kernels. A bi-directional tree structured model is proposed and complementary features are learned from information flow in opposite directions. Experimental results on two public datasets show that the proposed framework improves feature learning substantially. Even with very simple post processing, it outperforms the state-of-the-art method. In the future work, further improvement is expected by integrating with more advanced post processing techniques from existing literature. Moreover, various structures for message passing investigated in existing works <ref type="bibr" target="#b34">[35,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b18">19]</ref> could also provide guidance to improve message passing at the feature level.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 . ( 1 )</head><label>11</label><figDesc>Our approach jointly learns feature maps at different body joints and the spatial and co-occurrence relationships between feature maps. The information from different joints passes at the feature level.(a) Two input images (I1 and I2) with different poses. (c) Responses of feature channels for elbow (e1-e7). (I1, b) is the response map of e5 for image I1. (I2, b) is the response map of e4 for image I2. Similarly, (d) and (e) show the response maps and responses of different feature channels for lower arm.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .</head><label>2</label><figDesc>Examples of response maps of different images to the same feature channels. (a) A feature channel for the neck. (b) A feature channel for the left wrist. (c) A feature channel for the left lower arm.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Fig. 3 (</head><label>3</label><figDesc>a)-(c) shows that convolution with asymmetric kernels could geometrically shift the feature responses. (a) is a feature map assuming Gaussian distribution. (b) are different kernels for illustration. (c) are the transformed feature maps after convolution. The feature map has been shifted towards different directions and sum up to different values.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 3 .</head><label>3</label><figDesc>(a)-(c) show that feature maps can be shifted through convolution with kernels. (d)-(h) show an example of updating feature maps by passing information between joints. (i)-(k) compare the featuer maps before (i.e. (j)) and after (i.e. (k)) information passing.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 4 .</head><label>4</label><figDesc>Our pipeline for pose estimation. (1) Original feature maps for body joints. (2) Refine the feature maps by information passing in a structure feature learning layer. (2,a) and (2,b) show the details of the bi-directional tree which have information flows in opposite directions. The process of updating feature maps are also illustrated. (3) Predict score maps for joints based on feature maps. Dashed line is copy operation and solid line is convolution.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head></head><label></label><figDesc>×34 are the 17 × 2 connections on the bi-directional tree. elt(+) stands for element-wise summation. This table only lists the number of filters, kernel size and stride of each layer, and the message passing process should followFig. 4 (2,a)and(2,b).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 7 .</head><label>7</label><figDesc>Qualitative results on FLIC and LSP datasets. The first row are results from FLIC dataset. The second and third rows are results from LSP dataset. More results can be avalibale in the supplymentary material</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head></head><label></label><figDesc>Table 3. Comparison of strict PCP results on the FLIC dataset for model components investigation. Note that the Mean is only the average result for U.arms and L.arms</figDesc><table>Experiment 
+Head 
+Torso U.arms L.arms Mean 
+Baseline 
+83.5 
+71.6 
+83.8 
+66.3 
+75.1 
+SD 
+97.4 
+89.6 
+96.1 
+79.6 
+87.9 
+Bi-direct 
+97.7 
+93.8 
+96.8 
+90.0 
+93.4 
+Bi-direct(+) 
+98.6 
+93.9 
+97.9 
+92.4 
+95.2 
+
+</table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0" />
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">2d human pose estimation: New benchmark and state of the art analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andriluka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Pishchulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Gehler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Pictorial structures revisited: people detection and articulated pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andriluka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Detecting people using mutually consistent poselet activations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bourdev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Maji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Human pose estimation with iterative error feedback</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Carreira</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Agrawal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Fragkiadaki</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1507.06550</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Articulated pose estimation by a graphical model with image dependent pairwise relations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Adaptive occlusion state estimation for human pose tracking under selfocclusions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N.-G</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-W</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Pattern Recognition</title>
+		<imprint>
+			<biblScope unit="volume">46</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="649" to="661" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Multi-task recurrent neural network for immediacy prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Ouyang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Histograms of oriented gradients for human detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Dalal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Triggs</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Appearance sharing for collective human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Eichner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ferrari</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">Combining local appearance and holistic view: Dual-source deep neural networks for human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Fan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Wang</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1504.07159</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Pictorial structures for object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">F</forename><surname>Felzenszwalb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Huttenlocher</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">61</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Deformable part models are convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Iandola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.5403</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Clustered pose and nonlinear appearance models for human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Object detection from video tubelets with convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Ouyang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krähenbühl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1210.5644</idno>
+		<title level="m">Efficient inference in fully connected crfs with gaussian edge potentials</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Multi-source deep learning for human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Ouyang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Deepid-net: Deformable deep convolutional neural networks for object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Ouyang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Qiu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-C</forename><surname>Loy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Poselet conditioned pictorial structures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Pishchulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andriluka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Gehler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Strong appearance and expressive spatial models for human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Pishchulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andriluka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Gehler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Modec: Multimodal decomposable models for human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Sapp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Taskar</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Overfeat: Integrated recognition, localization and detection using convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Eigen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mathieu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1312.6229</idno>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.1556</idno>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.4842</idno>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+	<note type="report_type">Going deeper with convolutions. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Exploring the spatial hierarchy of mixture models for human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">G</forename><surname>Narasimhan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV. 2012</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Efficient object localization using convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tompson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Goroshin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Bregler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Joint training of a convolutional network and a graphical model for human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Tompson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Bregler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Deeppose: Human pose estimation via deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Toshev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">An approach to posebased action recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Beyond physical connections: Tree models in human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Learning hierarchical poselets for human parsing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Liao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Learning deep feature representations with domain guided dropout for person re-identification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Ouyang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Combining skeletal pose with local motion for human activity recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">N</forename><surname>Krovi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Corso</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Articulated Motion and Deformable Objects</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="114" to="123" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">End-to-end learning of deformable mixture of parts and deep convolutional neural networks for human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Ouyang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Articulated human detection with flexible mixtures of parts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">12</biblScope>
+			<biblScope unit="page" from="2878" to="2890" />
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">D</forename><surname>Zeiler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1311.2901</idno>
+		<title level="m">Visualizing and understanding convolutional neural networks</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Jayasumana</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Romera-Paredes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vineet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Du</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Torr</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.03240</idno>
+		<title level="m">Conditional random fields as recurrent neural networks</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

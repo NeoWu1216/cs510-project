@@ -1,0 +1,903 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Robust 3D Hand Pose Estimation in Single Depth Images: from Single-View CNN to Multi-View CNNs</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Liuhao</forename><surname>Ge</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Institute for Media Innovation</orgName>
+								<orgName type="institution">Nanyang Technological University</orgName>
+								<address>
+									<country key="SG">Singapore</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hui</forename><surname>Liang</surname></persName>
+							<email>hliang1@e.ntu.edu.sg</email>
+							<affiliation key="aff0">
+								<orgName type="department">Institute for Media Innovation</orgName>
+								<orgName type="institution">Nanyang Technological University</orgName>
+								<address>
+									<country key="SG">Singapore</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Junsong</forename><surname>Yuan</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Institute for Media Innovation</orgName>
+								<orgName type="institution">Nanyang Technological University</orgName>
+								<address>
+									<country key="SG">Singapore</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Daniel</forename><surname>Thalmann</surname></persName>
+							<email>danielthalmann@ntu.edu.sg</email>
+							<affiliation key="aff0">
+								<orgName type="department">Institute for Media Innovation</orgName>
+								<orgName type="institution">Nanyang Technological University</orgName>
+								<address>
+									<country key="SG">Singapore</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Robust 3D Hand Pose Estimation in Single Depth Images: from Single-View CNN to Multi-View CNNs</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:45+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Articulated hand pose estimation plays an important role in human-computer interaction. Despite the recent progress, the accuracy of existing methods is still not satisfactory, partially due to the difficulty of embedded highdimensional and non-linear regression problem. Different from the existing discriminative methods that regress for the hand pose with a single depth image, we propose to first project the query depth image onto three orthogonal planes and utilize these multi-view projections to regress for 2D heat-maps which estimate the joint positions on each plane. These multi-view heat-maps are then fused to produce final 3D hand pose estimation with learned pose priors. Experiments show that the proposed method largely outperforms state-of-the-art on a challenging dataset. Moreover, a cross-dataset experiment also demonstrates the good generalization ability of the proposed method.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>The problem of 3D hand pose estimation has aroused a lot of attention in computer vision community for long, as it plays a significant role in human-computer interaction such as virtual/augmented reality applications. Despite the recent progress in this field <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b17">18,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b22">23,</ref><ref type="bibr" target="#b28">29]</ref>, robust and accurate hand pose estimation remains a challenging task. Due to large pose variations and high dimension of hand motion, it is generally difficult to build an efficient mapping from image features to articulated hand pose parameters.</p><p>Data-driven methods for hand pose estimation train discriminative models, such as isometric self-organizing map <ref type="bibr" target="#b3">[4]</ref>, random forests <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b24">25]</ref> and convolutional neural networks (CNNs) <ref type="bibr" target="#b28">[29]</ref>, to map image features to hand pose parameters. With the availability of large annotated hand pose datasets <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b28">29]</ref>, data-driven approaches become more advantageous as they do not require complex model calibration and are robust to poor initialization. <ref type="figure">Figure 1</ref>: Overview of our proposed multi-view regression framework. We generate heat-maps for three views by projecting 3D points onto three orthogonal planes. Three CNNs are trained in parallel to map each view's projected image to its corresponding heat-maps, which are then fused together to estimate 3D hand joint locations.</p><p>We focus on CNN-based data-driven methods in this paper. CNNs have been applied in body and hand pose estimation <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b29">30]</ref> and have shown to be effective. The main difficulty of CNN-based methods for hand pose estimation lies in accurate 3D hand pose regression. Direct mapping from input image to 3D locations is highly nonlinear with high learning complexity and low generalization ability of the networks <ref type="bibr" target="#b26">[27]</ref>. One alternative way is to map input image to a set of heat-maps which represent the probability distributions of joint positions in the image and recover the 3D joint locations from the depth image with model fitting <ref type="bibr" target="#b28">[29]</ref>. However, in this method, the heatmap only provides 2D information of the hand joint and the depth information is not fully utilized.</p><p>In this work, we propose a novel 3D regression method using multi-view CNNs that can better exploit depth cues to recover fully 3D information of hand joints without model fitting, as illustrated in <ref type="figure">Fig. 1</ref>. Specifically, the point cloud of an input depth image is first projected onto three orthogo- Blue points are true locations, and red points are estimated locations. The little finger tip is misestimated on the background and the middle finger tip is misestimated on the hand palm. (b) Illustration of ambiguous estimation. Despite the heat-map of x-y view contains two hotspots which are hard to choose, from the heat-map of z-x view, it is easy to find that the x value is small with high confidence. Thus, the left hotspot in x-y view's heat-map is true. nal planes, and each projected image is then fed into a separate CNN to generate a set of heat-maps for hand joints following similar pipeline in <ref type="bibr" target="#b28">[29]</ref>. As the heat-map in each view encodes the 2D distribution of a joint on the projection plane, their combination in three views thus contains the location distribution of the joint in 3D space. By fusing heat-maps of three views with pre-learned hand pose priors, we can finally obtain the 3D joint locations and alleviate ambiguous estimations at the same time.</p><p>Compared to the method of single view CNN in <ref type="bibr" target="#b28">[29]</ref>, our proposed method of multi-view CNNs has the following advantages:</p><p>• In the single view CNN, the depth of a hand joint is taken as the corresponding depth value at the estimated 2D position, which may result in large depth estimation errors even if the estimated 2D position is only slightly deviated from the true joint position, as shown in <ref type="figure" target="#fig_0">Fig. 2a</ref>. In contrast, our proposed multi-view CNNs generate heatmaps for front, side and top views simultaneously, from which the 3D locations of hand joints can be estimated more robustly.</p><p>• In case of ambiguous estimations, the single view CNN cannot well differentiate among multiple hotspots in the heat-map, in which only one could correspond to the true joint, as shown in <ref type="figure" target="#fig_0">Fig. 2b (x-y view)</ref>. With the proposed multi-view CNNs, the heat-maps from other two views can help to eliminate the ambiguity, such as that in <ref type="figure" target="#fig_0">Fig. 2b</ref>.</p><p>• Different from <ref type="bibr" target="#b28">[29]</ref> that still relies on a pre-defined hand model to obtain the final estimation, our proposed approach embeds hand pose constraints learned from training samples in an implicit way, which allows to enforce hand motion constraints without manually defining hand size parameters.</p><p>Comprehensive experiments validate the superior performance of the proposed method compared to state-of-theart methods on public datasets <ref type="bibr" target="#b20">[21]</ref>, with runtime speed of over 70fps. In addition, our proposed multi-view regression method can achieve relatively high accuracy in crossdataset experiments <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b20">21]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Literature Review</head><p>Vision-based hand pose estimation has been extensively studied in literature over many years. The most common hand pose estimation techniques can be classified into model-driven approaches and data-driven approaches <ref type="bibr" target="#b21">[22]</ref>. Model-driven methods usually find the optimal hand pose parameters via fitting a deformable 3D hand model to input image observations. Such methods have demonstrated to be quite effective, especially with the depth cameras <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b22">23]</ref>. However, there are some shortcomings for the model-driven methods. For instance, they usually need to explicitly define the anatomical size and hand motion constraints of the hand to match to the input image. Also, due to the high dimensional of hand pose parameters, they can be sensitive to initialization for the iterative modelfitting procedure to converge to the optimal pose.</p><p>In contrast, the data-driven methods do not need the explicit specification of the hand size and motion constraints. Rather, such information is automatically encoded in the training data. Therefore, many recent methods are built upon such a scheme <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b31">32]</ref>. Among them, the random forest and its variants have proved to be reasonably accurate and fast. In <ref type="bibr" target="#b31">[32]</ref>, the authors propose to use the random forest to directly regress for the hand joint angles from depth images, in which a set of spatial-voting pixels cast their votes for hand pose independently and their votes are clustered into a set of candidates. The optimal one is determined by a verification stage with a hand model. A similar method is presented in <ref type="bibr" target="#b24">[25]</ref>, which further adopts transfer learning to make up for the inconsistence between synthesis and real-world data. As the estimations from random forest can be ambiguous for complex hand postures, pre-learned hand pose priors are sometimes utilized to better fuse independently predicted hand joint distributions <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b11">12]</ref>. In <ref type="bibr" target="#b20">[21]</ref>, the cascaded pose regression algorithm <ref type="bibr" target="#b2">[3]</ref> is adapted to the problem of hand pose estimation. Particularly, the authors propose to first predict the root joints of the hand skeleton, based on which the rest joints are updated. In this way the hand pose constraints can be well preserved during pose regression.</p><p>Very recently, convolutional neural networks have shown to be effective in articulated pose estimation. In <ref type="bibr" target="#b29">[30]</ref>, they are tuned to regress for the 2D human poses by directly minimizing the pose estimation error on the training data. The results have shown to outperform the traditional methods largely. However, it takes more than twenty days to train the network and the dataset only contains several thousand images. Considering the relatively small size of the dataset used in <ref type="bibr" target="#b29">[30]</ref>, it can be difficult to use it on larger datasets such as <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b23">24]</ref>, which consist of more than 70K images. Also, it is reported in <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b26">27]</ref> that such direct mapping with CNNs from image features to continuous 2D/3D locations is of high nonlinearity and complexity as well as low generalization ability, which renders it difficult to train CNNs in such a manner. To this end, in their work on body pose estimation <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b27">28]</ref>, the CNNs are used to predict the heat-maps of joint positions instead of the original articulated pose parameters, and on each heat-map the intensity of a pixel indicates the likelihood for a joint occurring there. During training, the regression error is instead defined as the L2norm of the difference between the estimated heat-map and the ground truth heat-map. In this way, the network can be trained efficiently and they achieve state-of-the-art performances. Similarly, such a framework has also been applied in 3D hand pose estimation <ref type="bibr" target="#b28">[29]</ref>. However, the heatmap only provides 2D information of the hand joint and the depth information is not fully utilized. To address this issue, a model-based verification stage is adopted to estimate the 3D hand pose based on the estimated heat-maps and the input depth image <ref type="bibr" target="#b28">[29]</ref>. Such heat-map based approaches are interesting as heat-maps can reflect the probability distribution of 3D hand joints in the projection plane. Inspired by such methods, we generate heat-maps of multiple views and fuse them together to estimate the probability distribution of hand joints in 3D space.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Methodology</head><p>The task of the hand pose estimation can be regarded as the extraction of the 3D hand joint locations from the depth image. Specifically, the input of this task is a cropped depth image only containing a human hand with some gesture and the outputs are K 3D hand joint locations which represent the hand pose. Let the K objective hand joint locations be Φ = {φ k } K k=1 ∈ Λ, here Λ is the 3 × K dimensional hand joint space, and in this work K = 21. The 21 objective hand joint locations are the wrist center, the five metacarpophalangeal joints, the five proximal interphalangeal joints, the five distal interphalangeal joints and the five finger tips.</p><p>Following the discussion in Section 1, we propose to infer 3D hand joint locations Φ based on the projected images on three orthogonal planes. Let the three projected images be I xy , I yz and I zx , which are obtained by projecting 3D points from the depth image onto x-y, y-z and z-x planes in the projection coordinate system, respectively. Thus, the query depth image I D is transformed to the three projections I xy , I yz and I zx , which will be used as the inputs to infer 3D hand joint locations in our following derivations.</p><p>We estimate the hand joint locations Φ by applying the MAP (maximum a posterior) estimator on the basis of pro- <ref type="figure">Figure 3</ref>: Illustration of 3D points projection. 3D points obtained from the input depth image are projected onto x-y, y-z and z-x planes of the OBB coordinate system, respectively.</p><p>jections I xy , I yz and I zx , which can be viewed as the observations of the 3D hand pose. Given (I D , Φ), we assume that the three projections I xy , I yz and I zx are independent, conditioned on the joint locations Φ <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b32">33]</ref>. Under this assumption and the assumption of equal a priori probability P (Φ), the posterior probability of joint locations can be formulated as the product of the individual estimations from all the three views. The problem to find the optimal hand joint locations Φ * is thus formulated as follows:</p><formula xml:id="formula_0">Φ * = arg max Φ P ( Φ| I xy , I yz , I zx ) = arg max Φ P ( I xy , I yz , I zx | Φ) = arg max Φ P ( I xy | Φ) P ( I yz | Φ) P ( I zx | Φ) = arg max Φ P ( Φ| I xy ) P ( Φ| I yz ) P ( Φ| I zx ) s.t. Φ ∈ Ω (1)</formula><p>where Φ is constrained to a low dimensional subspace Ω ⊆ Λ in order to resolve ambiguous joint estimations.</p><p>The posterior probabilities P ( φ k | I xy ), P ( φ k | I yz ) and P ( φ k | I zx ) can be estimated from heat-maps generated by CNNs. Now we present the details of multi-view 3D joint location regression. We first describe the methods of multiview projection and learning in Section 3.1 and then describe the method of multi-view fusion in Section 3.2.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Multi-view Projection and Learning</head><p>The objective for multi-view projection and learning is to generate projected images on each view and learn the relations between the projected images and the heat-maps of each view. First, we describe the details of 3D projections. Then, we introduce the architecture of the CNNs.</p><p>3D Points Projection: As illustrated in <ref type="figure">Fig. 1</ref>, the input depth image is first converted to a set of 3D points in the world coordinate system by using the depth camera's intrinsic parameters, e.g. the position of principal point and the focal length. To generate multi-view's projections, we project these 3D points onto three orthogonal planes. As shown in <ref type="figure">Fig. 3</ref>, an oriented bounding box (OBB) is generated by performing principal component analysis (PCA) on the set of 3D points, which is a tight fit around these 3D points in local space <ref type="bibr" target="#b30">[31]</ref>. The origin of OBB coordinate system is set on the center of the bounding box, and its x, y, z axes are respectively aligned with the 1st, 2nd and 3rd principal components. This coordinate system is set as the projection coordinate system. For 3D points projection onto a plane, the distances from 3D points to the projection plane are normalized between 0 and 1 (with nearest points set to 0, farthest points set to 1). Then, 3D points are orthographically projected onto the OBB coordinate system's x-y, y-z and z-x planes respectively, as shown in <ref type="figure">Fig. 3</ref>. The corresponding normalized distances are stored as pixel values of the projected images. If multiple 3D points are projected onto the same pixel, the smallest normalized distance will be stored as the pixel value. Notice that the projections on the three orthogonal planes maybe coarse because of the resolution of the depth map <ref type="bibr" target="#b8">[9]</ref>, which can be solved by performing median filter and opening operation on the projected images.</p><p>Architecture of CNNs: Since we project 3D points onto three views, for each view, we construct a convolutional network having the same network architecture and the same architectural parameters. Inspired by the work of Tompson et al. in <ref type="bibr" target="#b28">[29]</ref>, we employ the multi-resolution convolutional networks architecture for each view as shown in <ref type="figure" target="#fig_1">Fig. 4</ref>.</p><p>The input projected images are resized to 96x96 pixels and then filtered by local contrast normalization (LCN) <ref type="bibr" target="#b5">[6]</ref> to normalize the contrast in the image. After LCN, the 96x96 image is down-sampled to 48x48 and 24x24 pixels. All of these three images with different resolutions are propagated through three banks which consist of two convolutional stages. The output feature maps of these three banks are concatenated and fed into a fully-connected network containing two linear stages. The final outputs of this network are 21 heat-maps with 18x18 pixels, of which the intensity indicates the confidence of a joint locating in the 2D position on a specific view.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Multi-view Fusion</head><p>The objective for multi-view fusion is to estimate the 3D hand joint locations from three views' heat-maps. Let φ kx , φ ky and φ kz denote the x, y and z coordinates of the 3D hand joint location φ k in the OBB coordinate system.</p><p>The CNNs generate a set of heat-maps for each joint, each view. Since the intensity on a heat-map indicates the confidence of a joint locating in the 2D position of the x-y, y-z or z-x view, we can get the corresponding probabilities P ( φ kx , φ ky | I xy ), P ( φ ky , φ kz | I yz ), and P ( φ kz , φ kx | I zx ) from three views' heat-maps.</p><p>Assuming that, conditioned on the x-y view, the distribution of z variable is uniform, we have:</p><formula xml:id="formula_1">P ( φ k | I xy ) = P ( φ kx , φ ky , φ kz | I xy ) = P ( φ kx , φ ky | I xy )P ( φ kz | I xy ) ∝ P ( φ kx , φ ky | I xy )<label>(2)</label></formula><p>With similar assumptions, for the other two views, it can be derived that P ( φ k | I yz ) ∝ P ( φ ky , φ kz | I yz ) and</p><formula xml:id="formula_2">P ( φ k | I zx ) ∝ P ( φ kz , φ kx | I zx ).</formula><p>We assume that the hand joint locations are independent conditioned on each view's projected image. Thus, the optimization problem in Eq. 1 can be transformed into:</p><formula xml:id="formula_3">Φ * = arg max Φ P ( Φ| I xy ) P ( Φ| I yz ) P ( Φ| I zx ) = arg max Φ k P ( φ k | I xy ) P ( φ k | I yz ) P ( φ k | I zx ) = arg max Φ k Q (φ kx , φ ky , φ kz )<label>(3)</label></formula><p>where Q (φ kx , φ ky , φ kz ) denotes the product of probabilities P ( φ kx , φ ky | I xy ), P ( φ ky , φ kz | I yz ), and P ( φ kz , φ kx | I zx ) for each joint.</p><p>Eq. 3 indicates that we can get the optimal hand joint locations by maximizing the product of Q (φ kx , φ ky , φ kz ) for all the joints which can be calculated from the intensities of three views' heat-maps. In this work, a set of 3D points in the bounding box is uniformly sampled and projected onto three views to get its corresponding heat-map intensities.</p><p>Then the value of Q (φ kx , φ ky , φ kz ) for a 3D point can be computed.</p><p>For simplicity of this problem, the product of probabilities Q (φ kx , φ ky , φ kz ) is approximated as a 3D Gaussian distribution N (µ k , Σ k ), where µ k is the mean vector, Σ k is the covariance matrix. These parameters of the Gaussian distribution can be estimated from the sampled data.</p><p>Based on above assumptions and derivations, the optimization problem in Eq. 3 can be approximated as follow:</p><formula xml:id="formula_4">Φ * = arg max Φ k log Q (φ kx , φ ky , φ kz ) = arg max Φ k log N (µ k , Σ k ) = arg min Φ k (φ k − µ k ) T Σ −1 k (φ k − µ k ) s.t. Φ = M m=1 α m e m + u<label>(4)</label></formula><p>where Φ is constrained to take the linear from. In order to learn the low dimensional subspace Ω of hand configuration constrains, PCA is performed on joint locations in the training dataset <ref type="bibr" target="#b11">[12]</ref>. E = [e 1 , e 2 , · · · , e M ] are the principal components, α = [α 1 , α 2 , · · · , α M ] T are the coefficients of the principal components, u is the empirical mean vector, and M ≪ 3 × K.</p><p>As proved in the supplementary material, given the linear constrains of Φ, the optimal coefficient vector α * = [α * 1 , α * 2 , · · · , α * M ] T is:</p><formula xml:id="formula_5">α * = A −1 b<label>(5)</label></formula><p>where A is a M × M symmetric matrix, b is an Mdimensional column vector:</p><formula xml:id="formula_6">A ij = k e T j,k Σ −1 k e i,k , b i = k (µ k − u k ) T Σ −1 k e i,k e i = e T i,1 , e T i,2 , · · · , e T i,K T ; u = u T 1 , u T 2 , · · · , u T K T ;</formula><p>i, j = 1, 2, · · · , M . The optimal joint locations Φ * are reconstructed by back-projecting the optimal coefficients α * in the subspace Ω to the original joint space Λ:</p><formula xml:id="formula_7">Φ * = M m=1 α * m e m + u<label>(6)</label></formula><p>To sum up, the proposed multi-view fusing method consists of two main steps. The first step is to estimate the parameters of Gaussian distribution for each joint using the three views' heat-maps. The second step is to calculate the optimal coefficients α * and reconstruct the optimal joint locations Φ * . The principal components and the empirical mean vector of hand joint configuration are obtained by applying PCA on training data during the training stage.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">CNNs Training</head><p>The CNNs of multiple views described in Section 3.1 were implemented within the Torch7 <ref type="bibr" target="#b1">[2]</ref> framework. The optimization algorithm applied in CNNs training process is stochastic gradient descent (SGD) with a mean squared error (MSE) loss function, since the task of hand pose estimation is a typical regression problem. For training parameters, we choose the batch size as 64, the learning rate as 0.2, the momentum as 0.9 and the weight decay as 0.0005. Training is stopped after 50 epochs to prevent overfitting. We use a workstation with two Intel Xeon processors, 64GB of RAM and two Nvidia Tesla K20 GPUs for CNNs training. The CNNs of three views can be trained at the same time since they are in parallel. Training the CNNs takes approximately 12 hours.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Dataset and Evaluation Metric</head><p>We conduct a self-comparison and a comparison with state-of-the-art methods on the dataset released in <ref type="bibr" target="#b20">[21]</ref>, which is the most challenging hand pose dataset in the literature. This dataset contains 9 subjects and each subject contains 17 gestures. In the experiment, we use 8 subjects as the training set for CNNs training and the remaining subject as the testing set. This is repeated 9 times for all subjects.</p><p>In addition, we conduct a cross-dataset evaluation by using the training data from the dataset in <ref type="bibr" target="#b20">[21]</ref> and the testing data from another dataset in <ref type="bibr" target="#b16">[17]</ref>.</p><p>We employ two metrics to evaluate the regression performance. The first metric is the mean error distance for each joint across all the test samples, which is a standard evaluation metric. The second metric is the proportion of good test samples in the entire test samples. A test sample is regarded as good only when all the estimated joint locations are within a maximum allowed distance from the ground truth, namely the error tolerance. This worst case accuracy proposed in <ref type="bibr" target="#b25">[26]</ref> is very strict.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Self-comparisons</head><p>For self-comparison, we implement two baselines: the single view regression approach and the multi-view regression approach using a coarse fusion method. In the single view regression approach, only the projected images on OBB coordinate system's x-y plane are fed into the CNNs. From the output heat-maps, we can only estimate the x and y coordinates of joint locations by using the Gaussian fitting method proposed in <ref type="bibr" target="#b28">[29]</ref>. The z coordinate can be estimated from the intensity of the projected image. If the 2D point with the estimated x, y coordinates is on the background of the projected image, the z coordinate will be specified as zero in OBB coordinate system instead of the maximum depth value, which can reduce the estimation errors on z di- rection. The multi-view regression approach using a coarse fusion method can be considered as a degenerated variant of our fine fusion method. This method estimates the 3D hand joint locations by simply averaging the estimated x, y and z coordinates from three views' heat-maps.</p><p>We compare the accuracy performance of these two approaches with the multi-view fine fusion method described in Section 3. The mean error for each joint and the worst case accuracy of these three methods are shown in <ref type="figure">Fig. 5</ref> (left and middle) respectively. As can be seen, the multiview regression is effective since our two multi-view regression approaches significantly outperform the single view regression method. In addition, the fine fusion method is better than the coarse fusion method when considering the mean error performance, which is about 13 mm on the dataset in <ref type="bibr" target="#b20">[21]</ref>. When considering the worst case accuracy, the fine fusion method performs worse than the coarse fusion method only when the error tolerance is large. However, the high accuracy corresponding to small values of error tolerance should be more favorable, because the large values of error tolerance indicate that imprecise estimations will be considered as good test samples. Thus, the fine fusion method is overall better than the coarse fusion method and we apply this fusion method in the following experiments. <ref type="figure" target="#fig_2">Fig. 6</ref> shows an example of the ambiguous situation where the index fingertip is very likely to be confused with the little fingertip. As can be seen, the single view regression method only utilizes the x-y view's heat-map which contains two hotspots and gives an estimation with large error distance to the ground truth. However, the multi-view fine fusion method fuses the heat-maps of three views and estimates the 3D location with high accuracy. The multi-  <ref type="figure">Figure 7</ref>: Comparison with the approach proposed in <ref type="bibr" target="#b28">[29]</ref>. In this method, 14 hand joints are estimated. For fair comparison, in our method, 14 corresponding joints of 21 estimated joints are used to calculate the worst case accuracy. view coarse fusion method gives an estimation in between the results of the above two methods due to its underutilization of heat-maps' information. <ref type="figure" target="#fig_6">Fig. 9</ref> shows qualitative results of these three methods on several challenging examples to further illustrate the superiority of the multi-view fine fusion method over the other two methods.</p><p>In addition, we study the impact of different number of principal components used in joint constraints on the worst case accuracy under different error tolerances, as shown in <ref type="figure">Fig. 5 (right)</ref>. It is reasonable to use 35 principal components in joint constraints considering the worst case accuracy. We use this setting in all the other experiments.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Comparison with State-of-the-art</head><p>We compare our multi-view fine fusion method with two state-of-the-art methods on the dataset in <ref type="bibr" target="#b20">[21]</ref>. The first method is the CNNs based hand pose estimation proposed in <ref type="bibr" target="#b28">[29]</ref>. The second method is the random forest based hierarchical hand pose regression proposed in <ref type="bibr" target="#b20">[21]</ref>.</p><p>The method in <ref type="bibr" target="#b28">[29]</ref> requires a model fitting process to correct large estimation errors. Since the dataset in <ref type="bibr" target="#b20">[21]</ref> does not release the hand parameters for each subject, we conduct model fitting with an uncalibrated hand model and set the hand size and finger lengths as the variables in optimization. In our implementation, this method estimates 14 hand joint locations which are a subset of the 21 hand joints used in our method. For fair comparison, we calculate the worst case accuracy of the 14 corresponding joints from the 21 joints estimated by our method. As shown in <ref type="figure">Fig. 7</ref>, our multi-view regression with fine fusion method significantly outperforms the method in <ref type="bibr" target="#b28">[29]</ref> for the worst case accuracy. Essentially, the method in <ref type="bibr" target="#b28">[29]</ref> is a single view regression method which only uses the depth image as the input of the networks. This result further indicates the benefit of using multi-view's information for CNN-based 3D hand pose estimation. Even though an accurately calibrated hand model   <ref type="bibr" target="#b20">[21]</ref>. Left: the proportion of good test samples in the entire test samples over different error tolerances. Middle &amp; right: the mean error distance over different yaw and pitch angles of the viewpoint. Our method holds smaller average errors in all of the yaw and pitch angles. The curves of the hierarchical regression method are cropped from the results reported in <ref type="bibr" target="#b20">[21]</ref>. may improve the accuracy of the method in <ref type="bibr" target="#b28">[29]</ref> in a limited degree, it is cumbersome to calibrate the hand model for every subject and the model fitting process will increase the computational complexity.</p><p>We compare with the hierarchical regression method proposed in <ref type="bibr" target="#b20">[21]</ref>. Note that this method has been presented superior than the methods in <ref type="bibr" target="#b19">[20,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b31">32]</ref>. Thus, we indirectly compare our method with the methods in <ref type="bibr" target="#b19">[20,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b31">32]</ref>. As can be seen in <ref type="figure">Fig. 8</ref>, our method is superior than the method in <ref type="bibr" target="#b20">[21]</ref>. The worst case accuracy of our method is better than the method in <ref type="bibr" target="#b20">[21]</ref> over most error tolerances, as shown in <ref type="figure">Fig. 8 (left)</ref>. Especially, when the error tolerances are 20mm and 30 mm, the good sample proportions of our method are about 10% and 15% higher than those of the method in <ref type="bibr" target="#b20">[21]</ref>. When the error tolerance is smaller than 15mm, the good sample proportion of our method is slightly lower than that of the method in <ref type="bibr" target="#b20">[21]</ref>. This may be caused by the relatively low resolution of the heat-maps used in our method. We also compare the average estimation errors over different viewpoint angles of these two methods. As shown in <ref type="figure">Fig. 8 (middle and right)</ref>, the average errors of our method are smaller than those of the method in <ref type="bibr" target="#b20">[21]</ref> over all yaw and pitch viewpoint angles. In addition, our method is more robust to the pitch angle variation with a smaller standard deviation (0.64mm) than the method in <ref type="bibr" target="#b20">[21]</ref> (0.79mm).</p><p>The runtime of the entire pipeline is 14.1ms, including 2.6ms for multi-view projection, 6.8ms for CNNs forward propagation and 4.7ms for multi-view fusion. Thus, our method runs in real-time at over 70fps. Note that the process of multi-view projection and multi-view fusion is performed on CPU without parallelism, and the process of CNNs forward propagation is performed on GPU with parallelism for three views.   <ref type="table">Table 1</ref>: Average estimation errors (in mm) of 6 subjects for 6 methods tested on the dataset in <ref type="bibr" target="#b16">[17]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.5.">Cross-dataset Experiment</head><p>In order to verify the generalization ability of our CNN based multi-view regression method, we perform a crossdataset experiment. We attempt to adapt the existing CNN based regressors learned from the source dataset in <ref type="bibr" target="#b20">[21]</ref> to a new target dataset in <ref type="bibr" target="#b16">[17]</ref>.</p><p>In this experiment, we train the CNNs on all the 9 subjects of the dataset in <ref type="bibr" target="#b20">[21]</ref>. The CNNs are directly used for hand pose estimation on all the 6 subjects of the dataset in <ref type="bibr" target="#b16">[17]</ref> by using our proposed method. According to the evaluation metric in <ref type="bibr" target="#b16">[17]</ref>, we calculate the average errors for the wrist and the five fingertips. We compare our method with model based tracking methods reported in <ref type="bibr" target="#b16">[17]</ref>, which are FORTH <ref type="bibr" target="#b14">[15]</ref>, PSO <ref type="bibr" target="#b16">[17]</ref>, ICP <ref type="bibr" target="#b15">[16]</ref>, ICP-PSO <ref type="bibr" target="#b16">[17]</ref> and ICP-PSO * (ICP-PSO with finger based initialization) <ref type="bibr" target="#b16">[17]</ref>.</p><p>According to <ref type="bibr" target="#b16">[17]</ref>, these model-based tracking methods need an accurate hand model that is calibrated to the size of each subject, and they rely on temporal information. Particularly, to start tracking, these methods use ground truth information to initialize the first frame. However, our method does not use such information and thus is more flexible in real scenarios and robust to tracking failure. Under such situation, our method still outperforms FORTH, PSO and ICP methods, as shown in <ref type="table">Table 1</ref>, which indicates that our method has good ability of generalization. It is not surprising that our method is worse than ICP-PSO and ICP-PSO * , because we do not use calibrated hand model or any ground truth information or temporal information and we perform this experiment on cross-dataset which is more challenging.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>In this paper, we presented a novel 3D hand pose regression method using multi-view CNNs. We generated a set of heat-maps of multiple views from the multi-view CNNs and fused them together to estimate 3D hand joint locations. Our multi-view approach can better leverage the 3D information in one depth image to generate accurate estimations of 3D locations. Experimental results showed that our method achieved superior performance for 3D hand pose estimation in real-time.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 2 :</head><label>2</label><figDesc>(a) Illustration of joint estimation in single view.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 4 :</head><label>4</label><figDesc>Convolutional Network architecture for each view. The network contains convolutional layers and fullyconnected layers. In convolutional layers, there are three banks for multi-resolution inputs. The network generates 21 heat-maps with the size of 18x18 pixels. All of the three views have the same network architecture and the same architectural parameters.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 6 :</head><label>6</label><figDesc>An experimental example for self-comparison. Top-left: 3D point cloud with ground truth and estimated 3D locations. Top-right: Projection images in three views. Bottom-right: Heat-maps of three views. The ground truth and estimated 3D locations are back-projected onto three views and their heat-maps for comparison. Lines indicate the offsets between ground truth and estimations.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 5 :Figure 8 :</head><label>58</label><figDesc>Self-comparison of different methods on the dataset in<ref type="bibr" target="#b20">[21]</ref>. Left: the mean error distance for each joint across all the test samples (R:root, T:tip). Middle: the proportion of good test samples in the entire test samples over different error tolerances. Right: The impact of different number of principal components used in joint constraints on accuracy performance. Comparison with the approach proposed in</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 9 :</head><label>9</label><figDesc>Qualitative results for dataset in<ref type="bibr" target="#b20">[21]</ref> of three approaches: single view regression (in the first line), our multi-view regression with coarse fusion (in the second line) and our multi-view regression with fine fusion (in the third line). We show the estimated hand joint locations on the depth image. Different hand joints and bones are visualized using different colors. This image is best viewed in color.</figDesc></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgment: This research, which is carried out at BeingThere Centre, is supported by Singapore National Research Foundation under its International Research Centre @ Singapore Funding Initiative and administered by the IDM Programme Office.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Two-view feature generation model for semi-supervised learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">K</forename><surname>Ando</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Torch7: A matlab-like environment for machine learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Collobert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Farabet</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BigLearn, NIPS Workshop</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Cascaded pose regression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Welinder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">The isometric selforganizing map for 3d hand pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Guan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Feris</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Turk</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">FGR</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Learning human pose estimation features with convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tompson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andriluka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Taylor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Bregler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title level="m" type="main">What is the best multi-stage architecture for object recognition? In ICCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Jarrett</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ranzato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Hand pose estimation and hand shape classification using multi-layered randomized decision forests</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Keskin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Kra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Kara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Akarun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Hierarchically constrained 3d hand pose estimation using regression forests from single frame depth data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Kirac</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">E</forename><surname>Kara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Akarun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Pattern Recognition Letters</title>
+		<imprint>
+			<biblScope unit="volume">50</biblScope>
+			<biblScope unit="page" from="91" to="100" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Action recognition based on a bag of 3d points</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR Workshops</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Barehanded music: real-time hand interaction for virtual piano</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yuan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>He</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACM SIGGRAPH I3D</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Parsing the hand in depth images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yuan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Thalmann</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Multimedia</title>
+		<imprint>
+			<biblScope unit="volume">16</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="1241" to="1253" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Resolving ambiguous hand pose predictions by exploiting part correlations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yuan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Thalmann</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Transactions on Circuits and Systems for Video Technology</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">25</biblScope>
+			<biblScope unit="page" from="1125" to="1139" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Ar in hand: Egocentric palm pose tracking and gesture recognition for augmented reality applications</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yuan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Thalmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">M</forename><surname>Thalmann</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACM-MM</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Training a feedback loop for hand pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Oberweger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Wohlhart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Efficient model-based 3d tracking of hand articulations using Kinect</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Oikonomidis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Kyriazis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Argyros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">A generalization of the icp algorithm for articulated bodies</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Pellegrini</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Schindler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Nardi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Realtime and robust hand tracking from depth</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Qian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Robust part-based hand gesture recognition using kinect sensor</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yuan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Meng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Multimedia</title>
+		<imprint>
+			<biblScope unit="volume">15</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="1110" to="1120" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Real-time hand tracking using synergistic inverse kinematics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Schrder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Maycock</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Ritter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Botsch</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Real-time human pose recognition in parts from a single depth image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cook</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Sharp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Finocchio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Moore</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kipman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Blake</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Cascaded hand pose regression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Depth-based hand pose estimation: methods, data, and challenges</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">S</forename><surname>Supancic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Iii</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Rogez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Robust articulated-icp for realtime hand tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Tagliasacchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Schroeder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Tkach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bouaziz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Botsch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pauly</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computer Graphics Forum</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Latent regression forest: Structured estimation of 3d articulated hand posture</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">J</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Tejani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">K</forename><surname>Kim</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Real-time articulated hand pose estimation using semi-supervised transductive regression forests</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">H</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">K</forename><surname>Kim</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">The vitruvian manifold: Inferring dense correspondences for one-shot human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Taylor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Sharp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Efficient object localization using convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tompson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Goroshin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Bregler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Joint training of a convolutional network and a graphical model for human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tompson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Bregler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Real-time continuous pose recovery of human hands using convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tompson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Stein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Perlin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page">169</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Deeppose: Human pose estimation via deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Toshev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+		<title level="m" type="main">Essential mathematics for games and interactive applications</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Van Verth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">M</forename><surname>Bishop</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CRC Press</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Efficient hand pose estimation from a single depth image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Cheng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Multimodal partial estimates fusion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yuan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

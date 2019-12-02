@@ -1,0 +1,847 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Scene recognition with CNNs: objects, scales and dataset bias</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Luis</forename><surname>Herranz</surname></persName>
+							<email>luis.herranz@vipl.ict.ac.cn</email>
+							<affiliation key="aff0">
+								<orgName type="department">Key Laboratory of Intelligent Information Processing of Chinese Academy of Sciences (CAS) Institute of Computer Technology</orgName>
+								<orgName type="institution">CAS</orgName>
+								<address>
+									<postCode>100190</postCode>
+									<settlement>Beijing</settlement>
+									<country key="CN">China</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shuqiang</forename><surname>Jiang</surname></persName>
+							<email>shuqiang.jiang@vipl.ict.ac.cn</email>
+							<affiliation key="aff0">
+								<orgName type="department">Key Laboratory of Intelligent Information Processing of Chinese Academy of Sciences (CAS) Institute of Computer Technology</orgName>
+								<orgName type="institution">CAS</orgName>
+								<address>
+									<postCode>100190</postCode>
+									<settlement>Beijing</settlement>
+									<country key="CN">China</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiangyang</forename><surname>Li</surname></persName>
+							<email>xiangyang.li@vipl.ict.ac.cn</email>
+							<affiliation key="aff0">
+								<orgName type="department">Key Laboratory of Intelligent Information Processing of Chinese Academy of Sciences (CAS) Institute of Computer Technology</orgName>
+								<orgName type="institution">CAS</orgName>
+								<address>
+									<postCode>100190</postCode>
+									<settlement>Beijing</settlement>
+									<country key="CN">China</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Scene recognition with CNNs: objects, scales and dataset bias</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:45+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Since scenes are composed in part of objects, accurate recognition of scenes requires knowledge about both scenes and objects. In this paper we address two related problems: 1) scale induced dataset bias in multi-scale convolutional neural network (CNN) architectures, and 2) how to combine effectively scene-centric and object-centric knowledge (i.e. Places and ImageNet) in CNNs. An earlier attempt, , showed that incorporating ImageNet did not help much. Here we propose an alternative method taking the scale into account, resulting in significant recognition gains. By analyzing the response of ImageNet-CNNs and Places-CNNs at different scales we find that both operate in different scale ranges, so using the same network for all the scales induces dataset bias resulting in limited performance. Thus, adapting the feature extractor to each particular scale (i.e. scale-specific CNNs) is crucial to improve recognition, since the objects in the scenes have their specific range of scales. Experimental results show that the recognition accuracy highly depends on the scale, and that simple yet carefully chosen multi-scale combinations of ImageNet-CNNs and Places-CNNs, can push the stateof-the-art recognition accuracy in SUN397 up to 66.26% (and even 70.17% with deeper architectures, comparable to human performance).</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>State-of-the-art in visual recognition is based on the successful combination of deep representations and massive datasets. Deep convolutional neural networks (CNNs) trained on ImageNet (i.e. ImageNet-CNNs) achieve impressive performance in object recognition, while CNNs trained on Places (Places-CNNs) do in scene recognition <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b1">2]</ref>. However, CNNs also have limitations, such as the lack of invariance to significant scaling. This problem is particularly important in scene recognition, due to a wider range of scales and a larger amount of objects per image.</p><p>As an alternative to Places-CNN holistic representation, some recent works <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b0">1,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b15">16]</ref> have shown that CNN features extracted locally in patches can be also aggregated into effective scene representations. Often, these approaches combine multiple scales, that are pooled using VLAD <ref type="bibr" target="#b3">[4]</ref> or Fisher vector (FV) <ref type="bibr" target="#b20">[21]</ref> encoding. Dixit et al <ref type="bibr" target="#b0">[1]</ref> suggested applying the pooling directly on the semantic representation, arguing that semantic representations are more invariant. Recently, Wu et al <ref type="bibr" target="#b15">[16]</ref> proposed an architecture in which dense sampling of patches is replaced by region proposals and discrimintive patch mining. In general, these works use ImageNet-CNN to extract the local activations instead of Places-CNN, since local patches are closer to objects than to scenes. However, a largely overlooked aspect in this multi-scale scenario is the role of the scale and its relation with the feature extractor (i.e. CNN). One limitation of current multi-scale approaches is the naive use of CNNs by simply considering CNNs as general purpose feature extractors <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b1">2]</ref>. Using the same fixed CNN model for all the scales inevitably leads to dataset bias <ref type="bibr" target="#b12">[13]</ref>, since the properties of the data vary at different scales, while the feature extractor remains fixed.</p><p>Since objects are main components of scenes, knowledge about objects may be helpful in scene recognition. Although, Places-CNN itself develops suitable object models at intermediate layers <ref type="bibr" target="#b21">[22]</ref>, the information in ImageNet might be valuable. However, in a previous attempt, a network trained with the combined dataset ImageNet+Places (Hybrid-CNN <ref type="bibr" target="#b22">[23]</ref>) show that including ImageNet, far from helpful was harmful. We will see how this problem is also connected to scale-related dataset bias.</p><p>In this paper we will study these two problems (i.e. dataset bias in patch-based CNNs under different scaling conditions, and how to effectively combine Places and Im-ageNet) and will see that they are related. Torralba and Efros <ref type="bibr" target="#b12">[13]</ref> studied the dataset bias as a cross-dataset generalization problem, in which the same classes may have slightly different feature distributions in different datasets. In our particular case, this bias in the feature distribution is induced by scaling the image. If the scaling operation is considerable, the characteristics of the data may change completely, switching from scene data to object data. Understanding and quantifying this bias can help us to design better multi-scale architectures, and even better ways to combine object and scene knowledge. In particular, we propose multi-scale architectures with scale-specific networks as a principled way to address scale-related dataset bias and combine scene and object knowledge (i.e. Places and Ima-geNet). In the next sections:</p><p>• We show that using a single CNN as a generic feature extractor from patches is quite limited, due to the dataset bias induced by scale changes. We show how networks trained on different datasets are suitable for different scale ranges. In particular, ImageNet-CNN and Places-CNN have very different optimal ranges, due to their object-centric and scene-centric natures.</p><p>• We evaluate two strategies to alleviate the dataset bias by using scale-specific networks: hybrid Places/ImageNet architectures and fine tuning. By combining after reducing the dataset bias, our method is also a more effective way to combine Places and ImageNet. Extensive experiments with different scale combinations and hybrid variations (optionally fine tuned) lead to some variations achieving state-of-theart performance in scene recognition.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Objects and scenes</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Objects in object datasets and scene datasets</head><p>The knowledge learned by CNNs lies in the data seen during training, and will be of limited use if tested in a different type of data. Thus, CNNs trained with ImageNet are limited when used for scene recognition due to this training/test bias, while Places-CNNs perform better in this task. While this is essentially true, objects and scenes are closely related, so knowledge about objects can be still helpful to recognize scenes, if used properly.</p><p>Understanding the characteristics of the datasets involved is essential to better explain the causes of dataset bias. In our case, we want to analyze the properties of objects found in scene and object datasets. We focus on two aspects related with the objects: scales and density.</p><p>To evaluate the dataset bias we use SUN397 <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b16">17]</ref> as target dataset. Since Places contains scene data, with 205 scene categories overlapping with SUN397, and significantly more data, we can expect a low dataset bias. Thus we focus on ImageNet (in particular ILSVRC2012), which contains mostly object data. Fortunately, both ImageNet and SUN have a fraction of images with region annotations and labels, so we can collect some relevant statistics and compare their distributions (we used the LabelMe toolbox <ref type="bibr" target="#b13">[14]</ref>). Since we will use this information to interpret the variations in recognition accuracy in next experiements, we focus on the 397 categories of the SUN397 benchmark (rather than the 908 categories of the full SUN database).</p><p>Scale. <ref type="figure" target="#fig_0">Fig. 1a</ref> shows the distribution of object sizes, and <ref type="figure" target="#fig_0">Fig. 1c</ref> some examples of objects of different normalized sizes. We normalized the size of the object relative to the equivalent training crop. While objects in ImageNet are mostly large, often covering the whole image, objects in SUN397 are much smaller, corresponding to the real distribution in scenes. Thus <ref type="figure" target="#fig_0">Fig. 1a</ref> shows an obvious mismatch between both datasets.</p><p>Density. <ref type="figure" target="#fig_0">Fig. 1b</ref> shows the distribution of object annotations per scene image. We can observe that images in ImageNet usually contain just one big object, while images in SUN397 typically contain many small objects.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Dataset bias in object recognition</head><p>In order to study the behaviour of ImageNet-CNNs and Places-CNNs in object recognition, we need object data extracted from scenes datasets. We selected 100 images per category from the 75 most frequent object categories in SUN397, so we can have enough images to train SVM classifiers. We took some precautions to avoid selecting too small objects.</p><p>In contrast to most object and scene datasets, in this case we have the segmentation of the object within the scene, so we can use it to create variations over the same objects. Thus we defined two scales:</p><p>• Original scale: the scale of the object in original scene.</p><p>• Canonical scale: the object is centered and rescaled to fill the crop (keeping the aspect ratio). So in this case its normalized size is 1.</p><p>Then we created four variations (see <ref type="figure" target="#fig_2">Fig. 2</ref>): original masked, original with background, canonical masked and canonical with background. In particular, to study the response to different scaling, the canonical variant is scaled in the range 10%-100%. Note how scaling the variant with background shifts progressively the content of the crop from object to scene.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.">Scale sensitivity and object density</head><p>We trained a SVM classifier with 50 images per class, and tested on the remaining 50 images. The input feature was the output of the fc7 activation. The results are shown in <ref type="figure" target="#fig_1">Fig. 3</ref>. We use two variants: objects masked and objects with background (see <ref type="figure" target="#fig_2">Fig. 2</ref>). Regarding objects masked, where the background is removed, we can see that in general the performance is optimal when the object is near full size, above 70-80%. This is actually the most interesting region, with ImageNet-CNN performing slightly better than Places-CNN. This is interesting, since Places-CNN was trained with scenes containing more similar objects to the ones in the test set, while ImageNet-CNN was trained with the less related categories found in ILSVRC2012 (e.g. dogs, cats). However, as we saw in <ref type="figure" target="#fig_0">Fig. 1a</ref>, objects in ILSVRC2012 cover a large portion of the image in contrast to smaller objects in SUN397, suggesting that a more similar scale in the training data may be more important than more similar object categories. As the object becomes smaller, the performance of both models degrades similarly, again showing a limited robustness to scale changes.</p><p>Focusing now on the objects with background variant, the performance is worse than when the object is isolated from the background. This behaviour suggests that the background may introduce some noise in the feature and lead to poorer performance. In the range close to full object size, both ImageNet-CNN and Places-CNN have similar performance. However, as the object becomes smaller, and the content is more similar to scenes, Places-CNN has much better performance than ImageNet-CNN, arguably due to the fact it has learn contextual relations between objects and global scene properties. In any case, scales with low accuracy are probably too noisy and not suitable for our purpose.</p><p>3. Multi-scale architecture with scale-specific networks <ref type="bibr" target="#b2">3</ref></p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>.1. Overview</head><p>For scene recognition we introduce our multi-scale architecture, which combines several networks that operate in parallel over patches extracted from increasingly larger versions of the input image. We use a standard multiscale architecture combining several AlexNet CNNs (Caffe-Net <ref type="bibr" target="#b4">[5]</ref> in practice) where 227x227 patches are extracted from each full image. For faster processing, instead of extracting patches independently we use a fully convolutional network. In contrast to recent works[4, 3, 21, 1], we adopt simple max pooling to aggregate patch features into image features.</p><p>The previous analysis and experimental results on object recognition evidence the limitations of using either ImageNet-CNNs or Places-CNNs to deal with such a broad range of scales, and will be confirmed in the next sections by the experiments on scene data. For these reasons, we propose a hybrid architecture introducing two simple, yet crucial modifications in the architecture (discussed previously in Section 2.2).</p><p>• Instead of using naively the same CNN model for all the scales, we select the most suitable one for each (ImageNet-CNN, Places-CNN or fine tuned).</p><p>• Optionally we fine tune each CNN model to further adapt it to the range of each scale. This requires resizing the image to target size and extracting patches for training.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Differences with previous works</head><p>Our architecture is similar to others proposed in previous multi-scale approaches <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b0">1]</ref>, with the subtle difference of using scale-specific networks in a principled way to alleviate the dataset bias induced by scaling. The main emphasis in these works is on the way multi-scale features are combined, implemented as either VLAD or FV encoding, while leaving the CNN model fixed. While adding a BOW encoding layer can help to alleviate somewhat the dataset bias, the main problem is still the rigid CNN model. In contrast, our method addresses better the dataset bias related  with scale and achieves significantly better performance, by simply adapting the CNN model to the target scale, even without relying to sophisticated pooling methods.</p><p>We can also regard our approach as a way to combine the training data available in Places and ImageNet. This was explored previously by Zhou et al <ref type="bibr" target="#b22">[23]</ref>, who trained a Hybrid-CNN using the AlexNet architecture and the combined Places+ImageNet dataset. However, Hybrid-CNN performs just slightly better than Places-CNN on MIT Indoor 67 and worse on SUN397. We believe that the main reason was that this way of combining data from ImageNet and Places ignores the fact that objects found in both datasets in two different scale ranges (as shown in <ref type="figure" target="#fig_0">Fig. 1</ref>). In contrast, our architecture combines the knowledge in a scale-adaptive way via either ImageNet-CNN or Places-CNN. Wu et al <ref type="bibr" target="#b15">[16]</ref> use Hybrid-CNN on patches at different scales. Again, the main limitation is that the CNN model is fixed, not adapting to the scale-dependent distributions of patches.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments on scene recognition</head><p>In this section we perform experiments directly over scene data, to evaluate the relation beween scale, training dataset and dataset bias by analyzing the scene recognition performance. Then we combine and evaluate multi-scale architectures.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Datasets</head><p>We evaluate the proposed architectures with three widely used scene benchmarks. 15 scenes <ref type="bibr" target="#b5">[6]</ref> is a small yet popular dataset with 15 natural and indoor categories. Models are trained with 100 images per category. MIT Indoor 67 <ref type="bibr" target="#b8">[9]</ref> contains 67 categories of indoor images, with 80 images per category available for training. Indoor scenes tend to be rich in objects, which in general makes the task more challenging, but also more amenable to architectures using ImageNet-CNNs on patches. SUN397 <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b18">19]</ref> is a larger scene benchmark (at least considered as such before Places) containing 397 categories, including indoor, man-made and natural categories. This dataset is very challenging, not only because of the large number of categories, but also because the more limited amount of training data (50 images per category) and a much larger variability in objects and layout properties. It is widely accepted as the reference benchmark for scene recognition. We consider seven scales in our experiments, obtained by scaling images between 227x227 and 1827x1827 pixels.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Single scale 4.2.1 Accuracy</head><p>Average accuracy is a reasonable metric to evaluate a deep representation in the context of a classification task. For the different scales, we extracted fc7 activations locally in pacthes as features, and then trained SVMs. In addition to the seven scales evaluated, we included 256x256 pixels as a baseline, since off-the-shelf ImageNet-CNN and Places-CNN are trained on this scale. The results for the three datasets are shown in <ref type="figure" target="#fig_4">Fig. 5</ref>, with similar patterns. Places-CNN achieves the best performance when is applied globally at scene level (227x227 or 256x256), while rapidly degrades for more local scales. ImageNet-CNN exhibits a very different behaviour, with a more modest performance at global scales, and achieving optimal performance on patches at intermediate scales, and outperforming Places-CNN at most local scales. These curves somewhat represent the operational curve of CNNs and the scale. In particular, the performance of ImageNet-CNN can be increases notably just by using an appropriate scale.</p><p>An interesting observation is that there is one point (around 643 or scale 0.35) that splits the range into two parts, one dominated by ImageNet-CNN and another one dominated by Places-CNN, which we can loosely identify as object range and scene range. We will use this observation later in Section 4.4 to design spliced architectures.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.2">Effect of fine tuning</head><p>A popular way to deal with dataset bias in CNNs is fine tuning, which basically continues training on a pretrained model with the target dataset data. Similarly in our case, we expect that fine tuning can modify somehow the weights and thus adapt to the objects or at least the scales in the target dataset. However, in practice that is often not possible because of the limited data, overfitting and difficulty of setting the training process itself. In our case, fine tuning on scales where patches are very local is very difficult due since the patch often contains objects or parts while labels indicates scenes categories. In addition, the number of patches is huge, so only a tiny fraction of them can be used in practice, rendering fine tuning not very effective.</p><p>We evaluated fine tuning on MIT Indoor 67. For scales with few patches, and thus limited training data, we only fine tune the fully connected layers. For larger images we can collect more patches, up to 500K patches (randomly selected). <ref type="figure" target="#fig_4">Fig. 5b</ref> shows the results. Interestingly, there is a moderate gain in those range of scales where the original CNNs perform poorly, i.e. global scales for ImageNet-CNN and local scales for Places-CNN, while marginal or no gain in ranges where they have already good performance. Thus, fine tuning has certain "equalizing" effect over the accuracy vs scale curve. but limited overall improvement. In particular the gain is such that now Places-CNN (fine tuned) has the best performance in the whole range of scales.</p><p>Fine tuning has impact mostly on the top layers, obtaining a similar effect to adding a BOW pooling layer. However, the effectiveness is limited, since intermediate layers remain biased to the (pre-)training data.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.3">Discriminability and redundancy</head><p>Accuracy provides a good indirect measure of the utility of the feature for a given target task (e.g. scene recognition) via a classifier (e.g. SVM). Here we also consider two information theoretic metrics measuring directly the discriminability and redundancy of the deep feature <ref type="bibr" target="#b7">[8]</ref>. We define the discriminability of a feature x = (x 1,··· , x 4096 ) with respect to a set of classes C = {1, · · · , M }</p><formula xml:id="formula_0">D (x, C) = 1 |C| |S| c∈C xi∈x I (x i ; c)</formula><p>where I (x i ; c) is the filter x i and the class c. In order to evaluate how redundant is the feature (compared with other filters), we use the redundancy of a feature x, defined as</p><formula xml:id="formula_1">R (x) = 1 |S| 2 xj ∈x xi∈x I (x i ; x j )</formula><p>In the next experiment we compute D (x, C) and R (x) of the fc7 activation for ImageNet-CNN and Places-CNN in MIT Indoor 67. While we can find similarities with the accuracy curve, a direct comparison is not easy, since more discriminability not always means higher accuracy. If we observe the discriminability of ImageNet-CNN (see <ref type="figure" target="#fig_5">Fig. 6a</ref>), the curve follows a similar pattern to the accuracy, with a peak around the scales where the accuracy was best, and bad discriminability at global scales. Places-CNN extracts the most discriminative features at more global scales. Comparing ImageNet-CNN and Places-CNN, the former obtains more discriminative features yet also more redundant. Too local scales (e.g. 1827x1827) increase significantly the redundancy of the feature and the noise</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Two scales</head><p>In the next experiment we evaluated pairwise combinations of CNNs used at different scales. This dual architecture consists simply of two CNNs processing images at different scales. We then concatenate the two resulting fc7 activations into a 8192-dim feature and then train the SVM. The results in <ref type="figure" target="#fig_6">Fig. 7</ref> show that the dual architectures with best performance are hybrid combinations of Places-CNN extracting features at global scales (typically 227x227) with ImageNet-CNN extracting features from patches at more local scales. The result is a considerable boost in the performance, achieving a remarkable accuracy of 64.10% on SUN397 using only two AlexNet CNNs. Note that this way of combining ImageNet and Places data is much more effective than Hybrid-CNN <ref type="bibr" target="#b22">[23]</ref> (see <ref type="table" target="#tab_0">Table 1</ref>). Our dual architecture does not mix object and scene knowledge (obtained from ImageNet and Places, respectively) and adapts the learned models to scales with similar properties. Dixit et al <ref type="bibr" target="#b0">[1]</ref> combine Places-CNN with a four-scales architecture built on top of ImageNet-CNN. Similarly to our framework, Places-CNN operates at scene scale while ImageNet-CNN operates at object scales. Note, however, that we obtain comparable performance on MIT Indoor 67 and significantly better on SUN397, using just two networks instead of five.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Multiple scales</head><p>Finally, we consider the combination of all the scales to see whether more complex architectures could be helpful in terms of accuracy. In this experiment we evaluate the concatenation of all the fc7 features of each of the seven scalespecific networks. In this case we use PCA to reduce the dimension of each features vector so the combined dimension is approximately 4096. We achieve 74.33% (all scales using ImageNet-CNN) and 78.21% (all scales using Places-CNN) accuracy for MIT Indoor 67, and 58.71% and 63.81% for SUN397, respectively. Note that both are better than the corresponding dual architecture, yet below the corresponding dual hybrids (78.28% and 64.10%). This suggests than including more scales while keeping the same CNN model is marginally helpful and increases significantly the extraction cost and the noise in the representation. So the key is to find an appropriate combination of Places-CNNs and ImageNet-CNNs. While in dual architectures evaluating all the combinations is very costly, with seven networks the combinations is impractical. Since the optimal ranges of both are complementary, we can design the full hybrid architecture as global scales using Places-CNN and local scales using ImageNet-CNN, just as shown in <ref type="figure" target="#fig_3">Fig. 4</ref>. We can consider only one free parameter which is the splicing point. The results for SUN397 are shown in <ref type="figure" target="#fig_7">Fig. 8</ref>. As expected, we can reach slightly better performance (80.97% and 65.38%) than in dual architectures. The performance of hybrid spliced is also significantly better than a 7 network architecture with a fixed CNN model.</p><p>Finally we also evaluate a double full architecture, in which both full ImageNet-CNN and full Places-CNN are combined in a complex 14 CNNs architecture by concatenating the previous features. This combination does not help in MIT Indoor 67, and slightly in SUN397, reaching an accuracy of 66.26%.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.5.">Deeper networks and other works</head><p>The experiments presented so far are based on the AlexNet architecture.</p><p>Deeper architectures such as GoogLeNet <ref type="bibr" target="#b11">[12]</ref> and VGG-net <ref type="bibr" target="#b10">[11]</ref> have demonstrated superior performance by exploiting deeper models. We repeated some of the experiments using the 16 layer VGG architecture, obtaining state-of-the-art results in the three datasets. The experiments with VGG in dual architectures are consistent with those with AlexNet, but with a more moderate gain. However, experiments combining more networks were surprisingly disappointing, performing even worse than single network baselines. VGG applied on small patches tends to be very noisy with poor performance. We tried an intermediate hybrid architecture, including a total of three scales, achieving slightly better performance than with dual architectures.</p><p>Overall, for the small 15 scenes dataset, it seems that the performance is somewhat saturated, with a best performance of 95.18% (94.51% with AlexNet). The best performance in MIT Indoor 67 is 86.04% (compared with 80.97% with AlexNet) and in SUN397 is 70.17% (compared with 66.26% with AlexNet). This performance is better than human recognition by "good workers" (68.5%), and close to human expert performance (70.6%), as reported in <ref type="bibr" target="#b17">[18]</ref>.  <ref type="bibr" target="#b16">[17]</ref> 68.5% Human (expert) <ref type="bibr" target="#b16">[17]</ref> 70.6% 1 256x256 central crop (conventional settings for single crop). 2 Excluding 256x256. <ref type="bibr" target="#b2">3</ref> Six scales (1827x1827 was not included). <ref type="bibr" target="#b3">4</ref> Only evaluated the combination Places-CNN 227x227, Places-CNN 451x451, ImageNet-CNN 899x899.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusions</head><p>In contrast to previous works, in this paper we analyzed multi-scale CNN architectures focusing on the local CNN model, rather than on the pooling method. In particular, we showed that scaling images induces a bias between training and test data, which has a significant impact on the recognition performance. We also showed how ImageNet-CNN and Places-CNN in this context are implicitly tuned for different scale ranges (object scales and scene scales). Based on these findings, we suggest that addressing this bias is critical to improve scene recognition, and propose including scale-specific networks in the multi-scale architecture. The proposed method is also a more principled way to combine scene-centric knowledge (Places) and object-centric knowledge (ImageNet) than previous attempts (e.g. Hybrid-CNN).</p><p>In fact, recent scene recognition approaches fall into two apparently opposite directions: global holistic recognition (Places-CNN) versus local object recognition and pooling (multi-scale CNNs). In this paper we describe them as two particular cases in a more general view of how multi-scale features can be combined for scene recognition. They are not incompatible, and actually when combined properly to reduce the dataset bias the results can be excellent, even reaching human recognition performance simply with just two or three networks carefully chosen. Our hybrid parallel architecture also suggests some similarities with perceptual and cognitive models, where object recognition and global scene features follow two distinct yet complementary neural pathways which are later integrated to accurately recognize the visual scene <ref type="bibr" target="#b6">[7]</ref>.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Characteristics of objects in ILSVRC2012 (object data) and SUN397 (scene data): (a) distribution of objects sizes (normalized), (b) number of objects per scene, and (c) examples of objects by increasing normalized size.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 3 .</head><label>3</label><figDesc>(imnet) objects masked (places) objects w/ bg (imnet) objects w/ bg (places) Object recognition accuracy on SUN397 (75 categories).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 2 .</head><label>2</label><figDesc>The two variants used in the object recognition experiments: object masked (top row) and object with background (bottom row) with two examples of (a) armchair and (b) streetlight. Left crops show the object in the original scale in the scene. Right crops show the object scaled progressively from the canonical size (100%) down to 10%. All the images are centered in the object of interest.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 .</head><label>4</label><figDesc>Multi-scale architecture combining scale-specific networks (spliced architecture). ImageNet-CNNs and Places-CNNs are combined according to the scale of the input patches. This can effectively alleviate the dataset bias by adapting test data to the underlying training data. Intra-scale features are obtained using max pooling within each scale, and then concatenated into a single multi-scale feature.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 5 .</head><label>5</label><figDesc>Scene recognition accuracy for different scales: (a) 15 scenes, (b) MIT Indoor 67, and (c) SUN397.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 6 .</head><label>6</label><figDesc>Discriminability (a) and redundancy (b) of fc7 feature in MIT Indoor 67.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 7 .</head><label>7</label><figDesc>Accuracy in dual architectures combining two networks (only ImageNet-CNNs, only ImageNet-CNNs and hybrid combinations): (a) 15 scenes, (b) SUN397 and, (c) MIT Indoor 67 (and fine tuned versions). Diagonals of only ImageNet-CNNs and only Places-CNNs variations show single scale accuracy.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 8 .</head><label>8</label><figDesc>Accuracy on SUN397 of full and hybrid spliced architectures (7 AlexNet networks). The combination same indicates that the 7 networks share the same CNN model (i.e. trained with the same dataset).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="true"><head>Table 1 .</head><label>1</label><figDesc>Accuracy for different multi-scale variations and architectures.</figDesc><table>Architecture 
+Pretraining dataset 
+#scales 
+15 scenes 
+MIT Indoor 67 (w/ FT) 
+SUN 397 
+Alex VGG 
+Alex 
+VGG 
+Alex VGG 3 
+
+Baseline 1 
+IN 
+1 
+87.60 90.69 
+61.49 
+72.31 47.93 55.19 
+PL 
+1 
+91.16 92.90 
+74.18 
+80.45 58.87 66.50 
+
+Best single 2 
+IN 
+1 
+88.54 91.86 66.64 (68.21) 76.42 52.42 59.71 
+PL 
+1 
+91.65 93.73 72.76 (73.35) 80.90 58.88 66.23 
+
+Dual 
+IN 
+2 
+91.16 93.84 71.87 (72.46) 79.04 56.62 61.07 
+PL 
+2 
+93.80 95.18 76.87 (79.40) 83.43 62.60 68.49 
+Dual hybrid 
+IN/PL 
+1+1 
+93.80 95.18 78.28 (78.81) 85.59 64.10 69.20 
+Three 4 
+IN/PL 
+1+2 
+93.37 95.14 
+78.28 
+86.04 63.03 70.17 
+
+Full 
+IN 
+7 
+91.66 92.86 74.33 (75.97) 70.22 58.71 55.18 
+PL 
+7 
+93.77 94.51 78.21 (79.70) 77.81 63.81 58.80 
+Full hybrid (spliced) 
+IN/PL 
+7 
+93.90 94.08 80.97 (80.75) 80.22 65.38 63.19 
+Double full hybrid 
+IN/PL 
+2x7 
+94.51 94.84 80.97 (79.85) 
+80.7 
+66.26 62.01 
+Hybrid-CNN[23] 
+IN+PL 
+1 
+53.86 
+-
+70.80 
+-
+53.86 
+-
+MOP-CNN[4] 
+IN 
+3 
+-
+-
+68.88 
+-
+51.98 
+-
+MPP[21] 
+IN 
+7 
+-
+-
+75.67 
+-
+-
+-
+MPP+DSFL[21] 
+IN 
+7+DSFL 
+-
+-
+80.78 
+-
+-
+-
+SFV[1] 
+IN 
+4 
+-
+-
+72.86 
+-
+54.4 
+-
+SFV+Places[1] 
+IN/PL 
+4+1 
+-
+-
+79.0 
+-
+61.72 
+-
+MetaObject-CNN[16] Hybrid (IN+PL)[23] 1 (variable) 
+-
+-
+78.90 
+-
+58.11 
+-
+DAG-CNN[20] 
+IN 
+1 
+-
+92.9 
+-
+77.5 
+-
+56.2 
+DSP[3, 15] 
+IN 
+1 
+-
+91.78 
+-
+78.28 
+-
+59.78 
+Human (good)</table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0" />
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Scene classification with semantic fisher vectors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Dixit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Gao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Rasiwasia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Vasconcelos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">DeCAF: A deep convolutional activation feature for generic visual recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hoffman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Tzeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Deep spatial pyramid: The devil is once again in the details</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Gao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Lin</surname></persName>
+		</author>
+		<idno>arXiv, 1504.05277</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Multi-scale orderless pooling of deep convolutional activation features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Gong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="392" to="407" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Caffe: Convolutional architecture for fast feature embedding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Karayev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Guadarrama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACM International Conference on Multimedia</title>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="675" to="678" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Beyond bags of features: Spatial pyramid matching for recognizing natural scene categories</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ponce</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Scene perception</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The New Visual Neurosciences</title>
+		<editor>J. S. Werner and L. M. Chalupa</editor>
+		<imprint>
+			<publisher>The MIT Press</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="725" to="732" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Feature selection based on mutual information criteria of max-dependency, maxrelevance, and min-redundancy</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Peng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Ding</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<date type="published" when="2005-08" />
+			<biblScope unit="volume">27</biblScope>
+			<biblScope unit="page" from="1226" to="1238" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Recognizing indoor scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Quattoni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="413" to="420" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">CNN features off-the-shelf: An astounding baseline for recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">S</forename><surname>Razavian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Azizpour</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sullivan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Carlsson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR) Workshops</title>
+		<imprint>
+			<date type="published" when="2001" />
+			<biblScope unit="page" from="512" to="519" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Going deeper with convolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2015-06" />
+			<biblScope unit="page" from="1" to="9" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Unbiased look at dataset bias</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2001" />
+			<biblScope unit="page" from="1521" to="1528" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Labelme: Online image annotation and applications</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">C</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yuen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE</title>
+		<meeting>the IEEE</meeting>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="volume">98</biblScope>
+			<biblScope unit="page" from="1467" to="1484" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Deep spatial pyramid ensemble for cultural event recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><forename type="middle">S</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">B</forename><surname>Gao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV) Workshops</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="280" to="286" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Harvesting discriminative meta objects with deep CNN features for scene classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Sun database: Exploring a large collection of scene categories</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Ehinger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1" to="20" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">SUN database: Largescale scene recognition from abbey to zoo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hayes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Ehringer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Olivia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">mCENTRIST: A multichannel feature generation mechanism for scene categorization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yuan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Image Processing</title>
+		<imprint>
+			<biblScope unit="volume">23</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="823" to="836" />
+			<date type="published" when="2014-02" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Multi-scale recognition with DAG-CNNs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="1215" to="1223" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Multi-scale pyramid pooling for deep convolutional representation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Yoo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-Y.</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>So Kweon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR) Workshops</title>
+		<imprint>
+			<date type="published" when="2001" />
+			<biblScope unit="volume">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Object detectors emerge in deep scene cnns</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lapedriza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Learning deep features for scene recognition using places database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lapedriza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page" from="487" to="495" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

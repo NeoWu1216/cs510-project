@@ -1,0 +1,1082 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Joint Training of Cascaded CNN for Face Detection</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hongwei</forename><surname>Qin</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Grad. School at Shenzhen</orgName>
+								<orgName type="institution">Tsinghua University</orgName>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="department">Dept. of Automation</orgName>
+								<orgName type="institution">Tsinghua University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Junjie</forename><surname>Yan</surname></persName>
+							<affiliation key="aff2">
+								<orgName type="department">Dept. of Computer Science and Technology</orgName>
+								<orgName type="institution">Tsinghua University</orgName>
+							</affiliation>
+							<affiliation key="aff3">
+								<orgName type="laboratory">SenseTime</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiu</forename><surname>Li</surname></persName>
+							<email>li.xiu@sz.</email>
+							<affiliation key="aff0">
+								<orgName type="department">Grad. School at Shenzhen</orgName>
+								<orgName type="institution">Tsinghua University</orgName>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="department">Dept. of Automation</orgName>
+								<orgName type="institution">Tsinghua University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaolin</forename><surname>Hu</surname></persName>
+							<email>xlhu@tsinghua.edu.cnyanjunjie@outlook.com</email>
+							<affiliation key="aff2">
+								<orgName type="department">Dept. of Computer Science and Technology</orgName>
+								<orgName type="institution">Tsinghua University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Joint Training of Cascaded CNN for Face Detection</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:42+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Cascade has been widely used in face detection, where classifier with low computation cost can be firstly used to shrink most of the background while keeping the recall. The cascade in detection is popularized by seminal Viola-Jones framework and then widely used in other pipelines, such as DPM and CNN. However, to our best knowledge, most of the previous detection methods use cascade in a greedy manner, where previous stages in cascade are fixed when training a new stage. So optimizations of different CNNs are isolated. In this paper, we propose joint training to achieve end-to-end optimization for CNN cascade. We show that the back propagation algorithm used in training CNN can be naturally used in training CNN cascade. We present how jointly training can be conducted on naive CNN cascade and more sophisticated region proposal network (RPN) and fast R-CNN. Experiments on face detection benchmarks verify the advantages of the joint training.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Face detection plays an important role in face based image analysis and is one of the fundamental problems in computer vision. The performances of various face based applications, from face identification and verification to face clustering, tagging and retrieval, rely on accurate and efficient face detection. Recent works in face detection focus on faces in uncontrolled setting, which is challenging due to the variations in subject level (e.g., a face can have many different poses), category level (e.g., adult and baby) and image level (e.g., illumination and cluttered background).</p><p>Given a novel image I, the face detector is expected to return a bounding box configuration B = (b i , c i ) {N } , where the b i and c i specify the localization and confidence of a face. The number of detected faces N always vary in different images. Considering that the b i can possibly appear in any scale and position, the face detection problem has a output space of size (w * h) <ref type="bibr" target="#b1">2</ref> </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>2</head><p>, where w and h denote width and height respectively. Considering that it can be (500 * 350) <ref type="bibr" target="#b1">2</ref> 2 ≈ 10 10 for a typical 500 × 350 image, it is actually impossible to evaluate them all at a acceptable cost. Actually, only a few of them correspond to faces and most of the configurations in the output space belongs to the background.</p><p>The previous face detection research can be seen as a history of more efficiently sampling the output space to a solvable scale and more effectively evaluating per configuration. One natural idea to achieve this is using cascade, where classifier with low computation cost can be firstly used to shrink background while keeping the faces. The pioneering work <ref type="bibr" target="#b26">[27]</ref> popularized this, which combined classifiers in different stages, to allow background regions quickly discarded while spending more computation on promising face-like regions. The cascade made efficient detection possible and was widely used in subsequent works. For example, two other detection pipelines DPM <ref type="bibr" target="#b5">[6]</ref> and CNN <ref type="bibr" target="#b15">[16]</ref> can both use cascade for acceleration.</p><p>Despite the efficiency in testing, the cascade based detectors are always trained greedily. In a typical training procedure, when training a new stage in the cascade, previous stages are fixed. The relationship of different stages lies in that each stage is trained with the hard training samples which pass through previous stages. It makes the greedily trained cascade not end-to-end optimal with respect to the final detection score. It leads to performance drop when compared with non-cascade methods. For example, the cascade version of DPM <ref type="bibr" target="#b5">[6]</ref> does not as accurate as the original version <ref type="bibr" target="#b6">[7]</ref>.</p><p>In this paper, we show that in CNN based cascade detection, other than enjoying the advantages in efficiency as traditional cascade, different stages in the cascade can be jointly trained to achieve better performance. We show that the back propagation algorithm used in training CNN can be naturally used in training CNN cascade. Joint training can be conducted on naive CNN cascade and more sophisticated cascade such as region proposal network (RPN) and fast R-CNN. We show that the jointly trained cascade CNN as well as the jointly trained RPN and fast R-CNN can achieve lead-ing performance on face detection.</p><p>The rest of the paper is organized as follows. Section 2 reviews the related work. Analysis of jointly training is presented in section 3. Then we present how to jointly train naive CNN cascade in section 4 and how to jointly train RPN and Fast RCNN in section 5. Section 6 shows the experimental results and analysis and section 7 concludes the paper.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>Numerous works have been proposed for face detection and some of them have been delivered to real applications. Similar to many other computer vision tasks, leading algorithms in face detection are based on convolutional neural network in the 1990s, then based on hand-craft feature and model, and recently based on convolutional neural network again. In this part, we briefly review the three kinds of methods and refer more detailed survey to <ref type="bibr" target="#b32">[33,</ref><ref type="bibr" target="#b36">37,</ref><ref type="bibr" target="#b34">35</ref>].</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Early CNN based methods</head><p>Face detection, as well as MNIST OCR recognition, are two tasks where CNN based approach achieve success in 1990s. In <ref type="bibr" target="#b25">[26]</ref>, CNN is used in a sliding window manner to traverse different locations and scales and classify faces from the background. In <ref type="bibr" target="#b21">[22]</ref>, CNN is used for frontal face detection and shows quite good performance. In <ref type="bibr" target="#b22">[23]</ref>, CNNs trained on faces from different poses are used for rotation invariant face detection. These methods are quite similar to modern CNN methods and get relatively good performance on easy datasets.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Hand-craft feature based methods</head><p>In <ref type="bibr" target="#b26">[27]</ref>, Viola and Jones proposed to use Haar feature, Adaboost based learning and cascade based inference for face detection. It shows advantage in speed when compared with methods (e.g., <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b18">19]</ref>) at the same period and quickly became very popular. Many subsequent works further improve performance through new local features <ref type="bibr" target="#b37">[38,</ref><ref type="bibr" target="#b30">31]</ref>, new boosting algorithms <ref type="bibr" target="#b35">[36,</ref><ref type="bibr" target="#b10">11]</ref> and new cascade structures <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b27">28]</ref>. The single model in Viola-Jones framework cannot handle faces from different poses, and in <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b10">11]</ref> the authors proposed efficient cascade structures to use multiple models for pose-invariant face detection. <ref type="bibr" target="#b1">[2]</ref> uses additional landmarks annotations for better detection performance.</p><p>Besides Viola-Jones framework, methods based on structural models progressively achieve better performance and becomes more and more efficient, on challenging benchmarks such as AFW <ref type="bibr" target="#b38">[39]</ref> and FDDB <ref type="bibr" target="#b12">[13]</ref>. The seminal work deformable part model (DPM) <ref type="bibr" target="#b6">[7]</ref> use the deformable parts on top of HOG feature to represent objects. <ref type="bibr" target="#b38">[39,</ref><ref type="bibr" target="#b29">30,</ref><ref type="bibr" target="#b17">18,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b7">8]</ref> use supervised parts, more pose partition, better training or more efficient inference to achieve better performance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.">Modern CNN based methods</head><p>In recent two years, CNN based methods show advantages in face detection. <ref type="bibr" target="#b31">[32,</ref><ref type="bibr" target="#b19">20]</ref> use boosting and DPM on top of CNN features. <ref type="bibr" target="#b4">[5]</ref> fine-tune CNN model trained on 1000-way ImageNet classification task for face background classification task. <ref type="bibr" target="#b33">[34]</ref> uses fully convolutional networks (FCN) to generate heat map of facial parts and then use the heat map to generate face proposals. <ref type="bibr" target="#b11">[12]</ref> uses a unified end-to-end FCN framework to directly predict bounding boxes and object class confidences. These methods, however, are relatively slow even on a high-end GPU. In <ref type="bibr" target="#b15">[16]</ref>, six CNNs (three stages) are cascaded to efficiently reject backgrounds.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Cascaded Networks</head><p>Algorithms using cascaded stages are widely used in detection tasks. The advantage of cascaded stages lies in that they can handle unbalanced distribution of negative and positive samples. In the early stages, week classifiers can reject most false negatives. In the later stages, stronger classifiers can save computation with less proposals.</p><p>With the development of deep CNNs, multi-stage CNNs are getting popular. State-of-the-art object detection algorithms adopt multi-stage mechanisms. The first stage is a network for region proposal generation. The following one or more stages are networks for detection. Cascaded CNNs <ref type="bibr" target="#b15">[16]</ref> and faster R-CNN <ref type="bibr" target="#b20">[21]</ref> are such mechanisms.</p><p>However, previous methods are not jointly trained. They use greedy algorithms to optimize. Different from boosting methods, deep CNNs can naturally be jointly optimized. Recent CNNs are usually deep neural networks using backpropagation for optimization. So layers of different networks can be jointly optimized to share computation and information. For object detection tasks, we can design a single network that includes both region proposal generation and detection (maybe multi-stage) and optimize it jointly with back-propagation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Cascaded CNNs</head><p>The cascaded CNN for face detection in <ref type="bibr" target="#b15">[16]</ref> contains three stages. In each stage, they use one detection network and one calibration network. There are totally six CNNs. In practice, this makes the training process quite complicated. We have to carefully prepare the training samples for all the stages and optimize the networks one by one.</p><p>One natural question is how about we jointly train all the stages in one network?</p><p>Firstly, detection network and calibration network can share a multi-loss network used for both detection and bounding-box regression. Multi-loss optimization has been proved effective in general objection detection <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b20">21]</ref>.</p><p>Secondly, if multi-resolution is used during training the later stages, as the authors did in <ref type="bibr" target="#b15">[16]</ref>, the network of the later stage contains the network of the previous one. So theoretically, the convolution layers can be shared by three stages. Meanwhile, shared convolutional layers results in smaller model size. In the joint training network, the model size is approximately the same as the final stage in separate cascaded CNNs.</p><p>Thirdly, in cascaded CNNs, the separate first stage used for generating proposals is only optimized by itself. In the joint network, it is jointly optimized by larger scale branches. In this way, each branch benefits from other branches. Together, the joint network is expected to achieve end-to-end optimization.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">RPN + fast R-CNN</head><p>In faster R-CNN, the authors use one CNN called Region Proposal Network (RPN) for generating proposals, the other CNN called fast R-CNN <ref type="bibr" target="#b8">[9]</ref> for detection.</p><p>In order to share convolutional layers between region proposal network and detection network, the typical training of RPN and fast R-CNN adopts four separate stages and uses alternating optimization. In the first step, RPN is initialized with an ImageNet pre-trained model and fine-tuned for region proposal. In the second step, fast R-CNN is initialized with the same pre-trained model and fine-tuned for detection. In the third step, RPN is initialized with fast R-CNN model from the second step and fine-tuned for region proposal. At this point, RPN and fast R-CNN share convolutional layers. Finally, fast R-CNN is fine-tuned from the second step fast R-CNN with proposals generated by the third step RPN.</p><p>The core idea is to let region proposal and later detection network share convolutional layers. However, in the final models, the convolutional layers are dominated by the second step fast R-CNN. The loss of RPN in the third step would not back-propagate to the convolutional layers.</p><p>RPN and the first stage FCN of cascaded CNNs are highly similar. They both use fully convolutional neural network to generate proposals. The input image can be of arbitrary size. The convolution computations are shared among proposals. They both use bounding-box (anchor) regression to refine the proposals. They both can handle various scales of proposals. The main difference lies in that FCN uses image pyramids to handle various scales, while RPN uses pre-set anchor scales to do that. Naturally FCN can better handle more scales than RPN, while RPN can save computation with only one input scale.</p><p>So the joint training of cascaded CNNs can apply to RPN and fast R-CNN.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Joint Training of Cascaded CNN</head><p>We design a joint training architecture to train the network once for all. We call this architecture FaceCraft. <ref type="figure" target="#fig_0">Fig. 1</ref> demonstrates this joint training architecture. During training, the network takes an image of size 48 × 48 as input, and outputs one joint loss of three branches. The three branches are called x12, x24, x48 respectively, corresponding to the input size of each network. We use ReLU for non-linear layers and drop-out before classification or regression layer.</p><p>It is optimized through back-propagation. Compared to separate networks, the joint network also use threshold control layers to decide which proposals from up branches contribute to the loss of the down branches.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Training architecture</head><p>Branch x12: fully convolutional proposal network The proposal generation network is a fully convolutional network that has two sibling output layers. Input data is averagely pooled to 12×12. The final convolutional layer before output layer is of size 1×16×1×1. For the two output layers, one outputs a probability distribution (per feature map point) p = (p 0 , p 1 ), over face v.s. non-face. The other outputs bounding-box regression offsets, t k = (t k x , t k y , t k w , t k h ), for each of the predicted face proposal.</p><p>Optimization We use a multi-task loss of classification and bounding-box regression to jointly optimize this branch. We use softmax loss for classification and smooth L1 loss defined in <ref type="bibr" target="#b8">[9]</ref> for bounding-box regression:</p><formula xml:id="formula_0">L(p, u, t u , v) = L cls (p, u) + λ[u ≥ 1]L loc (t u , v), (1)</formula><p>where L cls (p, u) = − log p u is log loss for true class u.</p><p>We set λ = 1 in our experiment, this is appropriate for all three separate CNN networks.</p><p>For the regression offsets, we set the 4 coordinates defined in <ref type="bibr" target="#b9">[10]</ref>: Branch x12-x24 hard negative sample mining x12-x24 first averagely pools the input data to size 24 × 24, then outputs a 128 dimensional fc layer called 24fc. 24fc is concatenated with 1 × 16 fc layer flattened from 1 × 16 × 1 × 1 of x12. We call the new fc layer 12-24fc.</p><p>We choose a classification score threshold for the score threshold layer. Only the passed proposals contribute to the loss of final layers. In our experiments, 0.1 is an appropriate threshold. This threshold is similar to that in separate cascaded networks.</p><p>x12-x24 also outputs classification loss and boundingbox regression loss.</p><p>Branch x12-x24-x48: harder negative mining x12-x24-x48 outputs a 256 dimensional fc layer called 48fc. 48fc is concatenated with 12-24fc.</p><p>As in x12-x24, we choose a classification score threshold for the score threshold layer. Only the passed proposals contribute to the loss of final layers. In our experiments, 0.003 is an appropriate threshold. This threshold is similar to that in separate cascaded networks.</p><p>x12-x24-x48 also outputs classification loss and bounding-box regression loss.</p><p>Joint loss Each branch has a face v.s. non-face classification loss and a bounding-box regression loss. Adding them with loss weights, we get the joint loss function:</p><formula xml:id="formula_1">L joint = λ 1 L x12 + λ 2 L x24 + λ 3 L x48 ,<label>(6)</label></formula><p>where L x12 , L x24 and L x48 denote different losses of three branches. The loss of each branch is calculated by Equation 1. λ 1 , λ 2 and λ 3 are loss weights of the three branches.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Implementation details</head><p>Training data To prepare training data, we first use sliding windows on each training image to get face candidates. The positive samples are chosen from the candidates that have intersection over union (IoU) overlap with any groundtruth bounding box of larger than 0.8. The negative samples are sampled from the face candidates that have a maximum IoU with ground-truth in the interval [0, 0.5). The samples are cropped and resized to network input size. To apply data augmentation, each sample is horizontally flipped. The ultimate ratio of positive samples of the whole training data is about 5%. The input patches are mean removed with mean image from ImageNet <ref type="bibr" target="#b2">[3]</ref>. No other pre-processing is used.</p><p>Training procedure Each training image is first built into image pyramids with interval of 5. The smallest pyramid is 1/2 5 of the original image. We prepare face proposals by sliding windows with stride 8 over training images. Positive samples are chosen from face proposals whose maximum IoU with ground-truth is larger than 0.8. Negative samples are chosen from the proposals that have a maximum IoU with ground-truth in the interval [0, 0.5). For the sample ratio, we keep a very low positive sample ratio during stage one. Because this can decrease false positives , which also accelerates the following negative mining stages. In our ex-periments, setting the ratio of positive samples as 5% is appropriate. The x12 branch threshold is set as 0.1, x12-x24 branch threshold is set as 0.003. They are set empirically. Within appropriate threshold range, the training procedure is quite robust. The principle is to make the threshold as high as possible while keeping the recall, so as to reject as many proposals as possible in the earlier stages. Alternatively, we can fix the proposal number, which is exactly what we did in the joint training of RPN and fast R-CNN. During forward, only face proposals that have x12 branch scores higher than 0.1 contribute to x12-x24 branch. Only face proposals that have x12-x24 branch scores higher score than 0.003 contribute to x12-x24-x48 branch.</p><p>We decrease the positive sample thresholds when training the three stages. So in the later stages, we can train the networks with harder samples. This in turn results in stronger models for face v.s. non-face classification.</p><p>To make it converge eaisily, we train seperate networks and initialize the joint network with trained weights.</p><p>SGD hyper-parameters. We set global learning rate 0.001. After a number of iterations, we lower the learning rate to 0.0001 to train more iterations. The specific iteration number is related to the number of training samples. Generally, 5 to 10 epochs would be appropriate. Following standard practice, we use a momentum term with weight 0.9 and weight decay factor of 0.0005.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Testing pipeline</head><p>The testing pipeline contains three separate CNNs. Given an input test image, the fully convolution network outputs a feature map response. Each point of the feature map gives a face v.s. non-face classification score and bounding box regression targets (1 × 4). The regression targets are used for bounding-box refinement. Each point is corresponding to a bounding-box, whose up-left vertex is the point. After the first stage, we keep the boxes whose scores are higher than the pre-set threshold. Usually Nonmaximum suppression (NMS) is applied to reject the highly overlapped boxes. However, NMS is quite time consuming. We use a novel algorithm to reject the highly overlapped boxes. Inspired by max pooling, we apply max pooling on the output feature map. Different from max pooling, the resolution of the feature map stays unchanged. In detail, we choose a max pooling kernel k. In the k × k area, only the point with the highest score is kept, while the others are set to zero. The stride of the stage one network is 2. So, when k = 2, the result is comparative to NMS with threshold set as 0.5.</p><p>The remaining boxes are fed to the second stage. We crop each box region from the original image and resize them to 24 × 24. For each region, this network outputs a score and corresponding bounding-box regression targets.</p><p>As in the first stage, we reject the boxes whose score is lower than the pre-set threshold. Then we use the regression targets to refine the boxes.</p><p>After the second stage, in average only dozens of boxes are remaining. We apply similar procedure as the second stage. The box regions are cropped and resized to 48 × 48 for input. After score threshold operation, the passed boxes are refined by bounding box regression targets which is the output of the third stage.</p><p>Finally NMS is applied to all the remaining boxes to get the final detection results. In practice, the test image is first built into image pyramids to handle different face scales.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Joint Training of RPN and Fast R-CNN</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Training architecture</head><p>Considering the disadvantages of RPN + Fast R-CNN training procedure, we design an alternative joint training architecture for RPN and fast R-CNN. The architecture is shown in <ref type="figure">Fig. 2</ref>. In our architecture, we use only one joint network. In this network, RPN and fast R-CNN share convolutional layers. The output of the last shared convolutional layer is fed into two sibling branches. One region proposal branch for generating candidate proposals with scores. The other is Region of Interest (RoI) pooling branch for detection with final scores.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Training process</head><p>The training is a two-step procedure (2× faster than the original four-step one). We train RPN as in separate training first, then fine-tune the joint network from RPN model. The proposals used for fast R-CNN branch are generated by doing RPN test on the training images. During training the joint network, the inputs consist of original RPN inputs plus proposals generated by trained RPN model. The RPN generated proposals serve as the input RoIs of fast R-CNN in the joint network. The loss fusion is similar with the joint training of cascaded CNNs in section 4.1.</p><p>Except for cascade of RPN and fast R-CNN, there are more cascaded CNNs out there. Joint training maybe one possible solution for end-to-end optimization and convolutional layer sharing.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Experiments</head><p>We carry out experiments on face detection dataset to evaluate our joint training pipeline.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.1.">Datasets</head><p>In training joint cascaded CNNs, we use Annotated Facial Landmarks in the Wild (AFLW) <ref type="bibr" target="#b14">[15]</ref>   <ref type="figure">Figure 2</ref>. In our architecture, we use only one joint network. In this network, RPN and fast R-CNN share convolutional layers. The output of the last shared convolutional layer is fed into two sibling branches. One region proposal branch for generating candidate proposals with scores. The other is RoI pooling branch for detection with final scores. online social network, the image on which is a reflection of the real world images in everyday life. To add negative samples, we also use images in PASCAL VOC2012 <ref type="bibr" target="#b3">[4]</ref> that do not contain persons as background image. In total, the dataset contain 47211 images with 82987 faces and about 32000 background images. To avoid confusing circumstances when it is difficult to judge a patch is groundtruth or not, we add ignore regions in our training images. An ignore region is defined as a region where we do not sample negative samples.</p><p>To avoid annotation confusion, we do not annotate using face rectangles. Instead, each face is annotated by 21 facial landmarks. The landmarks are slightly different from those of AFLW official annotations, of which a face may be annotated with less than 21 landmarks. We design a transformation algorithm from facial landmarks to face rectangles. The face rectangles are square annotations. Face examples are shown in <ref type="figure" target="#fig_1">Fig. 3</ref>. We can see that nose is always in the center of the square annotations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.2.">AFW results</head><p>We evaluate FaceCraft on Annotated Faces in the Wild (AFW) <ref type="bibr" target="#b38">[39]</ref>. AFW contains 205 images collected from Flickr. The images contain cluttered backgrounds and various face viewpoints and appearances.</p><p>In ground-truth annotation, one specific problem of face detection different from general object detection is how to decide the face bounding box when a face is not frontal. Different rules in face annotations result in various groundtruth. So detectors trained with different training data may get mismatched results on test dataset annotated following different rules. This problem has been pointed out before <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b15">16]</ref>. In our test results, this is also true. Examples of detection results are shown in <ref type="figure">Fig. 4</ref>. In our test results, non-frontal face bounding-box centred on the nose, which is consistent with our training ground-truth shown in <ref type="figure" target="#fig_1">Fig. 3</ref>. While in AFW ground-truth, nose is on the bounding-box edge.</p><p>In previous work <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b15">16]</ref>, the authors use refined detection results or manual evaluation to evaluate on AFW. We check all of our detection results and found that setting the evaluation IoU to 0.3 for all the methods can fairly evaluate the non-frontal faces with almost no impact on frontal faces. In this way, no post-processing or human interference is needed. Practically, 0.3 IoU is enough for following applications like face alignment.</p><p>When we judge a detector, the accuracy of bounding-box should be one of the indicators. For now, there is no such evaluation rule on AFW. One reason is that researches use various training data and various annotations. One possible solution maybe that we use a uniform transformation from facial landmarks to face rectangle annotations. Because facial landmarks can be accurately annotated.</p><p>The comparison of Precision-Recall curves generated by different methods is shown in <ref type="figure" target="#fig_3">Fig. 6</ref>. As we can see, the recall of our face detector is higher than all previous results, approaching 99.75%. The Average Precision (AP) is 98.22%, which is comparable with state-of-the-art methods.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.3.">FDDB results</head><p>Face Detection Data Set and Benchmark (FDDB) <ref type="bibr" target="#b12">[13]</ref> contains 2845 images with 5171 face annotations.</p><p>We use the evaluation toolbox provided by <ref type="bibr" target="#b17">[18]</ref>, which also reports recall at 1000 false positives. This dataset use two kinds of evaluation method, discontinuous score and continuous score <ref type="bibr" target="#b12">[13]</ref>. As pointed in section 6.2, conti-   nous score is largely influenced by annotations of training dataset. Previous works use many tricks to refine the detected face box to get a better score. To reduce comparison confusion, we only report discontinuous score.</p><p>The curve is shown in <ref type="figure" target="#fig_4">Fig. 7</ref>. As we can see, the joint training result get a recall of 88.2% (1000 false positives), which is comparative with the state-of-the-art. This is better than Cascaded CNN result (85.7%) reported in <ref type="bibr" target="#b15">[16]</ref>. To make a fair comparison, we also show the result with the same networks but trained separately. The separately trained model get a recall of 87.2%, which is lower than Jointly trained model.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.4.">How larger dataset benefits?</head><p>In Faceness <ref type="bibr" target="#b33">[34]</ref> the authors used more training data. To evaluate our method on larger training dataset, we conduct experiments with enlarged dataset 3R+. In total, we use 108000 images with annotated faces. The experiments prove that our architecture can benefit from enlarged train-ing data. Results are shown in <ref type="figure" target="#fig_3">Fig. 6</ref> and <ref type="figure" target="#fig_4">Fig. 7</ref>. AP on AFW is 98.73%, recall on FDDB is 90.8% (1000 false positives).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.5.">Detection efficiency</head><p>CNN based methods have always been accused of its runtime efficiency. Recent CNN algorithms are getting faster on high-end GPUs. However, in most practical applications, especially mobile applications, they are not fast enough.</p><p>In our testing pipeline, the later two stages are more complicated, while the most time consuming stage is the first stage. By rejecting most of the face proposals in the first stage, we make the following two networks very efficient. The later two stages occupy about half of the whole computation.</p><p>Response map pooling In the first stage, after using score threshold, there are still nearly 1000 proposals in average. NMS would be time consuming, so we use max pooling on the final feature map. This is faster than NMS while achieving similar result.</p><p>Image patch resizing In the later two stages, we need to resize the image patches to the network input size. Actually when generating image pyramids, we've already resized the images to 1/2 k of the original size. To speed up the computation, for a passed face proposal after stage one, we can find the corresponding twice larger patch from the upper scale image pyramid. In this way, we can save the patch resizing time.</p><p>Our fast version method achieves 10 FPS on a single CPU core while keeping 87.3% (merely decreased compared to previous 88.2%) recall on FDDB. We test on VGA images, and detect multi-scale faces as small as 24 × 24. For specific circumstances, we can vary threshold and image pyramids number to accelerate. As comparison, the fast version of Faceness <ref type="bibr" target="#b33">[34]</ref> uses outside methods to generate proposals, and runs 20 FPS on Titan Black GPU for VGA images, at the expense of recall rate decreased to 87%. Cascade CNNs <ref type="bibr" target="#b15">[16]</ref> runs 14 FPS on CPU at the expense of recall rate, and it only scans for 80 × 80 faces.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.6.">Experiments of jointly trained faster R-CNN</head><p>For the convolutional layers, we use a network that is modified from ZF-net, in which we chop off the LRN layers. All settings in training separate and joint networks are the same, e.g., loss weights, NMS thresholds, proposal numbers and learning rates. We train RPN first and finetune the joint network from RPN model. The proposals used for fast R-CNN branch are generated by doing RPN testing on the training images. During training the joint network, the joint inputs consist of original RPN inputs and proposals generated by trained RPN model. The joint network converges easily with improved performance. The experiments are conducted on 3R+.</p><p>As shown in <ref type="table">Table.</ref> 1, with our presented RPN + F-RCNN (fast R-CNN) joint training pipeline, the AP (average precision) on AFW is 98.7%, compared to the baseline result 97.0% trained with 4-stage training method proposed in <ref type="bibr" target="#b20">[21]</ref>. On FDDB, the recall (1000 false positives) is 91.2% v.s. 89.7%. For the F-RCNN branch, the final joint training loss decreases 64% compared to separate training. In joint RPN + F-RCNN, the detection results mostly have much higher confidence scores than separate training results, which have lower confidence scores because of F-RCNN domination in convolution layers.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.7.">Disscussion</head><p>Except for the use of jointly trained cascaded CNNs for face detection, jointly trained RPN and fast R-CNN is also a promising method for fast and accurate face detection. RPN is very fast for generating good proposals with large pre-trained models in general object detection, while it is not fast enough for face detection. For face detection, we can design smaller RPN and train from scratch. The advantage is that the use of multi-scale anchors can replace image pyramids used in previous methods. However if trained with the faster R-CNN four-step procedure, the RPN convolutional layers would be dominated by fast R-CNN. If RPN is jointly trained with fast R-CNN, the whole network can get better performance. As the whole computation won't add too much compared with RPN only, fast face detection can be very promising.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Conclusion</head><p>In this paper, we have presented joint training as a novel way of training cascaded CNNs. By joint training, CNN cascade can achieve end-to-end optimization. We show that the back propagation algorithm used in training CNN can be naturally used in training CNN cascade. By jointly optimizing cascaded stages, the whole network get improved performance with smaller models for sharing convolutions. We evaluate joint training on face detection datasets. Our results achieve the state-of-the-art. Joint training can extend to general cascaded CNNs, and we show how to jointly train RPN and fast R-CNN as an example.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Joint training architecture. During training, the network takes an image of size 48 × 48 as input, and outputs one joint loss of three branches. The network is optimized through back-propagation. Compared to separate networks, the joint network also use threshold control layers, to decide which proposals from up branches contribute to the loss of the down branches.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 3 .</head><label>3</label><figDesc>Face annotation examples.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 4 .Figure 5 .</head><label>45</label><figDesc>Qualitative results of FaceCraft on AFW. Qualitative results of FaceCraft on FDDB.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 6 .</head><label>6</label><figDesc>Precision-Recall Comparisons with state-of-the-art methods on AFW. The methods are HeadHunter<ref type="bibr" target="#b17">[18]</ref>, Structured Models<ref type="bibr" target="#b29">[30]</ref>, SquaresChnFtrs-5<ref type="bibr" target="#b17">[18]</ref>, Shen et al.<ref type="bibr" target="#b24">[25]</ref>, TSM<ref type="bibr" target="#b38">[39]</ref>, Face.com, Face++ and Google Picasa.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 7 .</head><label>7</label><figDesc>Comparison with state-of-the-art methods on FDDB.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>and our dataset called 3R. 3R contains about 26000 images that have faces and 27000 images that have no faces. 3R is collected from</figDesc><table>conv layers 
+
+RPN layers 
+
+RoI pooling 
+
+cls layers 
+
+reg layers 
+
+cls layers 
+
+loss 
+
+RoIs 
+reg layers 
+
+loss 
+
+detection results (test) 
+
+Loss 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 1 .</head><label>1</label><figDesc>Comparison of training methods of RPN + F-RCNN</figDesc><table>Benchmark Separate 
+Joint 
+AFW 
+97.0% 
+98.7% 
+FDDB 
+89.7% 
+91.2% 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot">t * x = (x * − x p )/w p (2) t * y = (y * − y p )/h p (3) t * w = log(w * /w p ) (4) t * h = log(h * /h p ),(5)where x and y denote the two coordinates of the box center, w and h denote box width and height respectively . The variables x p , and x * are for the proposal box and groundtruth box respectively. In this way, we can optimize the regression targets and regress the bounding-box from a proposal box to a nearby ground-truth box. During training, the regression offsets are normalized to have zero mean and unit variance. This optimization method also applies to the other two branches.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgment</head><p>This work is partially done when the first author was an intern at SenseTime. This work was partly supported by National Natural Science Foundation of China </p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Robust object detection via soft cascade</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bourdev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Brandt</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="236" to="243" />
+		</imprint>
+	</monogr>
+	<note>IEEE</note>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Joint cascade face detection and alignment</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Cao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision-ECCV 2014</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="109" to="122" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Imagenet: A large-scale hierarchical image database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Dong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L.-J</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="248" to="255" />
+		</imprint>
+	</monogr>
+	<note>CVPR 2009. IEEE Conference on</note>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">The PASCAL Visual Object Classes Challenge 2012 (VOC2012) Results</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K I</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<ptr target="http://www.pascal-network.org/challenges/VOC/voc2012/workshop/index.html.6" />
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Multi-view face detection using deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">S</forename><surname>Farfade</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Saberian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L.-J</forename><surname>Li</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.02766</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Cascade object detection with deformable part models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">F</forename><surname>Felzenszwalb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer vision and pattern recognition (CVPR), 2010 IEEE conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2010" />
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Object detection with discriminatively trained partbased models. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">F</forename><surname>Felzenszwalb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1627" to="1645" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Ghiasi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">C</forename><surname>Fowlkes</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1506.08347</idno>
+		<title level="m">Occlusion coherence: Detecting and localizing occluded faces</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1504.08083</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">Fast r-cnn. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Rich feature hierarchies for accurate object detection and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2014 IEEE Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="580" to="587" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">High-performance rotation invariant multiview face detection. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Ai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">29</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="671" to="686" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Densebox: Unifying landmark localization with end to end object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1509.04874</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Learned-Miller. Fddb: A benchmark for face detection in unconstrained settings</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">UMass Amherst Technical Report</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">Fast multi-view face detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jones</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Viola</surname></persName>
+		</author>
+		<idno>TR-20003-96</idno>
+		<imprint>
+			<date type="published" when="2003" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">14</biblScope>
+		</imprint>
+	</monogr>
+	<note type="report_type">Mitsubishi Electric Research Lab</note>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Annotated facial landmarks in the wild: A large-scale, realworld database for facial landmark localization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Köstinger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Wohlhart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">M</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision Workshops (ICCV Workshops), 2011 IEEE International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="2144" to="2151" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">A convolutional neural network cascade for face detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Brandt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="page" from="5325" to="5334" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Statistical learning of multi-view face detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">Z</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Blake</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Shum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer VisionECCV</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2002" />
+			<biblScope unit="page" from="67" to="81" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Face detection without bells and whistles</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mathias</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Benenson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pedersoli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision-ECCV 2014</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Training support vector machines: an application to face detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Osuna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Freund</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Girosi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="1997" />
+			<biblScope unit="page" from="130" to="136" />
+		</imprint>
+	</monogr>
+	<note>IEEE Computer Society Conference on</note>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title level="m" type="main">A deep pyramid deformable part model for face detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ranjan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">M</forename><surname>Patel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Chellappa</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1508.04389</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">Faster r-cnn: Towards real-time object detection with region proposal networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1506.01497</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Neural network-based face detection. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Rowley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Baluja</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kanade</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="23" to="38" />
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Rotation invariant neural network-based face detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Rowley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Baluja</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kanade</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings. 1998 IEEE Computer Society Conference on</title>
+		<meeting>1998 IEEE Computer Society Conference on</meeting>
+		<imprint>
+			<date type="published" when="1998" />
+			<biblScope unit="page" from="38" to="44" />
+		</imprint>
+	</monogr>
+	<note>Computer Vision and Pattern Recognition</note>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">A statistical method for 3d object detection applied to faces and cars</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Schneiderman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kanade</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2000" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="746" to="751" />
+		</imprint>
+	</monogr>
+	<note>Proceedings. IEEE Conference on</note>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Detecting and aligning faces by image retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Brandt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2013 IEEE Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="3460" to="3467" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Original approach for the localisation of objects in images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Vaillant</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Monrocq</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Le Cun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEE Proceedings-Vision, Image and Signal Processing</title>
+		<imprint>
+			<date type="published" when="1994" />
+			<biblScope unit="volume">141</biblScope>
+			<biblScope unit="page" from="245" to="250" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Robust real-time face detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Viola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Jones</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International journal of computer vision</title>
+		<imprint>
+			<biblScope unit="volume">57</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="137" to="154" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Boosting chain learning for object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-J</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision, 2003. Proceedings. Ninth IEEE International Conference on</title>
+		<imprint>
+			<date type="published" when="2003" />
+			<biblScope unit="page" from="709" to="715" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">The fastest deformable part model for object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">Z</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2014 IEEE Conference on</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="2497" to="2504" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Face detection by structural models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">Z</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Image and Vision Computing</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">10</biblScope>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Aggregate channel features for multi-view face detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">Z</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Joint Conference on</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="1" to="8" />
+		</imprint>
+	</monogr>
+	<note>Biometrics (IJCB)</note>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+		<title level="m" type="main">Convolutional channel features for pedestrian</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">Z</forename><surname>Li</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1504.07339</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Detecting faces in images: A survey. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-H</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Kriegman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Ahuja</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">24</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="34" to="58" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+		<title level="m" type="main">From facial parts responses to face detection: A deep learning approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">C</forename><surname>Loy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1509.06451</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+		<title level="m" type="main">A survey on face detection in the wild: past, present and future. Computer Vision and Image Understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zafeiriou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Multiple instance boosting for object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">C</forename><surname>Platt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">A</forename><surname>Viola</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="1417" to="1424" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<monogr>
+		<title level="m" type="main">A survey of recent advances in face detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+			<pubPlace>Microsoft Research</pubPlace>
+		</imprint>
+	</monogr>
+	<note type="report_type">Tech. rep.</note>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Face detection based on multi-block lbp representation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Chu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Xiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Liao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">Z</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in biometrics</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2007" />
+			<biblScope unit="page" from="11" to="18" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Face detection, pose estimation, and landmark localization in the wild</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2012 IEEE Conference on</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

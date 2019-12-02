@@ -1,0 +1,1638 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Moral Lineage Tracing</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Florian</forename><surname>Jug</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Max Planck Institute of Molecular Cell Biology and Genetics</orgName>
+								<address>
+									<settlement>Dresden</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Evgeny</forename><surname>Levinkov</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="department">Max Planck Institute for Informatics</orgName>
+								<address>
+									<settlement>Saarbrücken</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Corinna</forename><surname>Blasse</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Max Planck Institute of Molecular Cell Biology and Genetics</orgName>
+								<address>
+									<settlement>Dresden</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eugene</forename><forename type="middle">W</forename><surname>Myers</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Max Planck Institute of Molecular Cell Biology and Genetics</orgName>
+								<address>
+									<settlement>Dresden</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bjoern</forename><surname>Andres</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="department">Max Planck Institute for Informatics</orgName>
+								<address>
+									<settlement>Saarbrücken</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Moral Lineage Tracing</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:43+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Lineage tracing, the tracking of living cells as they move and divide, is a central problem in biological image analysis. Solutions, called lineage forests, are key to understanding how the structure of multicellular organisms emerges. We propose an integer linear program (ILP) whose feasible solutions define, for every image in a sequence, a decomposition into cells (segmentation) and, across images, a lineage forest of cells (tracing). In this ILP, path-cut inequalities enforce the morality of lineages, i.e., the constraint that cells do not merge. To find feasible solutions of this NP-hard problem, with certified bounds to the global optimum, we define efficient separation procedures and apply these as part of a branch-and-cut algorithm. To show the effectiveness of this approach, we analyze feasible solutions for real microscopy data in terms of bounds and run-time, and by their weighted edit distance to lineage forests traced by humans.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Phenomenal progress in microscopy allows biologists to image large numbers of living cells as they move and divide <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b45">45]</ref>. Such observations are essential in developmental biology for studying embryogenesis and tissue formation <ref type="bibr" target="#b30">[31,</ref><ref type="bibr" target="#b32">33,</ref><ref type="bibr" target="#b36">37]</ref>. Consequently, the tracing of cells and their lineages in sequences of images has become a central problem in biological image analysis <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b28">29]</ref>.</p><p>The lineage tracing problem consists of two sub-problems. The first sub-problem is to identify the cells in every individual image. The second sub-problem is to connect every cell identified in an image to the same cell and descendant cells identified in subsequent images. A joint solution of both sub-problems is a set of pairwise disjoint lineage trees (depicted in <ref type="figure" target="#fig_0">Fig. 1</ref>, in red and green) whose nodes are cells.</p><p>The first sub-problem is an image decomposition problem: If every pixel shows a part of a cell and no pixel shows a background, the objective is to decompose the pixel grid graph of the image into precisely one component per cell. jointly select and decompose a subgraph of the pixel grid graph such that there is precisely one component for each cell and no component for the background. The second sub-problem is a cell tracking problem: The objective is to connect every cell detected in one image to the same cell and descendant cells identified in subsequent images. A joint solution of both sub-problems is constrained by prior knowledge. In particular, every cell has at most one direct progenitor cell, i.e., cells do not merge. Moreover, no cell splits into more than two cells at once. Yet, a cell can appear without a direct progenitor cell when entering the field of view, and a cell can disappear when dying or leaving the field of view. Finally, it can appear as if a cell was dividing into more than two cells at once if the temporal resolution is too low to separate consecutive divisions.</p><p>It is understood that errors in the image decomposition make it harder to reconstruct the true lineage forest. Attempts at reconstructing the lineage forest can help to avoid such errors. Thus, we state a joint optimization problem whose feasible solutions define, for every image, a decomposition (segmentation) into cells and, across images, a lineage forest. Unlike in prior work, we do not constrain the set of decompositions, except by contracting pixels to superpixels.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>The image decomposition problem has been tackled by various abstractions in the form of optimization problems including the minimum cost spanning forest problem, i.e., agglomerative clustering <ref type="bibr" target="#b0">[1]</ref>, balanced cut problems, i.e., spectral clustering <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b43">43]</ref>, and the minimum cost multicut problem, i.e., correlation clustering <ref type="bibr" target="#b33">[34]</ref>. We build on its formulation as a minimum cost multicut problem, an optimization problem studied in <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b17">18]</ref> which is NPhard <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b16">17]</ref> and has been used for image segmentation in <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b31">32,</ref><ref type="bibr" target="#b33">34,</ref><ref type="bibr" target="#b52">52,</ref><ref type="bibr" target="#b51">51]</ref>.</p><p>The lineage forest reconstruction problem has been cast as an optimization problem in <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b39">39,</ref><ref type="bibr" target="#b41">41,</ref><ref type="bibr" target="#b46">46,</ref><ref type="bibr" target="#b47">47,</ref><ref type="bibr" target="#b48">48,</ref><ref type="bibr" target="#b49">49]</ref>. If cells neither die nor enter or leave the field of view and if one drops the constraint that cells split into at most two direct descendant cells, the problem can be formulated as a minimum cost k disjoint arborescence problem <ref type="bibr" target="#b42">[42,</ref><ref type="bibr">Section 53.9]</ref>, as shown in <ref type="bibr" target="#b48">[48,</ref><ref type="bibr" target="#b49">49]</ref>. Here, k is the number of cells visible in the first image. This problem can be solved in strongly polynomial time <ref type="bibr" target="#b19">[20]</ref>. With the additional constraint that cells split into at most two descendant cells, the problem becomes NP-hard, and so do generalizations <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b39">39,</ref><ref type="bibr" target="#b41">41,</ref><ref type="bibr" target="#b46">46,</ref><ref type="bibr" target="#b47">47]</ref> that model, e.g., the (dis)appearance of cells.</p><p>One lineage tracing approach <ref type="bibr" target="#b27">[28]</ref> copes with imperfect decompositions by over-segmenting individual images. This guarantees that every cell is represented by at least one component and that every component represents at most one cell. Advantageous there is the fact that the true lineage forest is represented by at least one set of disjoint arborescences. Disadvantageous is the loss of robustness: For the true decomposition, every component belongs to precisely one arborescence and thus, every error in the set of disjoint arborescences implies at least a second error. This renders solutions robust to perturbations of the objective function. For an over-segmentation, this property is lost. Another disadvantage is the fact that the number of progenitor cells is not determined by the number of components of the first image. Over-estimates result in excessive arborescences that typically conflict with correct ones. Under-estimates result in a loss of lineage trees. As in <ref type="bibr" target="#b27">[28]</ref>, we consider an overdecomposition of each image into cell fragments. In contrast to <ref type="bibr" target="#b27">[28]</ref> where each node of a lineage forest is a single representative fragment, each node in the lineage forests we consider is a clusters of fragments. This idea of clustering instead of selecting has been used in <ref type="bibr" target="#b44">[44]</ref> to track multiple people in a video sequence. The optimization problem defined in <ref type="bibr" target="#b44">[44]</ref> is a hybrid of a minimum cost multicut problem and a disjoint path problem. The optimization problem we propose here is a hybrid of a minimum cost multicut problem and a disjoint arborescence problem.</p><p>Two techniques have been proposed to deal with over and under-decomposition simultaneously: The first <ref type="bibr" target="#b41">[41]</ref> is to allow single image components to represent multiple cells and thus be part of multiple lineages. This relaxation of the disjointness constraint of the arborescence problem introduces additional feasible solutions that can represent the true lineage forest even in the presence of under-decomposition. The same idea is used in <ref type="bibr" target="#b47">[47]</ref> for the reconstruction of curvilinear structures and in <ref type="bibr" target="#b50">[50]</ref> for the tracking of objects in containers. The second technique <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b40">40]</ref> considers a hierarchy of alternative decompositions and casts lineage tracing as an optimization problem whose feasible solutions select and connect components from the hierarchy. Constraints guarantee that selected components are mutually consistent and consistent with a set of disjoint lineages. As in <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b23">24]</ref>, the feasible solutions we propose define, for every image, a decomposition into cells and, across images, a lineage forest. In contrast to prior work, we do not constrain the set of decompositions, except by contracting pixels to superpixels. We compare our experimental results to a state-of-the-art software system for lineage tracing <ref type="bibr" target="#b1">[2]</ref>.</p><p>Unlike in the work discussed above, feasible lineages and costs of feasible lineages can be defined recursively, as in particle filtering. Cf. <ref type="bibr" target="#b14">[15]</ref> for a recent comprehensive comparison and <ref type="bibr" target="#b4">[5]</ref> for a recent application to lineage tracing.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Optimization Problem</head><p>In this section, we cast lineage tracing as an optimization problem that we call moral lineage tracing. In Section 3.1, we define the set of feasible solutions. In Section 3.2, we define the objective function and optimization problem.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Feasible Set</head><p>In order to encode a combinatorial number of feasible lineage forests, we define a hypothesis graph. In a hypothe-sis graph, every node corresponds to one superpixel of one image in a sequence and is referred to as a cell fragment (Def. 1). In order to encode a single feasible lineage forest, we define a lineage graph (Def. 2). A lineage graph is a subgraph of the hypothesis graph that defines, within each image, a clustering of cell fragments into cells and, across images, a lineage forest of cells (Lemma 1). In order to state in the form of an ILP an optimization problem whose feasible solutions are lineage graphs, we identify the characteristic functions of lineage graphs with 01-labelings of the edges of the hypothesis graph that satisfy a system of linear inequalities (Lemma 2).</p><formula xml:id="formula_0">Definition 1 A hypothesis graph is a node-labeled graph 1 G = (V, E, τ ) in which every edge {v, w} ∈ E holds |τ (v) − τ (w)| ≤ 1. Every v ∈ V is called a (cell) frag- ment, and τ (v) is called its time index.</formula><p>The intuition is this: For any distinct fragments v, w ∈ V with τ (v) = τ (w), the presence of the edge {v, w} ∈ E indicates the possibility that v and w are fragments of the same cell. For any fragments v, w ∈ V with τ (w) = τ (v) + 1, the presence of the edge {v, w} ∈ E indicates the possibility that v and w are fragments of the same cell, observed at successive points in time, as well as the possibility that v is a fragment of a progenitor cell of the cell of w.</p><p>Next, we characterize those subgraphs of a hypothesis graph that we consider as feasible solutions. For clarity, we propose some notation: For every t ∈ N, let V t := τ −1 (t) the set of all fragments having the time index t.</p><formula xml:id="formula_1">Let G t = (V t , E t ) be the subgraph of G induced by V t . Let E t,t+1 := {{v, w} ∈ E|v ∈ V t ∧ w ∈ V t+1</formula><p>} be the set of those edges of G that connect a fragment v having the time index t to a fragment w having the time index t+1. Let</p><formula xml:id="formula_2">G + t = (V + t , E + t ) be the subgraph of G induced by V + t := V t ∪ V t+1 . Finally, let V ≥t := ∪ ∞ t ′ =t V t ′ be the fragments of at least time index t, and E ≥t := ∪ ∞ t ′ =t (E t ′ ∪ E t ′ ,t ′ +1</formula><p>) the set of all edges of G between such fragments.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Definition 2 For every hypothesis graph</head><formula xml:id="formula_3">G = (V, E, τ ), a set C ⊆ E is called a lineage cut of G, and (V,C) with C := E \ C is called a lineage (sub)graph of G, iff the following conditions hold: 1. For every t ∈ N, the set E t ∩ C is a multicut 2 of G t 2.</formula><p>For every t ∈ N and every {v, w} ∈ E t,t+1 ∩ C, v and w are not connected by any path in the graph (</p><formula xml:id="formula_4">V + t , E + t ∩C) 3. For every t ∈ N, any v t , w t ∈ V t and any v t+1 , w t+1 ∈ V t+1 such that {v t , v t+1 } ∈ E ∩C and {w t , w t+1 } ∈ E ∩C, and for any path in (V, E t+1 ∩C) from v t+1 to w t+1 , there exists a path in (V, E t ∩C) from v t to w t .</formula><p>If these conditions are satisfied then, for every t ∈ N and every non-empty, maximal connected subgraph</p><formula xml:id="formula_5">(V ′ t , E ′ t ) of (V t , E t ∩C), its node set V ′</formula><p>t is called a cell at time index t. A lineage cut and lineage subgraph are called binary iff, in addition to Conditions 1-3, it holds: 4. For every t ∈ N, every cell V ′ t ⊆ V t is connected in the lineage subgraph to at most two distinct cells at t + 1.</p><p>An intuition for Conditions 1-3 is offered by Lemma 1 and the proof.</p><p>Lemma 1 For every t ∈ N, a lineage graph well-defines a decomposition of G t whose components are the cells at time index t. Across time, a lineage graph well-defines a (lineage) forest of cells.</p><p>PROOF Condition 1 guarantees that every subgraph defining a cell is node-induced, i.e., for every t ∈ N and every {v, w} ∈ E t : {v, w} ∈C iff v and w are fragments of the same cell. Condition 2 guarantees, for every t ∈ N, every cell V ′ t at time index t, and every cell V ′ t+1 at time index t + 1 that either all edges of G between V ′ t and V ′ t+1 are in C, or none. Condition 3 guarantees, for every t ∈ N and every distinct cells</p><formula xml:id="formula_6">V ′ t , V ′′ t at time index t that these are not connected in (V, E + t ∩C)</formula><p>to the same cell at time index t+1. This guarentees, by induction, that V ′ t , V ′′ t are not connected by any path in the graph (V ≥t , E ≥t ∩C). This guarantees that distinct cells never merge. ∀t ∈ N ∀Y ∈ cycles(G t ) ∀e ∈ Y :</p><formula xml:id="formula_7">x e ≤ e ′ ∈Y \{e} x e ′ (1) ∀t ∈ N ∀{v, w} ∈ E t,t+1 ∀P ∈ vw-paths(G + t ) : x vw ≤ e∈P x e (2) ∀t ∈ N ∀{v t , v t+1 }, {w t , w t+1 } ∈ E t,t+1 ∀T ∈ v t w t -cuts(G t ) ∀P ∈ v t+1 w t+1 -paths(G t+1 ) : 1 − e∈T (1 − x e ) ≤ x vtvt+1 + x wtwt+1 + e∈P x e (3) ∀t ∈ N ∀v ∈ V t ∀w 1 , w 2 , w 3 ∈ V t+1 ∀P 1 ∈ vw 1 -paths(G + t ) ∀P 2 ∈ vw 2 -paths(G + t ) ∀P 3 ∈ vw 3 -paths(G + t ) ∀C 12 ∈ w 1 w 2 -cuts(G t+1 ) ∀C 23 ∈ w 2 w 3 -cuts(G t+1 ) ∀C 13 ∈ w 1 w 3 -cuts(G t+1 ) 1 − e∈C12∪C23∪C13 (1 − x e ) ≤ e∈P1∪P2∪P3 x e<label>(4)</label></formula><p>A proof of Lemma 2 is given in the supplement. Complementary to the proof, a discussion of (dis)connectedness w.r.t. a multicut can be found in <ref type="bibr" target="#b5">[6]</ref>.</p><p>Here, the set of all x ∈ {0, 1} E that satisfy (1)-(4) is denoted by X G . Examples of violated inequalities are depicted in <ref type="figure" target="#fig_1">Fig. 2</ref>. Note that the path-cut inequalities (3) guarantee that any fragmets of the same cell at time t + 1 cannot be joined with fragments of distinct cells at time t, i.e., morality.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Objective Function</head><formula xml:id="formula_8">Definition 3 A priced hypothesis graph is a tuple (V, E, τ, c, c + , c − ) with (V, E, τ ) a hypothesis graph, c : E → R and c + , c − : V → R + 0 .</formula><p>For every e ∈ E, c e is called the cut cost of e. For every v ∈ V , c + v and c − v are called the appearance and disappearance cost of v, respectively.</p><p>The optimization problem we propose is defined below in the form of an ILP w.r.t. a priced hypothesis graph G = (V, E, τ, c, c + , c − ). This ILP has the following properties: Every feasible solutions defines a lineage subgraph of G. For every {v, w} = e ∈ E, the objective function assigns the cost (or reward) c e to all lineage graphs in which the cell fragments v and w belong to distinct cells. For every t ∈ N and every v ∈ V t+1 , the objective function assigns the (appearance) cost c + v to all lineage graphs in which the fragment v is not joined with any fragment in V t . For every t ∈ N and every v ∈ V t , the objective function assigns the (disappearance) cost c − v to all lineage graphs in which the fragment v is not joined with any fragment in V t+1 .  </p><formula xml:id="formula_9">x,x + ,x − e∈E c e x e + v∈V c + v x + v + v∈V c − v x − v (5) subject to x ∈ X G (6) ∀t ∈ N ∀v ∈ V t+1 ∀T ∈ V t v-cuts(G + t ) : 1 − x + v ≤ e∈T (1 − x e )<label>(7)</label></formula><formula xml:id="formula_10">∀t ∈ N ∀v ∈ V t ∀T ∈ vV t+1 -cuts(G + t ) : 1 − x − v ≤ e∈T (1 − x e )<label>(8)</label></formula><p>If, in an inequality of (7), all edges in the cut T are labeled 1, then x + v = 1. Otherwise, for every feasible solution x the same solution but with x + v := 0 is not worse (as 0 ≤ c + v , by definition of c + ). Thus, a cost c + v = 0 is payed iff fragment v appears at time t+1. The argument for <ref type="bibr" target="#b7">(8)</ref> and disappearance is analogous. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Optimization Algorithm</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Efficient Separation Procedures</head><p>Below, we define, for each class of inequalities, (1)-(4), (7) and <ref type="formula" target="#formula_10">(8)</ref>, an efficient separation procedure (Tab. 1) that takes any (x, x + , x − ) as input. If any inequality is violated, it terminates and outputs at least one of these. If no inequality is violated, it terminates and outputs the empty set. We apply these procedures in a branch-and-cut algorithm described in the next section. We have also applied these procedures in the preparation of the experiments described in Section 5, to certify the well-definedness of lineages we traced manually.</p><p>To separate infeasible solutions by inequalities (1) for a given t, we label maximal subgraphs of G t connected by edges labeled 0. Then, for every {v, w} = e ∈ E t with x e = 1 and with v and w being in the same subgraph, we search for a shortest vw-path P in G t such that x P = 0, using breadth-first-search (BFS). If the path is chordless, we output the inequality defined by the cycle P ∪ {e} and e.</p><p>To separate infeasible solutions by inequalities (2) for a given t, we label maximal subgraphs of G + t connected by edges labeled 0. Then, for every {v, w} = e ∈ E t,t+1 with x e = 1 and with v and w being in the same subgraph, we search for a shortest vw-path P in G + t such that x P = 0 using BFS. We output the inequality defined by the cycle Y := P ∪ {e} and e ∈ Y .</p><p>To separate infeasible solutions by inequalities (3) for a given t, we label maximal subgraphs of G t connected by edges labeled 0. Then, for every pair v, w ∈ V t of nodes with different labels, we use BFS to search for (i) a shortest vw-path P in (V t+1 , E t,t+1 ∪ E t+1 ) such that x P = 0, and (ii) a vw-cut T in G t such that x T = 1. We output the inequality defined by P and T .</p><p>To separate infeasible solutions by inequalities (4) for a given t, we label maximal subgraphs of G t and G t+1 , resp., connected by edges labeled 0. From every v ∈ V t , we start a BFS in the subgraph of G + t whose edges are labeled 0. If nodes w 1 , w 2 , w 3 ∈ V t+1 of three distinct components of G t+1 are reached, we output the inequality defined by the boundaries of these components and by paths from v to w j .</p><p>To separate infeasible solutions by inequalities <ref type="formula" target="#formula_9">(7)</ref> for a given t, we start a BFS from every v ∈ V t+1 in the subgraph of G + t whose edges are labeled 0. We either find a vertex w ∈ V t (no violation) or a cut T ∈ V t v-cuts(G + t ) which separates v from V t . In the latter case, we output the inequality defined by the vertex v and the cut T . The separation of infeasible solutions by inequalities <ref type="formula" target="#formula_10">(8)</ref> is analogous, in the opposite order of time indices.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Branch-and-Cut Algorithm for the ILP</head><p>In order to find feasible solutions of the moral lineage tracing problem (Def. 4), with certified bounds, we implement the separation procedures defined in the previous section in C++ and call these form the branch-and-cut algorithm of the ILP solver Gurobi <ref type="bibr" target="#b21">[22]</ref> whenever an integer feasible solution is found. In order to tighten intermediate LP relaxations, we resort to the cuts implemented in <ref type="bibr">Gurobi.</ref> In all experiments we conduct, less than 1% of the total run-time is spent on the separation of infeasible solutions by inequalities (1)-(4), <ref type="formula" target="#formula_9">(7)</ref> and <ref type="formula" target="#formula_10">(8)</ref> together. Objective values, bounds and numbers of added inequalities are shown w.r.t. run-time, for three instances of the problem, in <ref type="figure" target="#fig_5">Fig. 3.</ref> </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Cutting-Plane Algorithm for an LP Relaxation</head><p>In addition to the moral lineage tracing ILP and (integer) feasible solutions found by the branch-and-cut algorithm, we study the canonical LP relaxation and its (possibly fractional) solutions found by a cutting-plane algorithm. Results shown in <ref type="figure" target="#fig_5">Fig. 3</ref> and Tab. 2 are discussed below:</p><p>It can be seen from <ref type="figure" target="#fig_5">Fig. 3</ref> that the solution found by our cutting-plane algorithm for the LP (blue) converges slower than the lower bound found by our branch-and-cut algorithm for the ILP (black). This is simply because the separation of infeasible points by violated inequalities is more complex if Constraint ILP (branch-and-cut) LP (cutting-plane)  the point can be fractional; see Tab. 1. It can be seen from <ref type="figure" target="#fig_5">Fig. 3</ref> and Tab. 2 that the LP relaxation is almost tight for the problem instance HeLa-small and less tight for the larger problem instances. This is expected, as HeLa-small is dominated by the disjoint arborescence sub-problem, which is in PTIME, while the larger problems are dominated by the minimum cost multicut sub-problem, which is NP-hard. The solution of the LP is not half-integral. Yet, it encourages future work on rounding procedures.</p><formula xml:id="formula_11">Space O(|Et| 2 ) O(|Et| 2 log |Vt|) Spacetime O(|Et,t+1||E + t |) O(|Et,t+1||E + t | log |V + t |) Morality O(|Vt| 2 |E + t |) O(|Vt| 2 (m(|Vt|, |Et|) +|Et+1| log |Vt+1|)) Termination O(|Vt| + |E + t |) O(|Vt|m(|V + t |, |E + t |)) Birth O(|Vt+1| + |E + t |) O(|Vt+1|m(|V + t |, |E + t |)) Bifurcation O(|E| log |V | + |Vt| O(|Vt||Vt+1| 3 (m(|Vt+1|, |Et+1|) +|E + t | log |V + t |) +|E + t | log |V + t |))</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Application to Microscopy Data</head><p>In order to examine the effectiveness of moral lineage tracing (MLT) and the proposed branch-and-cut algorithm, we define three instances of the problem w.r.t. two biomedical data sets, N2DL HeLa and Flywing Epithelium.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">N2DL HeLa Data</head><p>This microscopy data consists of three sequences of images which show HeLa cells that move and divide as bright objects in front of a dark background, c.f . <ref type="figure">Fig. 5(a)</ref>. Two sequences are publicly available and one sequence is undisclosed for an annual competition <ref type="bibr" target="#b35">[36]</ref>. Here, we use the two public sequences, one for learning a cost function, the other (HeLa-test) for experiments. To obtain, in addition, a shorter sequence of smaller images, we crop from HeLatest a sub-problem (HeLa-small). For both sequences, we construct a priced hypothesis graph as shown in <ref type="figure" target="#fig_3">Fig. 4(a)</ref> and described below. The hypothesis graph for HeLa-test consists of 10882 nodes and 19807 edges. The hypothesis graph for HeLa-small consists of 512 nodes and 812 edges.</p><p>Optimization. The convergence of the branch-and-cut algorithm for the instances HeLa-small and HeLa-test of the MLT problem is shown in the first two rows of <ref type="figure" target="#fig_5">Fig. 3</ref>. It can be seen that the small problem is solved to optimality, while the full problem is solved with an optimality gap. Most separating cuts are morality constraints. Results. A lineage forest for HeLa-small defined by the solution of the MLT problem is shown in <ref type="figure" target="#fig_7">Fig. 6</ref>. This lineage forest is in exact accordance with the ground truth. Corresponding decompositions of images are shown in <ref type="figure">Fig. 5</ref>. A lineage forest for HeLa-test defined by the feasible solution of the MLT problem is shown in <ref type="figure" target="#fig_11">Fig. 8(a)</ref>. A comparison with ground truth provided in <ref type="bibr" target="#b35">[36]</ref> is shown in Tab. 3 in terms of metrics SEG and TRA as defined in <ref type="bibr" target="#b35">[36]</ref>.</p><formula xml:id="formula_12">N2DL-HeLa (a) I G t t+1 t C t t+1 p p' V t t v v _ Flywing-Epithelium (b) T T I G t t+1 t C t t+1 p'' V t t v v _</formula><p>Technical details. Before constructing a hypothesis graph we perform the following data pre-processing: We train a random forest to predict, for every pixel r, the probability p r of this pixel being foreground (part of a cell). For every time index t, we consider the set S t of pixels r at time t for which p r &gt; 0.5. A watershed search of the distance transform of S t decomposes the subgraph of the pixel grid graph induced by S t into cell fragments (superpixels) V t . For every cell fragment v ∈ V t , we compute its center of mass r v ∈ R 2 in the image plane. We train a second random forest to predict, for every pixel r, the probability p ′ r of this pixel showing a cell boundary, i.e. the interface between a cell and the background or the interface between two cells that touch.</p><p>We then construct a hypothesis graph G = (V, E, τ ) as follows: For every time index t and every pair of distinct cell fragments v, w ∈ V t , we introduce the edge {v, w} ∈ E t iff r v − r w &lt; d 1 , for a maximum distance d 1 ∈ R + . For every time index t and every pair (v, w) ∈ V t × V t+1 , we introduce the edge {v, w} ∈ E t,t+1 iff r v − r w &lt; d 2 , for a maximum distance d 2 ∈ R + .  <ref type="bibr" target="#b34">[35]</ref> undisclosed 0.8932 0.9920 HEID-GE <ref type="bibr" target="#b22">[23]</ref> undisclosed 0.8155 0.9871 LEID-NL <ref type="bibr" target="#b18">[19]</ref> undisclosed 0.8180 0.9558 HOUS-US <ref type="bibr" target="#b37">[38]</ref> undisclosed 0.7701 0.9865 NOTT-UK undisclosed 0.5778 0.7811 IMCB-SG undisclosed 0.3317 0.9327 <ref type="table">Table 3</ref>: Quantified above is the distance from ground truth of decompositions (SEG) and lineage forests (TRA) obtained by MLT and contenders of the second ISBI Tracking Challenge <ref type="bibr" target="#b35">[36]</ref>. Evaluation for <ref type="bibr" target="#b35">[36]</ref> is performed on undisclosed test data. We evaluate MLT on test data published on the challenge website. For every time index t and every edge e = {v, w} ∈ E t , we define the cost</p><formula xml:id="formula_13">c e = −logit max{||r v − r w ||/d 1 , p ′ (r v , r w )} .<label>(9)</label></formula><p>Here p ′ (r v , r w ) denotes the maximum of p ′ along the Bresenham line from r v to r w . For every time index t and every e = {v, w} ∈ E t,t+1 , we define the cost</p><formula xml:id="formula_14">c e = −logit ||r v − r w ||/d 2 .<label>(10)</label></formula><p>All (dis)appearance costs are constant, c + = c − = c 0 ∈ R + .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Flywing Epithelium Data</head><p>This dataset contains images that show a developing fly wing epithelium, c.f . <ref type="figure" target="#fig_9">Fig. 7(a)</ref>. Every pixel is a part of a cell and no pixels show background. The data is divided into a training sequence and a test sequence. We have collected ground truth for both sequences by manually joining watershed superpixels. The construction of a priced hypothesis  graph from the raw test sequence is sketched in <ref type="figure" target="#fig_3">Fig. 4(b)</ref> and described in more detail below. It consists of 5026 nodes and 19011 edges.</p><p>Optimization. The convergence of the branch-and-cut algorithm is shown in the third row of <ref type="figure" target="#fig_5">Fig. 3</ref>. It be seen from this figure that the problem is solved with an optimality gap determined by the lower bound.</p><p>Results. The lineage forest defined by the feasible solution of the problem is depicted in <ref type="figure" target="#fig_11">Fig. 8(b)</ref>. Corresponding decompositions of images are depicted in <ref type="figure" target="#fig_9">Fig. 7</ref>(c). Decompositions and the lineage forests are compared in Tab. 4 to the ground truth in terms of the metrics SEG and TRA. It can be seen from this table that these results compare well to those found by the tracking system biologist use today <ref type="bibr" target="#b1">[2]</ref>.</p><p>Technical details. Data pre-processing consist of training a random forest classifier for detecting, for every pixel r, the probability p ′′ r of showing a cell membrane. For every time index t, we decompose the image taken at time t into cell fragments V t by first applying a watershed transform on the raw image sequence and then progressively joining adjacent superpixels iff both the average image intensity and the average membrane probability along their shared boundary are below respective thresholds. We maximize these thresholds w.r.t. the training data subject to the constraint that no false joins occur at this stage. This leads to 3.09 ± 1.3 fragments per cell. Also as pre-processing, we estimate dense optical flow f for the image sequence and compute, for every cell fragment v, its center of mass r v ∈ R 2 .  We then construct a hypothesis graph G = (V, E, τ ) as follows: For every time index t and every pair of distinct cell fragments v, w ∈ V t , we introduce the edge {v, w} ∈ E t iff v and w are adjacent components of the pixel grid graph of the image taken at time index t. For every time index t and every pair (v, w) ∈ V t × V t+1 , we introduce the edge {v, w} ∈ E t,t+1 iff ||r v +f (r v )−r w || 2 ≤ d, for a maximum distance d ∈ R + .</p><p>For every time index t and every edge e = {v, w} ∈ E t , we define the cut-cost c e = −logit r∈E(v,w) p ′′ (r)/|B(v, w)| <ref type="bibr" target="#b10">(11)</ref> where B(v, w) is the set of pixels in fragment v adjacent to fragment w and vice versa. For every time index t and every edge e = {v, w} ∈ E t,t+1 , we define the cut-cost c e = c 0 + c 1 m e with m e the maximum of p ′′ along a geodesic between pixels r v and r w , and with c 0 , c 1 ∈ R estimated from training data by logistic regression. All (dis)appearance costs are constant, c + = c − = c 0 ∈ R + .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>Building on recent work in image decomposition and multi-target tracking, we have proposed a rigorous mathematical abstraction of lineage tracing, a central problem in biological image analysis. The optimization problem we propose, a hybrid of the well-known minimum cost multi-  <ref type="table">Table 4</ref>: Quantified above is the distance from ground truth of decompositions (SEG) and traced lineage forests (TRA) obtained by MLT and, alternatively, the Packing Analyzer <ref type="bibr" target="#b1">[2]</ref>. cut problem and the minimum cost k disjoint arborescence problem, is a joint formulation of image decomposition and lineage forest reconstruction. Its feasible solutions define, for every image in a sequence of images, a decomposition into cells and, across images, a lineage forest of cells. Unlike previous formulations, it does not constrain the set of decompositions. We have studied three instances of this problem defined by two biologically relevant microscopy data sets. For all instances, we have obtained feasible solutions with certified optimality gap. One instance has been solved to global optimality, yielding a solution in exact accordance with decompositions and ground truth lineages.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>If pixels potentially show background, the objective is to Given a sequence of images, taken at consecutive points in time, and given a decomposition of each image into cell fragments (depicted above as nodes), the objective of lineage tracing is to join fragments of the same cell within and across images, e.g. {a, b} and {c, d}, and to join fragments of descendant cells across images, e.g. {d, e}. Joins (cuts) are depicted as solid (dotted) lines. Fragments of dividing cells are depicted as black nodes.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>Depicted above are examples (graphs and 01-labelings of edges) in which inequalities (1)-(3) are violated. (a) An inequality (1) is violated iff there exist t ∈ N and a cycle Y in Gt in which precisely one edge is labeled 1. (b) An inequality (2) is violated iff there exist t ∈ N, an edge {v, w} ∈ Et,t+1 labeled 1 and a path in G + t connecting v to w in which all edges are labeled 0. (c) An inequality (3) is violated iff there exist t ∈ T and nodes vt, wt ∈ Vt and vt+1, wt+1 ∈ Vt+1 connected by edges {vt, vt+1}, {wt, wt+1} ∈ Et,t+1 labeled 0, such that vt and wt are separated by a cut in Gt with all edges labeled 1 and vt+1 and wt+1 are connected by a path in Gt+1 with all edges labeled 0.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>✷ Lemma 2</head><label>2</label><figDesc>For every hypothesis graph G = (V, E, τ ) and every x ∈ {0, 1} E , the set x −1 (1) of edges labeled 1 is a lineage cut of G iff x satisfies the linear inequalities (1)-(3) stated below. It is sufficient in (1) to consider only chordless cycles. Moreover, the lineage cut is binary iff, in addition, x satisfies the linear inequality (4).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Definition 4</head><label>4</label><figDesc>For any priced hypothesis graph G = (V, E, τ, c, c + , c − ), the instance of the moral lineage tracing problem w.r.t. G is the ILP in x ∈ {0, 1} E and x + , x − ∈ {0, 1} V written below.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 3 :</head><label>3</label><figDesc>Depicted above is the convergence of the branch-and-cut algorithm that solves the ILP and of the cutting plane algorithm that solves the canonical LP relaxation. Instances of the moral lineage tracing problem are, from top to bottom, HeLa-small, HeLa-test and Flywing. Graphs on the left show the objective values of intermediate integer feasible solutions (-) and lower bounds (-)found by the branch-and-cut algorithm, as well as the lower bound found by the cutting-plane algorithm (-). Dotted lines show the convergence with the bifurcation constraint (4). It can be seen that the LP relaxation is not tight for larger problems. Graphs on the right show numbers of cuts: morality (-), spacetime cycle (-), space cycle (-), appearance (-), disappearance (-), and bifurcation (-). It can be seen that violated morality constraints dominate.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 4 :Figure 5 :</head><label>45</label><figDesc>Sketched above is the construction of an instance of the MLT for (a) the N2DL-HeLa Data and (b) the Flywing-Epithelium Data. For every time index t and the respective image I in the sequence, foreground probabilities p of pixels showing part of a cell and probabilities p ′ and p ′′ of pixels showing object boundaries are estimated and used to decompose the image into cell fragments St. A hypothesis graph (shown for only one fragment each) connects nearby cell fragments within images and across successive images. Depicted above are (a) image crops of the full HeLa-test data set, and (b) decompositions of the images defined by a feasible solution of the moral lineage tracing problem (Def. 4). Diagonally striped cells indicate cell division.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 6 :</head><label>6</label><figDesc>Depicted above is the lineage forest (V,C) reconstructed by solving an instance of the moral lineage tracing problem (Def. 4) defined w.r.t. the image sequence HeLa-small. Edges connecting a fragment of one cell to a fragment of a descendant cell (depicted in black) indicate cell divisions. Edges connecting fragments of the same cell are depicted in a color representing that cell. Note the two progenitor cells in the first image, visible here on the l.h.s..</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_9"><head>Figure 7 :</head><label>7</label><figDesc>Depicted above are (a) images of the fly wing test set, (b) decompositions of these images into cell fragments, and (c) decompositions of the images defined by a feasible solution of the moral lineage tracing problem (Def. 4). Diagonally striped cells divide before the next time point (image).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_11"><head>Figure 8 :</head><label>8</label><figDesc>3D rendered lineage forests for (a) the full HeLa-test data set, and (b) the complete fly wing data set, as obtained by solving the moral lineage tracing problem. For better visibility, only the traced moral lineages are shown while all cut edges are hidden. Time progresses from left to right.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 :</head><label>1</label><figDesc></figDesc><table>Worst case time complexity of the separation procedures 
+we implement for integral points (ILP) and fractional points (LP). 
+Here, m(|V |, |E|) denotes the worst case time complexity of a 
+maximum st-flow algorithm for a graph (V, E). 
+
+Problem Instance 
+Variables Fractional Optimal 
+
+HeLa-small 
+1839 
+5 
+1834 (100%) 
+HeLa-test 
+41571 
+1180 
+40078 (99.2%) 
+Flywing 
+29063 
+1174 
+27740 (99.5%) 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 2 :</head><label>2</label><figDesc>Analysis of solutions of the canonical LP relaxation of the moral lineage tracing problem.</figDesc><table></table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">All graphs are assumed to be finite, simple and undirected. A node labeling of a graph (V, E) is a map τ : V → N.2 A multicut of Gt = (Vt, Et) is a subset M ⊆ Et of edges such that, for every cycle Y in Gt: |M ∩ Y | = 1<ref type="bibr" target="#b15">[16]</ref>.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>We thank the lab of Suzanne Eaton (MPI-CBG) for providing the flywing data. This work was partially supported by the German Federal Ministry of Research and Education (BMBF) under the code 031A099.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Seeded region growing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Adams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bischof</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="volume">16</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="641" to="647" />
+			<date type="published" when="1994-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Cell flow reorients the axis of planar polarity in the wing epithelium of Drosophila</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Aigouy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Farhadifar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">B</forename><surname>Staple</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Sagner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-C</forename><surname>Röper</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Jülicher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Eaton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Cell</title>
+		<imprint>
+			<biblScope unit="volume">142</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="773" to="786" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Ensemble segmentation using efficient integer linear programming</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Alush</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Goldberger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">10</biblScope>
+			<biblScope unit="page" from="1966" to="1977" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Towards comprehensive cell lineage reconstructions in complex organisms using light-sheet microscopy</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Amat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">J</forename><surname>Keller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Dev. Growth Differ</title>
+		<imprint>
+			<biblScope unit="volume">55</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="563" to="578" />
+			<date type="published" when="2013-05" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Fast, accurate reconstruction of cell lineages from largescale fluorescence microscopy data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Amat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Lemon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Mossing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Mcdole</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Branson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">W</forename><surname>Myers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">J</forename><surname>Keller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature Methods</title>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="951" to="958" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title level="m" type="main">Lifting of multicuts. CoRR</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Andres</surname></persName>
+		</author>
+		<idno>abs/1503.03791</idno>
+		<ptr target="http://arxiv.org/abs/1503.03791.4" />
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Probabilistic image segmentation with closedness constraints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Andres</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">H</forename><surname>Kappes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Beier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Köthe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">A</forename><surname>Hamprecht</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Globally optimal closed-surface segmentation for connectomics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Andres</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kröger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">L</forename><surname>Briggman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Denk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Korogod</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Knott</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Köthe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">A</forename><surname>Hamprecht</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Segmenting planar superpixel adjacency graphs w.r.t. non-planar superpixel affinity graphs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Andres</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yarkony</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">S</forename><surname>Manjunath</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kirchhoff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Turetken</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">C</forename><surname>Fowlkes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Pfister</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">EMMCVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Contour detection and hierarchical image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Maire</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Fowlkes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="898" to="916" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Large scale correlation clustering optimization. CoRR, abs/1112.2903</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bagon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Galun</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Correlation clustering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Bansal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Blum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chawla</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Machine Learning</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">56</biblScope>
+			<biblScope unit="page" from="89" to="113" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Fusion moves for correlation clustering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Beier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">A</forename><surname>Hamprecht</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">H</forename><surname>Kappes</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Cut, Glue &amp; Cut: A fast, approximate solver for multicut partitioning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Beier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kröger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">H</forename><surname>Kappes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Köthe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">A</forename><surname>Hamprecht</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Objective comparison of particle tracking methods</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Chenouard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Smal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>De Chaumont</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Maška</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><forename type="middle">F</forename><surname>Sbalzarini</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Gong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Cardinale</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Carthel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Coraluppi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Winter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">R</forename><surname>Cohen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">J</forename><surname>Godinez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Rohr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Kalaidzidis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Duncan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">E G</forename><surname>Magnusson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Jaldén</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">M</forename><surname>Blau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Paul-Gilloteaux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Roudot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Kervrann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Waharte</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-Y</forename><surname>Tinevez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">L</forename><surname>Shorte</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature Methods</title>
+		<editor>J. Willemse, K. Celler, G. P. van Wezel, H.-W. Dan, Y.-S. Tsai, C. Ortiz-de Solorzano, J.-C. Olivo-Marin, and E. Meijering</editor>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="281" to="289" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">The partition problem</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chopra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Mathematical Programming</title>
+		<imprint>
+			<biblScope unit="volume">59</biblScope>
+			<biblScope unit="issue">1-3</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="1993" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Correlation clustering in general weighted graphs. Theoretical Computer Science</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">D</forename><surname>Demaine</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Emanuel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fiat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Immorlica</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">361</biblScope>
+			<biblScope unit="page" from="172" to="187" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Geometry of Cuts and Metrics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">M</forename><surname>Deza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Laurent</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1997" />
+			<publisher>Springer</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Advanced level-set-based cell tracking in time-lapse fluorescence microscopy</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Dzyubachyk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">A</forename><surname>Van Cappellen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Essers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">J</forename><surname>Niessen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Meijering</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Medical Imaging</title>
+		<imprint>
+			<biblScope unit="volume">29</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2010-03" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Some well-solved problems in combinatorial optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Edmonds</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Combinatorial Programming: Methods and Applications</title>
+		<editor>B. Roy</editor>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="1975" />
+			<biblScope unit="volume">19</biblScope>
+			<biblScope unit="page" from="285" to="301" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Efficient automatic 3D-reconstruction of branching neurons from EM data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Funke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Anders</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">A</forename><surname>Hamprecht</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Cardona</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cook</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR &apos;12: Proceedings of the 2012 IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<publisher>IEEE Computer Society</publisher>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Gurobi optimizer reference manual</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Gurobi</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note>Optimization</note>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Large-scale tracking and classification for automatic analysis of cell migration and proliferation, and experimental optimization of high-throughput screens of neuroblastoma cells</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Harder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Batra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Diessl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gogolin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Eils</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Westermann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>König</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Rohr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Cytometry Part A</title>
+		<imprint>
+			<biblScope unit="volume">87</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="524" to="540" />
+			<date type="published" when="2015-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Optimal Joint Segmentation and Tracking of Escherichia Coli in the Mother Machine</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Jug</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pietzsch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kainmüller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Funke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kaiser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Van Nimwegen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Myers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Bayesian and grAphical Models for Biomedical Imaging</title>
+		<meeting><address><addrLine>Cham</addrLine></address></meeting>
+		<imprint>
+			<publisher>Springer International Publishing</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="25" to="36" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Globally optimal image partitioning by multicuts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">H</forename><surname>Kappes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Speth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Andres</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Reinelt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schnörr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">EMMCVPR</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Higher-order segmentation via multicuts. CoRR, abs/1305</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">H</forename><surname>Kappes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Speth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Reinelt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schnörr</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">6387</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Probabilistic correlation clustering and image partitioning using perturbed multicuts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">H</forename><surname>Kappes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Swoboda</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Savchynskyy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Hazan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schnörr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SSVM</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">A discrete chain graph model for 3d+t cell tracking with high misdetection robustness</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">X</forename><surname>Kausler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Schiegg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Andres</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Lindner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Koethe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Leitte</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wittbrodt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Hufnagel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">A</forename><surname>Hamprecht</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV&apos;12: Proceedings of the 12th European conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer-Verlag</publisher>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Imaging morphogenesis: technological advances and biological insights</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">J</forename><surname>Keller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Science</title>
+		<imprint>
+			<biblScope unit="volume">340</biblScope>
+			<biblScope unit="issue">6137</biblScope>
+			<biblScope unit="page">1234168</biblScope>
+			<date type="published" when="2013-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Fast, highcontrast imaging of animal development with scanned light sheet-based structured-illumination microscopy</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">J</forename><surname>Keller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">D</forename><surname>Schmidt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Santella</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Khairy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Bao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wittbrodt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">H K</forename><surname>Stelzer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature Methods</title>
+		<imprint>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="637" to="642" />
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Reconstruction of zebrafish early embryonic development by scanned light sheet microscopy</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">J</forename><surname>Keller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">D</forename><surname>Schmidt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wittbrodt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">H K</forename><surname>Stelzer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Science</title>
+		<imprint>
+			<biblScope unit="volume">322</biblScope>
+			<biblScope unit="issue">5904</biblScope>
+			<biblScope unit="page" from="1065" to="1069" />
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Efficient decomposition of image and mesh graphs by lifted multicuts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Keuper</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Levinkov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Bonneel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Lavoué</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Andres</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Reconstructing embryonic development</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Khairy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">J</forename><surname>Keller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Genesis</title>
+		<imprint>
+			<biblScope unit="volume">49</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<biblScope unit="page" from="488" to="513" />
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Image segmentation using higher-order correlation clustering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Yoo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Nowozin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="1761" to="1774" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Global linking of cell tracks using the Viterbi algorithm</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">E G</forename><surname>Magnusson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Jaldén</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">M</forename><surname>Gilbert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">M</forename><surname>Blau</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Med. Imag</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="911" to="929" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+		<title level="m" type="main">A benchmark for comparison of cell tracking algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Maška</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ulman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Svoboda</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Matula</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Matula</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Ederra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Urbiola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>España</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Venkatesan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">M W</forename><surname>Balak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Karas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Bolcková</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Štreitová</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Carthel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Coraluppi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Harder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Rohr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">E G</forename><surname>Magnusson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Jaldén</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">M</forename><surname>Blau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Dzyubachyk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Křížek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">M</forename><surname>Hagen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Pastor-Escuredo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Jimenez-Carretero</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Ledesma-Carbayo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Muñoz-Barrutia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Meijering</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kozubek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Ortiz-De Solorzano</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+	<note>Bioinformatics, page btu080</note>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Imaging in systems biology</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">G</forename><surname>Megason</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">E</forename><surname>Fraser</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Cell</title>
+		<imprint>
+			<biblScope unit="volume">130</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="784" to="795" />
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title level="m" type="main">Automated profiling of individual cell-cell interactions from high-throughput timelapse imaging microscopy</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Merouane</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Rey-Villamizar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Liadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Romain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Singh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">J N</forename><surname>Cooper</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Varadarajan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Roysam</surname></persName>
+		</author>
+		<imprint/>
+	</monogr>
+	<note>in nanowell grids (TIMING</note>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title/>
+	</analytic>
+	<monogr>
+		<title level="j">Bioinformatics</title>
+		<imprint>
+			<biblScope unit="issue">7</biblScope>
+			<biblScope unit="page">355</biblScope>
+			<date type="published" when="2015-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Coupled minimum-cost flow cell tracking for high-throughput quantitative analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Padfield</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Rittscher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Roysam</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Med Image Anal</title>
+		<imprint>
+			<biblScope unit="volume">15</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="650" to="668" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Graphical Model for Joint Segmentation and Tracking of Multiple Dividing Cells</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Schiegg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Hanslovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Haubold</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Koethe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Hufnagel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">A</forename><surname>Hamprecht</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Bioinformatics</title>
+		<imprint>
+			<biblScope unit="page">764</biblScope>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Schiegg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Hanslovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">X</forename><surname>Kausler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Hufnagel</surname></persName>
+		</author>
+		<title level="m">Conservation Tracking. ICCV 2013</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<monogr>
+		<title level="m" type="main">Combinatorial optimization. Polyhedra and efficiency</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Schrijver</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2003" />
+			<publisher>Springer</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Normalized cuts and image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="888" to="905" />
+			<date type="published" when="2000-08" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Subgraph decomposition for multi-target tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Andres</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andriluka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Quantitative high-speed imaging of entire developing embryos with simultaneous multiview light-sheet microscopy</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Tomer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Khairy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Amat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">J</forename><surname>Keller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature Methods</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<biblScope unit="page" from="755" to="763" />
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Detecting irregular curvilinear structures in gray scale and color imagery using multi-directional oriented flux</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Türetken</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Becker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Glowacki</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Benmansour</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Reconstructing loopy curvilinear structures using integer programming</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Türetken</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Benmansour</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Andres</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Pfister</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">Automated reconstruction of tree structures using path classifiers and mixed integer programming</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Türetken</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Benmansour</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">Automated reconstruction of dendritic and axonal trees by global optimization with geometric priors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Türetken</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Gonzalez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Blum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neuroinformatics</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="279" to="302" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">Tracking interacting objects optimally using integer programming</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Turetken</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Fleuret</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<analytic>
+		<title level="a" type="main">Planar ultrametric rounding for image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yarkony</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Fowlkes</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b52">
+	<analytic>
+		<title level="a" type="main">Fast planar correlation clustering for image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yarkony</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ihler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">C</forename><surname>Fowlkes</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

@@ -1,0 +1,1415 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Online Collaborative Learning for Open-Vocabulary Visual Classifiers</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hanwang</forename><surname>Zhang</surname></persName>
+							<email>hanwangzhang@gmail.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">National University of Singapore</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xindi</forename><surname>Shang</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">National University of Singapore</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wenzhuo</forename><surname>Yang</surname></persName>
+							<email>wenzhuo@nus.edu.sg</email>
+							<affiliation key="aff0">
+								<orgName type="institution">National University of Singapore</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Huan</forename><surname>Xu</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">National University of Singapore</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Huanbo</forename><surname>Luan</surname></persName>
+							<email>luanhuanbo@gmail.com</email>
+							<affiliation key="aff1">
+								<orgName type="institution">Tsinghua University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tat-Seng</forename><surname>Chua</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">National University of Singapore</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Online Collaborative Learning for Open-Vocabulary Visual Classifiers</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:44+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We focus on learning open-vocabulary visual classifiers, which scale up to a large portion of natural language vocabulary (e.g., over tens of thousands of classes). In particular, the training data are large-scale weakly labeled Web images since it is difficult to acquire sufficient well-labeled data at this category scale. In this paper, we propose a novel online learning paradigm towards this challenging task. Different from traditional N-way independent classifiers that generally fail to handle the extremely sparse and inter-related labels, our classifiers learn from continuous label embeddings discovered by collaboratively decomposing the sparse image-label matrix. Leveraging on the structure of the proposed collaborative learning formulation, we develop an efficient online algorithm that can jointly learn the label embeddings and visual classifiers. The algorithm can learn over 30,000 classes of 1,000 training images within 1 second on a standard GPU. Extensively experimental results on four benchmarks demonstrate the effectiveness of our method.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>In recent years, we have witnessed the impressive progress of visual classifiers that help to move a large variety of visual applications from academic prototypes into industrial products <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b40">41]</ref>. However, when we communicate with vision systems using natural language, those classifiers with a predefined vocabulary (e.g., ImageNet <ref type="bibr" target="#b34">[35]</ref>) generally fail due to vocabulary discrepancy and scarcity. For example, "dolphin" is usually used instead of "grampus griseus" <ref type="bibr" target="#b32">[33]</ref> and adjective classifiers like "romantic" or "exciting" are usually scarce as compared to nouns <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b18">19]</ref>. Recently, much attention has been paid to scale up visual classifiers to open-vocabulary, which covers the full range of vocabulary in natural language <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b45">46]</ref>.</p><p>One major limitation of the scale-up is the difficulty in acquiring sufficient well-labeled datasets with many classes, e.g., even the full ImageNet only contains images  <ref type="bibr" target="#b33">[34]</ref>, which is used as the training data. Middle: The power-law distribution of labels suggests that the images are sparsely labeled. We transform such extreme sparsity to continuous label space that preserve semantic relations. Different colors suggest various semantic clusters by K-means. Bottom: As compared to traditional classifiers, ours are learned from the latent embeddings. of around 20K nouns. Fortunately, a promising method to acquire more labels has been recently studied on learning concepts from millions of noisy Web images. This method utilizes user-generated textual descriptions as labels and can naturally accommodate an open vocabulary <ref type="bibr" target="#b33">[34,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b48">49]</ref>.</p><p>However, learning open-vocabulary classifiers from a large weakly-labeled dataset is not a trivial extension to the conventional N-way classification (e.g., one-vs-all SVM or softmax that treats the N classes independently), due to the following three challenges: Extreme Sparse Labels. Web images are usually weakly annotated, i.e., an image is usually described by only a small number of words as compared to the whole vocabulary. This results in extreme sparse labels, where the miss-ing entries have no clear "positive" or "negative" supervised samples that confuse the resultant classifiers. As shown in <ref type="figure" target="#fig_0">Figure 1</ref> (top), missing labels such as "green" and "grass" should also be considered as positive. Complex Semantic Relations. Traditional N -way classifiers assume that the N labels are mutually exclusive <ref type="bibr" target="#b0">[1]</ref>. However, when N is large, this assumption will no longer hold. Although some efforts are made by hand-crafting semantic relations among the labels <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b43">44,</ref><ref type="bibr" target="#b21">22]</ref>, it is increasingly impractical as more realistic open-vocabulary labels are considered. On one hand, different labels are usually used to describe the same image, e.g., "BMW" is a "car", which may or may not be a "racer"; treating them independently will violate semantic relations. On the other hand, the vocabulary of Web image labels follow a powerlaw distribution (cf. <ref type="figure" target="#fig_0">Figure 1</ref>(middle))-only a few labels correspond to many training data while the large number of the rest labels correspond to little data. If the semantic relations among labels are ignored, we cannot transfer the knowledge of learning frequent classes to help learning rare classes <ref type="bibr" target="#b36">[37]</ref>. Inexhaustible Web Data. Nearly 1.83 million images are uploaded to Flickr everyday 1 ! It is necessary to keep classifiers up-to-date since: 1) receiving more data will improve the performance of the classifiers; and 2) the semantics of classifiers may evolve when feeding additional examples <ref type="bibr" target="#b8">[9]</ref>. Obviously, it is impractical to retrain our visual classifiers each time when new samples arrive. Therefore, we require the open-vocabulary classifiers to be trained in an online fashion, which will help us to realize a practical never-ending visual learner <ref type="bibr" target="#b4">[5]</ref>.</p><p>In this paper, we present a novel classification paradigm towards tackling the above challenges. As shown in Figure 1(bottom), our key idea is to learn latent representations for labels and images, and then cast the classifier learning from label discrimination to image embedding regression. We call this paradigm Collaborative Learning since we exploits the joint collaboration among images, labels and visual features during classifier learning. In fact, this technique can be considered as a visual extension to the wellknown Collaborative Filtering that is used to learn latent representations for the sparsely linked users and items in recommendation systems <ref type="bibr" target="#b25">[26]</ref>. Collaborative learning can effectively transform the extreme sparse labels into compact latent space, where the semantic relations are also preserved in terms of similarities in the space (cf. <ref type="figure" target="#fig_0">Figure 1(b)</ref>). By doing this, we can effectively handle the patterns of missing labels and the complex label relations.</p><p>To address the dynamic nature of the ever-evolving Web images, we develop a computationally efficient online algorithm to solve the proposed collaborative learning problem. As illustrated in the colored components in <ref type="figure" target="#fig_1">Figure 2,</ref>   new image and its label, our model is updated by two online steps: 1) update the image and label embeddings given new images and labels; and 2) update the classifiers given the updated embeddings. In sharp contrast to the widely-used SGD, our method has two advantages: 1) it does not require the tuning of learning rate that has a significant effect on the performance of SGD, and 2) it can "memorize" the history data and thus only one pass of training data is sufficient. We apply the proposed method to learn a set of 30Kvocabulary classifiers from a publicly available 1M Flickr image dataset with weak labels <ref type="bibr" target="#b33">[34]</ref>. Our method achieves fast online training of 1K images within a second on a GPU (or 10s on a single CPU). Cross-dataset experiments on several multi-labeled benchmarks demonstrate that the learned open-vocabulary classifiers outperform several state-of-theart learning methods. <ref type="figure">Figure 3</ref> illustrates qualitative images ranked by several sample classifiers in our vocabulary. In summary, our contributions are as follows:</p><p>• We propose a novel open-vocabulary classification paradigm named collaborative learning, which tackles the three challenges of: extreme label sparsity, complex label relations and inexhaustible Web data.</p><p>• We develop a fast online algorithm for collaborative learning which requires no learning rate and retraining.</p><p>• Promising results on cross-datasets demonstrate the high potential of our 30,456-vocabulary classifiers trained from 1M Flickr Images.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>Our idea of transforming multi-label classification to regression is inspired by recent studies on learning visual models from semantic embeddings <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b1">2,</ref><ref type="bibr" target="#b37">38]</ref> that are fundamentally different from those studies on weblysupervised learning <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b3">4]</ref>. As compared to hand-crafted semantic relations, e.g., semantic hierarchy <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b36">37]</ref> and relation graph <ref type="bibr" target="#b10">[11]</ref>, mapping discrete label space to continuous semantic space offers a more flexible scalability. Frome et al. <ref type="bibr" target="#b15">[ 16]</ref> applied Word2Vec model <ref type="bibr" target="#b31">[32]</ref>   <ref type="bibr" target="#b6">[7]</ref> which are different from the training set. We can see that our classifiers well generalize the visual patterns, e.g., there is no "husky" in NUSWIDE but we can return the most similar "wolf". This is mainly due to the effectiveness of learning from semantic embeddings. Best viewed in color and zoom in.</p><p>the embeddings of the 1,000 ImageNet classes by learning from a large Wiki corpus and then fitted a visual CNN model to the 1,000 embeddings. Therefore, by similarity calculation between class embeddings, the visual model can be generalized to unseen classes in the corpus. Similar models with different regression function can be found in <ref type="bibr" target="#b37">[38]</ref>. Compared to our work, their semantic embeddings were pretrained by an external textual corpus while ours are jointly learned by collaborating images and visual features. This joint learning approach can also be found in recent visual-semantic embedding work <ref type="bibr" target="#b44">[45,</ref><ref type="bibr" target="#b23">24]</ref>. However, they require training data with well-annotated image-sentence pairs, while our method can deal with weakly labeled data.</p><p>Technically speaking, the work mentioned above and ours are closely related to Label Space Dimension Reduction (LSDR) <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b41">42]</ref>-a new paradigm in multi-label classification that can be traced back to the very classic CCA <ref type="bibr" target="#b19">[20]</ref>. LSDR maps the label-space into a new low dimensional space, trains the classifier in the constructed space and then projects the predictions back to the original labels. In experiments, we compare our method with two recent works <ref type="bibr" target="#b45">[46,</ref><ref type="bibr" target="#b47">48]</ref> since they can also be applied in largescale settings. Compared to their optimizaiton procedure, our method needs no sensitive learning rates or subproblem iterations.</p><p>Collaborative filtering via matrix factorization has been successfully applied in many recommender systems <ref type="bibr" target="#b25">[26]</ref>, which inspires our collaborative learning formulation. Our modeling of sparse label-image annotations is analogous to their sparse user-item relations. This idea has also been applied in the latest work on visual learning <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b13">14]</ref>, where the CNN model is fine-tuned with image embeddings learned by collaborative filtering. On the other hand, we develop an efficient online algorithm for the proposed collaborative learning with the help of matrix factorization. Our algorithm can be considered as a visual extension for the recent online dictionary learning methods <ref type="bibr" target="#b30">[31,</ref><ref type="bibr" target="#b14">15]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Formulation</head><p>For a typical multi-label classification problem with n training samples</p><formula xml:id="formula_0">{x i , y i } n i=1</formula><p>, where x i ∈ R d is the image feature vector and y i ∈{ 0, 1} m is the sparse label vector with vocabulary size m, we denote the nonzero entries of y i as the corresponding labels that are "present" or "on" whereas the zeros are "absent" or "off". When m is large, traditional N-way</p><formula xml:id="formula_1">classifiers {f i } m i=1 , where f i : R d →{ 0</formula><p>, 1}, will be problematic due to the complex semantic relations among the sparsely annotated labels.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Label Space Dimension Reduction</head><p>Recall that the proposed collaborative learning is closely related to Label Space Dimension Reduction (LSDR) <ref type="bibr" target="#b41">[42,</ref><ref type="bibr" target="#b5">6]</ref>-a generic framework that scales up to large label size. LSDR transforms the original linear classification model</p><formula xml:id="formula_2">y i ≈ Wx i into v i ≈ Wx i , where W ∈ R m×d and W ∈ R r×d</formula><p>are the parameters of linear models, v i ∈ R r (r ≪ m) lies the reduced label space (cf. <ref type="figure" target="#fig_0">Figure 1</ref>(bottom)). Formally, the objective of LSDR can be formulated as a coupled linear regression problem <ref type="bibr" target="#b47">[48]</ref>:</p><formula xml:id="formula_3">min U,W Y − U T WX 2 F + β U 2 F + W 2 F ,<label>(1)</label></formula><p>where the columns of Y ∈ R m×n and X ∈ R d×n represent {y i } and {x i }, respectively; U ∈ R r×m is a reduced classifier model. LSDR essentially seeks a low-rank decomposition for W, i.e., W = U T W, and the model of the i-th classifier can be written as</p><formula xml:id="formula_4">w i = u T i W, i.e., f i (x)=u T i Wx.<label>(2)</label></formula><p>The assumption of LSDR is that W = { w i } are interrelated. For example, w dog should be more similar to wpuppy than wcar. Due to the coupled linear U T WX, solving W and U requires large matrix inverse 2 , which is usually solved by iterative conjugate gradient descent <ref type="bibr" target="#b47">[48]</ref>. Therefore, they are impractical for designing online solutions.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Collaborative Learning</head><p>Instead of hand-crafting the semantic relations between classifier models W, we directly explore the relations from the extreme sparse labels Y by leveraging collaborative filtering <ref type="bibr" target="#b25">[26]</ref>, which is especially powerful in learning latent representations that preserve semantic relations for sparse user-item matrix like Y. Recall that V = {v i } is the image embedding in the reduced label space, by forcing V = WX, Eq. (1) can be reformulated as:</p><formula xml:id="formula_5">min U,V,W [Y − U T V 2 F + β U 2 F + W 2 F ,s.t.V = WX.<label>(3)</label></formula><p>By relaxing the equality constraint, our collaborative learning formulation can be obtained:</p><formula xml:id="formula_6">min U,V,W Y − U T V 2 F + α V − WX 2 F + β U 2 F + V 2 F + W 2 F .<label>(4)</label></formula><p>To ensure the constraint in Eq. <ref type="formula" target="#formula_5">(3)</ref> is satisfied, we can enforce WX − V 2 F =0by imposing a very large α. Optimizing Eq. (3) involves a joint collaboration among the label embedding U, image embedding V, and the visual features X. This joint learning is different from other works that use two-stage learning, including separated semantic embedding and visual-semantic mapping <ref type="bibr" target="#b37">[38,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b15">16]</ref>.</p><p>Note that the original collaborative filtering loss is only defined for the observed entries, i.e., (Y − U T V) ⊙ I 2 F , where I indicates whether Y ij is taken into account or not. However, our method cannot apply this partially collaborative filtering formulation due to the following three reasons. First, Y is extremely sparse, e.g., for the 1M Flickr dataset used in this paper, over 99.7% of the enries are missing. Thus, only modeling the nonzero entries will cause severely overfitting. Second, most of the missing labels should be considered as "negative" although there do exist missing "positive" labels. In fact, some results show that treating <ref type="bibr" target="#b1">2</ref> To see this, denoting w = vec(W),</p><formula xml:id="formula_7">X i =[ u 1 ⊗ x i , ..., um ⊗ x i ]</formula><p>(vec is the column-wise vectorization of a matrix and ⊗ is matrix outer product), the subproblem can be reformulated into min W i y i − X T i vec(W) 2 2 + λ 2 vec(W) 2 2 , which requires impractical inversion of the size md × md.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Blue bell in pink makeup bag.</head><p>blue <ref type="formula">(</ref>  <ref type="figure">Figure 4</ref>. Top5: top 5 predicted labels ranked by inner product values (in brackets) between the image embedding and label embeddings, obtained by Partial CF and Full CF. Words in red are wrong labels. Original: the product value between the embeddings of the image and the original labels. We can see that due to severe overfitting, the observed labels receive nearly perfect (close to 1) predictions; while unobserved but wrong labels receive high product values.</p><p>"missing" as "zero" is much more effective than considering "missing" as "undefined", especially for preserving the latent semantic relations <ref type="bibr" target="#b38">[39,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b39">40]</ref>. Finally, the mask I will cause difficulties in deriving matrix-form solutions and hence cannot be easily speed-up by parallel computing via GPU. <ref type="figure">Figure 4</ref> illustrates some results of the label embedding qualities using different matrix decompositions.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Online Algorithm</head><p>Eq. (4) can be easily solved via alternating minimization that involves solving several quadratic programming problems. However, in dealing with large-scale and everevolving training data, such batch methods become impractical due to the limitation of storage and computational power.</p><p>The batch objective function in Eq. (4) with a batch of samples can be rewritten as:</p><formula xml:id="formula_8">Jn(U, W)= 1 n n i=1 (U, W; x i , y i )+ β n U 2 F + W 2 F , (5) where (U, W; x i , y i )=min v y i − U T v 2 F + α Wx i − v 2 F + β v 2 2 .</formula><p>Note that the regularization for U and W is imposed on all the training samples, so we have β n . This reasonable since when n →∞ , β n → 0, i.e., the regularization is no longer necessary due to sufficient training data. In the online optimization setting, we usually focus on minimizing the expected loss Ex,y[ (U, W); x, y] where the expectation is taken w.r.t. samples (x, y), instead of directly minimizing the empirical loss. The reason is that online algorithms such as SGD can lead to a lower expected loss than a perfect batch minimization <ref type="bibr" target="#b2">[3]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Solution</head><p>Inspired by recent online matrix factorization algorithms <ref type="bibr" target="#b30">[31,</ref><ref type="bibr" target="#b14">15]</ref>, we develop an online stochastic optimization algorithm to minimize the empirical loss in Eq. <ref type="formula">(5)</ref>, which can process one training sample at a time. In particular, at time t, we estimate (U, W; x, y) by using vt, which is</p><formula xml:id="formula_9">Algorithm 1: Online Collaborative Learning Input : {xi ∈ R d } n i=1 : training image features, {yi ∈{0, 1} m } n i=1</formula><p>: training labels, r: embedding dimension, α and β: trade-off parameters Output: W ∈ R r×d : image embedding model, U ∈ R r×m : label embeddings 1 Initialization: randomly initialize U 0 and W 0 , set</p><formula xml:id="formula_10">A 0 = 0 r×d , C 0 = 0 r×m , B −1 0 = α β I d×d , D −1 0 = 1 β I r×r 2 for t=1 to n do 3 Reveal the sample (xt, yt) 4 Update vt ← U t−1 U T t−1 +( α+β)I −1 (αW t−1 xt + U t−1 yt); 5 Update Wt ← AtB −1 t , where At = A t−1 + vtx T t , B −1 t ←B −1 t−1 − B −1 t−1 xtx T t B −1 t−1 /(1 + x T t B −1 t−1 xt); 6 Update Ut ← D −1 t Ct, where Ct = C t−1 + vty T t , D −1 t ←D −1 t−1 −D −1 t−1 vtv T t D −1 t−1 / 1+v T t D −1 t−1 vt ; 7 end 8 return U = Ut, W = Wt</formula><p>solved by using last updated U t−1 and W t−1 . Then, we use the collected {v i } t i=1 to compute Ut and Wt. The detailed procedure is described as follows.</p><p>Update v t with Fixed W t−1 and U t−1 : We estimate (U, W; x, y) in Eq. (5) by using vt obtained by:</p><formula xml:id="formula_11">vt =argmin v yt −U T t−1 v 2 F + α W t−1 xt −v 2 F + β v 2 2 ,<label>(6)</label></formula><p>which has a closed-form update rule:</p><formula xml:id="formula_12">vt ← U t−1 U T t−1 +(α + β)I −1 (αW t−1 xt + U t−1 yt) . (7)</formula><p>Note that U t−1 U T t−1 is only of size r × r, thus computing the inverse is fast. Update U t and W t with fixed v t : The loss function for updating Ut and Wt is:</p><formula xml:id="formula_13">Gt(U, W)= β t U 2 F + W 2 F + 1 t t i=1 yt −U T vt 2 F + α Wxt − vt 2 F + β vt 2 2 .<label>(8)</label></formula><p>Minimizing Gt(U, W) can be solved by optimizing W and U alternatively. With U fixed, Gt(U, W) can be easily calculated by solving equation ∇ W Gt = 0, which leads to the following update for Wt:</p><formula xml:id="formula_14">Wt ← VtX T t XtX T t + β/αI −1 ,<label>(9)</label></formula><p>where Vt =[ V t−1 , vt] and Xt =[ X t−1 , xt]. Since the size of XtX T t is d × d (e.g., d is typically several thousands for modern visual features), computing the inverse of XtX T t is impractical for online algorithm due to O(d 3 ) computational cost. Fortunately, note that XtX T can apply Sherman-Morrison-Woodbury formula to simplify the inverse. Define B 0 = β α I and Bt = B t−1 +x t−1 x T t−1 , we have:</p><formula xml:id="formula_15">B −1 t = B t−1 + xtx T t −1 = B −1 t−1 − B −1 t−1 xtx T t B −1 t−1 1+x T t B −1 t−1 xt .<label>(10)</label></formula><p>which only requires matrix-vector multiplication. Let At = A t−1 + vtx T t and A 0 = 0, then the update rule of Wt in Eq. (9) can be rewritten as:</p><formula xml:id="formula_16">Wt ← AtB −1 t .<label>(11)</label></formula><p>Similarly, the updating rule of Ut can be reformulated as:</p><formula xml:id="formula_17">Ut ← D −1 t Ct,<label>(12)</label></formula><p>where Ct = C t−1 + vty T t , D 0 = βI, and</p><formula xml:id="formula_18">D −1 t = D t−1 + vtv T t −1 = D −1 t−1 − D −1 t−1 vtv T t D −1 t−1 1+v T t D −1 t−1 vt .<label>(13)</label></formula><p>There are two significant advantages of our method over SGD: 1) as shown in the update rules discussed above, our method requires no learning rate; 2) our method explicitly records the historical information in At, Bt, Ct and Dt. Thus, our method is expected to achieve better performance via only one pass of the data, while SGD usually needs several passes which are impossible for online cases.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Algorithmic Analysis</head><p>Our online algorithm is summarized in Algorithm 1. Theorem 1 provides the theoretical guarantee for the convergence of our algorithm, which states that the update series {(Wt, Ut)} obtained by Algorithm 1 will converge to a local minimum of the optimization problem with cost function J t shown in Eq. (5).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Theorem 1 (Convergence of Algorithm 1)</head><p>Assume (x i , y i ) is bounded; the solution W ∈ R r×d and U ∈ R r×m obtained by Algorithm 1 is full rank. Then, we have the following properties with probability one: (a) Gt converges; (b) Jt − Gt converges to 0; (c) Jt converges; and (d) (Wt, Ut) converges to a stationary point.</p><p>Since the image visual features and the labeling vectors are always bounded, and we empirically observe that (Wt, Ut) is always full rank, the assumptions in Theorem 1 hold. The proof can be done similarly to <ref type="bibr" target="#b30">[31,</ref><ref type="bibr" target="#b14">15]</ref> with additional efforts on showing Gt(W,U) in Eq. <ref type="formula" target="#formula_13">(8)</ref> is strictly convex and the update rules in Eq. <ref type="formula">(7)</ref>, <ref type="bibr" target="#b10">(11)</ref> and <ref type="formula" target="#formula_3">(12)</ref> satisfy the optimality conditions of their corresponding objective functions. Note that Theorem 1 also guarantees the convergence of the mini-batch extension of Algorithm 1. Suppose the batch size is b, we slightly abuse the notation Xt as the tth mini-batch {x i } t+b i=t , and Vt and Yt are defined similarly. Then, the extended version of Algorithm 1 can be derived by replacing xt, yt and vt to Xt, Yt and Vt, respectively. Moreover, we replace At and Bt in Step 5 in Algorithm 1:</p><formula xml:id="formula_19">At ← A t−1 + 1 b VtX T t , Bt ← B −1 t−1 − 1 b B −1 t−1 Xt(I + 1 b X T t B −1 t−1 Xt) −1 X T t B −1 t−1 ,<label>(14)</label></formula><p>and replace Ct and Dt in Step 6 in Algorithm 1 by averaging the observations in a minibatch:</p><formula xml:id="formula_20">Ct ← C t−1 + 1 b VtY T t , Dt ← D −1 t−1 − 1 b D −1 t−1 Vt(I + 1 b V T t D −1 t−1 Vt) −1 V T t D −1 t−1 .<label>(15)</label></formula><p>Note that the matrix inverse can be computed efficiently since the corresponding size is only b × b.</p><p>We now provide the complexity analysis for the proposed algorithm. In the training stage, despite the output model W and U, the memory consumption to store At, Bt, Ct and Dt are O(rd), O(d 2 ), O(rm) and O(r 2 ), respectively. At each training time t, the computational complexity for Step 4, 5 and 6 are as follows:</p><p>Step 4 requires O(r 3 + r 2 m), including inverse and matrix multiplication;</p><p>Step 5 requires O(rd 2 + rbd</p><formula xml:id="formula_21">+ bd 2 + b 2 d + b 3 ) including O(rd 2 ) for updating W t , O(rbd) for updating A t and O(bd 2 + b 2 d + b 3 ) for B t ,</formula><p>where b is the minibatch size and b =1in Algorithm 1; and Step 6 requires O(mr 2 + rbm + b 2 r + br 2 + b 3 ). We can see the memory and computational compelxity for our algorithm is relatively low-except for several small-size inverses (e.g., r×r and b × b matrices), our update rules only require matrix multiplications, which can be easily speed-up by using parallel computing such as GPU.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experiments</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Datasets</head><p>We used SBU captioned photo dataset <ref type="bibr" target="#b33">[34]</ref> as our largescale weakly-labeled training data. It contains 1M images with user-generated descriptive text, which covers noisy and wide variety of semantics including objects, attributes, actions, stuff and scenes. The stopwords and words with frequency less than 5 are removed from the text. This gives rises to a vocabulary of size 3,0456. Since we are interested in examining whether the open-vocabulary classifiers learned with one dataset can generalize to others, we conducted cross-dataset evaluations, i.e., we test the classifiers on datasets different from SBU. We used the official test split of four multi-labeled visual benchmarks: 1) NUSWIDE <ref type="bibr" target="#b6">[7]</ref>, containing 107,859 test images across 81 concepts; 2) CCV <ref type="bibr" target="#b22">[23]</ref>, containing 4,658 test videos across 20 concepts. Note that some labels of CCV are more complex than those of NUSWIDE (e.g., "MusicPerformance" vs. "car"); 3) Flickr30K <ref type="bibr" target="#b46">[47]</ref>, containing 31,783 Flickr images focusing on events involving people and animals. Each image is associated with five high-quality sentences independently written by five native English speakers from Mechanical Turk. Since this dataset has no train/test split, we use the whole dataset as test data; 4) COCO <ref type="bibr" target="#b29">[30]</ref>, containing 40K official validation images with 3-5 high-quality sentences. We consider Flickr30K and COCO as multilabeled datasets, where the labels correspond to the words in the associated sentences. After removing the words with frequency less than 5, it resulted in 4,015 and 3,638 labels, which reside in our 30,456-word open-vocabulary, respectively for Flickr30K and COCO. For images, we used De-CAF 4,096-d DCNN features <ref type="bibr" target="#b12">[13]</ref>. For videos, we sampled 1 frame image with a step size of 5 in each video and used the mean DeCAF feature as the final video feature. All the features are normalized by ℓ 2 -norm.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Compared Methods and Details</head><p>Recall that the two key model parameters for openvocabulary classifiers as described in Eq. (2) are: the visual-to-semantic mapping W and the label embedding U. We compared the proposed Online Collaborative Learning (OCL) against 6 state-of-the-art large-scale classification methods, which have different definitions of W and U. 1) CNN: a standard 3,0456-way AlexNet <ref type="bibr" target="#b26">[27]</ref> with softmax classifiers. Such deep architecture has been widely used in training classifiers recently. Since we used De-CAF visual features, other methods can be considered as CNNs of various classification layer but with fixed lowerlevel networks. With the last fully-connected layer as features, W can be defined as I and U is the softmax model; 2) IncSVM: Incremental SVM <ref type="bibr" target="#b42">[43]</ref>. It applies a warm start strategy to efficiently update the previously trained SVM. We used the one-vs-all strategy to train 30,456 independent classifiers. Similar to CNN which has no label space reduction, it defines W = I and U as the SVM model; 3) WSABIE: an online large-scale vocabulary image annotation method <ref type="bibr" target="#b45">[46]</ref>. It adopts a max-margin metric learning method to learn an image mapping W and and label embedding U;4 )DeViSE: a Deep Visual-Semantic Embedding Model <ref type="bibr" target="#b15">[16]</ref>. Different from WSABIE, it adopts an external method-Word2Vec <ref type="bibr" target="#b31">[32]</ref> to obtain label embedding U, which are fixed during metric learning. In this paper, we used the SBU captions as the textual corpus; 5) NIC: Google Neural Image Caption generator <ref type="bibr" target="#b44">[45]</ref>. Based on <ref type="bibr" target="#b24">[25]</ref>, we used the visual-semantic mapping as W and word embeddings as U;6)LEML: Low-rank Empirical risk minimization for Multi-Label Learning <ref type="bibr" target="#b47">[48]</ref>, where U and W are described in <ref type="figure" target="#fig_0">Eq. (1)</ref>.</p><p>The experiments showed that our method is insensitive to the trade-off parameters α and β. We empirically set α =1and β =1 0 −4 , which can achieve good performance. Except for WSABIE and DViSE which have no released source code, we used the implementations of the methods suggested by the authors. For WSABIE, our implementation can roughly reproduce the reported results on NUSWIDE. Since DeViSE has no released textual corpus, we used the sentences of SBU instead to obtain the label embeddings by gensim 3 , and then strictly sticked to the suggested hyperparameter settings. Except for CNN and IncSVM, the dimensionality r is a crucial parameter. We (d) COCO <ref type="figure">Figure 5</ref>. Performance (mAP% or mAP ) on four datasets using various training size. All the results are obtained in an online setting, i.e., when new data arrive, we do not retrain the model. Therefore, the performance at 100% is obtained by only one pass of the data. tested r ∈ [100, 300, 500, 1000, 1500] and found that 500 was best for NIC and 1,000 or 1,500 were best for the rest (1,500 slightly better). Therefore, for efficiency, we chose r = 500 for NIC and r = 1000 for OCL, WASABIE, De-ViSE and LEML. All the methods were run 5 times with different minibatch orders and averaged the results.</p><p>The experiments showed that the minibatch extension as described in Eq. <ref type="bibr" target="#b13">(14)</ref> and Eq. (15) improves the resultant accuracy and the overall training speed and different batch size b ∈ [64, 128, 256, 512] provided similar results. We used b = 256 as the default batch size for all the methods. <ref type="table" target="#tab_3">Table 1</ref> lists the time for training one minibatch of size 256 on a standard desktop 6-core 3.0GHz CPU with 64GB memory 4 . Our method is computationally efficient due to the fact that each iteration only requires matrix-vector multiplication and inversion of small-size matrices. Our method only costs ∼0.3s for a minibatch when running on a Titan Z GPU with 5K cuda cores and 12GB memory. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">Results</head><p>We first evaluated the performance of our online learned open-vocabulary classifiers. After collecting the visualsemantic mapping W and the label embedding U of various methods, we computed a score between label and image as the final classification score. Except for OCL, the other methods run for several epochs (e.g., scans of training data) until convergence. <ref type="table" target="#tab_4">Table 2</ref> lists the performance of all the methods. We can observe that: 1) Except on NUSWIDE, our method considerably out-performs the others. One possible reason is that the 81 classes in NUSWIDE, e.g., "car" and "dog" are relatively simple, e.g., with large inter-and small intra-class visual discrepancy. Therefore, N-way classifiers such as CNN can still perform well. When more complex classes appear such as "MusicPerformance" in CCV and many more classes in Flickr30K and COCO, our method becomes superior.</p><p>2) Visual-semantic embedding methods like WSABIE, De-ViSE and NIC generally fail on all the datasets. This shows that they are ineffective on weakly supervised data.</p><p>3) LEML and our method consistently perform well on all the datasets since they effectively take advantages of explicitly learning latent representations from the extreme sparse label-image matrix. 4) The online version of OCL even outperforms the batch version (OCL-batch). This finding is consistent with <ref type="bibr" target="#b2">[3]</ref>, which states that a perfect minimization of the empirical loss is not a necessary guarantee to minimize the expected loss. We further evaluated the effectiveness of online learning of our method. <ref type="figure">Figure 5</ref> shows the performance of various methods by only one pass of the training data (SBU). Besides similar observations as above, we can see that the performance of CNN and IncSVM considerably drop by using only one epoch. We believe that online learning is important for training Web images due to its large-scale and ever-evolving nature. The effectiveness of the proposed online learning suggests a practical way for learning openvocabulary classifiers. Moreover, we can see that there is still a large potential when our method is fed with more training data. That is to say, by continuously learning from the "free" Web images with weak labels, we can obtain   <ref type="figure">Figure 6</ref>. Performance (mAP%) of various classifiers vs. the frequency of their semantic labels in training data. For example, performance at 10% is the mAP% of all the classifiers whose labels fall in the lowest 5% to 10% freqency. We also show the top 10 results of our classifiers (OCL) at different frequency levels, including label names, AP%, and label freqency. Red lines indicate wrongly classified images according to the groundtruth. Best viewed in color and zoom in. more and more accurate classifiers at a large scale. Now we investigate how well the classifiers perform in more detail. <ref type="figure">Figure 6</ref> illustrates the the peformance of various classifiers at different label frequency levels. We can see that as compared to conventional datasets of uniformly distributed data over small label size (e.g., NUSWIDE and CCV), the performance on large-scale labeled datasets (e.g., Flickr30K and COCO) clearly reflects the power-law distribution of real-world label distribution (cf. <ref type="figure" target="#fig_0">Figure 1</ref> (middle)). Therefore, knowledge transfer from "many" classes to "few" classes is crucial in learning open-vocabulary classifiers <ref type="bibr" target="#b36">[37]</ref>. We can see that our method consistently offers more accurate classifiers at almost all the frequency levels. This demonstrate the effectiveness of our method that learns from semantic embeddings and transfers semantic knowledge. Next, we would like to gain more insights about the failure cases: Over generalization. Learning from semantic embeddings is not always effective. As shown in <ref type="figure">Figure 6</ref>, the "glacier" classifier is confused with "bear" and "lake" on NUSWIDE. The reason is that our model successfully learns that "glacier" is semantically related to "polar bear", "water" and "mountain". This is meaningful but it confuses the visual patterns of "glacier". When the visual cues are subtle, this confusion becomes more severe. For example, the "catcher" classifier on COCO is confused with "pitcher" and "batter", which are all very close to "baseball". Nevertheless, we believe that such confusion is more favorable than the semantically unrelated confusions, e.g., when there is only 6 training samples of "pacifier", it can still returns "baby" images as reasonable wrong results; moreover, as shown in <ref type="figure">Figure 3</ref>, there is no "husky" in NUSWIDE but we can return the most similar "wolf". This demonstrates a great potential in zero-shot learning. Word ambiguiation. We can see that "fire" classifier is confused with "fire truck", even there are 19,859 training images. The reason is that we did not adopt any word disambiguation. However, we believe such failure cases can be eliminated once we use advanced word sense disambiguation and part-of-speech techniques <ref type="bibr" target="#b35">[36]</ref> in the future work. Subjective labels. Human labeling is usually partially given in Flickr30K and COCO. For example, even though the top 10 images of our "yummy" classifier are all delicious food, none of them is labeled by human as "yummy".</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusions</head><p>This paper presents a novel large-scale classifier learning paradigm, called Online Collaborative Learning, which continuously learns many visual classifiers in an online fashion. The key difference between our method and conventional ones is that we explicitly learn from the discovered semantic embeddings, and hence we can effectively tackle the extreme sparse and complex semantic relations in weakly-supervised Web-scale images. We trained 3,0456 classifiers on 1M Flickr images and test them on four visual benchmarks. Promising results demonstrate the effectiveness of the proposed approach.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Top: Web images are usually noisy and incomplete. These examples are from SBU 1M Flickr image dataset</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .</head><label>2</label><figDesc>The proposed online collaborative learning paradigm. Colored components are alternatively updated.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>given a 1 https://www.flickr.com/photos/franckmichel/6855169886</figDesc><table>Online Collaborative Filtering 
+
+Label 
+Embedding 
+Image 
+Embed. 
+
+Image 
+Feat. 
+Classifier 
+
+Online Classifier Learning 
+
+Label 
+
+Image 
+
+new label 
+
+new 
+image 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>to obtain</figDesc><table>car 
+
+husky 
+party 
+castle 
+
+Noun 
+
+Adjective 
+
+colorful 
+delicious 
+relaxing 
+happy 
+
+walking 
+running 
+riding 
+sitting 
+
+Verb 
+
+politics 
+business 
+center 
+morning 
+
+Abstract 
+
+Figure 3. Top 10 images classified by our open-vocabulary classifiers, including various types of semantics such as nouns, adjectives, verbs 
+and abstract concepts. Note that the images are from NUSWIDE </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 1 .</head><label>1</label><figDesc>CPU time of various methods in processing a minibatch of size 256 with 30,456 labels. For example, ∼ 10× denotes the CPU time is about 10 times as OCL.</figDesc><table>CNN 
+IncSVM WSABIE DeViSE 
+NIC 
+LEML OCL 
+
+∼ 70× 
+∼ 10× 
+∼ 20× 
+∼ 20× ∼ 60× ∼ 10× ∼2s 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head>Table 2 .</head><label>2</label><figDesc>Performance (mAP%) of various methods on the four benchmarks. Numbers in the bracket are the number of classes. Dataset/Method CNN IncSVM WSABIE DeViSE NIC LEML OCL-batch OCL</figDesc><table>NUSWIDE (81) 
+24.3 
+20.4 
+9.87 
+9.51 
+7.79 
+23.6 
+22.7 
+23.9 
+
+CCV (20) 
+36.2 
+39.1 
+13.1 
+12.1 
+13.8 
+37.8 
+33.9 
+40.5 
+
+Flickr30K (4,015) 1.91 
+1.85 
+0.61 
+0.73 
+0.93 
+2.28 
+1.97 
+2.48 
+
+COCO (3,638) 
+2.36 
+2.31 
+1.22 
+1.11 
+1.28 
+3.40 
+3.11 
+3.52 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot">t = X t−1 X T t−1 +xtx T t ,which is a low-rank modification for the original matrix, we</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">https://radimrehurek.com/gensim/about.html</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="4">This comparison is coarse since the implementations are different, e.g., C++ for CNN, IncSVM and LEML, MATLAB for OCL, WASABIE and DeViSE, Python for NIC. However, the underlying linear algebra calculation of them benefits from Intel hardware acceleration</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>NExT research is supported by the National Research Foundation, Prime Minister's Office, Singapore under its IRC@SG Funding Initiative.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Good practice in large-scale learning for image classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Akata</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Perronnin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Harchaoui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Labelembedding for image classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Akata</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Perronnin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Harchaoui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">The tradeoffs of large scale learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Bousquet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Webly supervised learning of convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Neil: Extracting visual knowledge from web data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Shrivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Feature-aware label space dimension reduction for multi-label classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-N</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-T</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Nuswide: a real-world web image database from national university of singapore</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-S</forename><surname>Chua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Hong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zheng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CIVR</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Performance of recommender algorithms on top-n recommendation tasks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Cremonesi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Koren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Turrin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Recommender systems</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Minimising semantic drift with mutual exclusion bootstrapping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">R</forename><surname>Curran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Murphy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Scholz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">PACL</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">What does classifying more than 10,000 image categories tell us? In ECCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Large-scale object classification using label relation graphs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Ding</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Frome</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Murphy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Neven</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Adam</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Learning everything about anything: Webly-supervised visual concept learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">K</forename><surname>Divvala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Farhadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Guestrin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Decaf: A deep convolutional activation feature for generic visual recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hoffman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Tzeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1310.1531</idno>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Collaborative feature learning from social media</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Fang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Online robust pca via stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Feng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Devise: A deep visual-semantic embedding model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Frome</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">S</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mikolov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Learning image and user features for recommendation in social networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Geng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-S</forename><surname>Chua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Open-vocabulary object retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Guadarrama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Rodner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Saenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Farrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Robotics Science and Systems (RSS)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Beyond nouns: Exploiting prepositions and comparative adjectives for learning visual classifiers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">S</forename><surname>Davis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Relations between two sets of variates</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hotelling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Biometrika</title>
+		<imprint>
+			<biblScope unit="issue">3</biblScope>
+			<date type="published" when="1936" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Multi-label prediction via compressed sensing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hsu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kakade</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Langford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">What do 15,000 object categories tell us about classifying and localizing actions? In CVPR</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">C</forename><surname>Van Gemert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">G</forename><surname>Snoek</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Consumer video understanding: A benchmark database and an evaluation of human and machine performance</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-G</forename><surname>Jiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Ye</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-F</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ellis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Loui</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICMR</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Deep fragment embeddings for bidirectional image sentence mapping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Joulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">F F</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Unifying visualsemantic embeddings with multimodal neural language models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kiros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Zemel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Matrix factorization techniques for recommender systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Koren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Bell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Volinsky</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computer</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">From visual attributes to adjectives through decompositional distributional semantics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lazaridou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Dinu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Liska</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Baroni</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TACL</title>
+		<imprint>
+			<biblScope unit="issue">1</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Harvesting mid-level visual concepts from large-scale internet images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Tu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title level="m" type="main">Microsoft coco: Common objects in context</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Maire</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<idno>ECCV. 2014. 6</idno>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Online learning for matrix factorization and sparse coding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Mairal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Bach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ponce</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Sapiro</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">5</biblScope>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Distributed representations of words and phrases and their compositionality</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mikolov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">S</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">From large scale image categorization to entry-level categories</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ordonez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Choi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Berg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Im2text: Describing images using 1 million captioned photographs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ordonez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Kulkarni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">L</forename><surname>Berg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Russakovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Satheesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bernstein</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="1" to="42" />
+		</imprint>
+	</monogr>
+	<note>Imagenet large scale visual recognition challenge. IJCV</note>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Unsupervised learning of visual sense models for polysemous words</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Saenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Learning to share visual appearance for multiclass object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tenenbaum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Zero-shot learning through cross-modal transfer</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ganjoo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">D</forename><surname>Manning</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Weighted low-rank approximations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srebro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Jaakkola</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2003" />
+			<biblScope unit="volume">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Training and testing of recommender systems on data missing not at random</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Steck</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">KDD</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.4842</idno>
+		<title level="m">Going deeper with convolutions</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Multilabel classification with principal label space transformation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Tai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-T</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Computation</title>
+		<imprint>
+			<biblScope unit="issue">3</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Incremental and decremental training for linear classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-H</forename><surname>Tsai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-Y.</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-J</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">KDD</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Largescale image annotation using visual synset</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tsai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Rowley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Rehg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<monogr>
+		<title level="m" type="main">Show and tell: A neural image caption generator</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Toshev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1411.4555</idno>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Wsabie: Scaling up to large vocabulary image annotation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Weston</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Usunier</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IJCAI</title>
+		<imprint>
+			<date type="published" when="2003" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<monogr>
+		<title level="m" type="main">From image descriptions to visual denotations: New similarity metrics for semantic inference over event descriptions. TACL</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Young</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hodosh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hockenmaier</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Large-scale multi-label learning with missing labels</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-F</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><forename type="middle">S</forename><surname>Dhillon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">Start from scratch: Towards automatically identifying, modeling, and naming visual attributes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Luan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-S</forename><surname>Chua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">MM</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

@@ -1,0 +1,580 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Interactive Segmentation on RGBD Images via Cue Selection</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jie</forename><surname>Feng</surname></persName>
+							<email>jiefeng@cs.columbia.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Columbia University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Brian</forename><surname>Price</surname></persName>
+							<email>bprice@adobe.com</email>
+							<affiliation key="aff1">
+								<orgName type="laboratory">Adobe Research</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Scott</forename><surname>Cohen</surname></persName>
+							<email>scohen@adobe.com</email>
+							<affiliation key="aff1">
+								<orgName type="laboratory">Adobe Research</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shih-Fu</forename><surname>Chang</surname></persName>
+							<email>sfchang@cs.columbia.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Columbia University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Interactive Segmentation on RGBD Images via Cue Selection</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:41+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Interactive image segmentation is an important problem in computer vision with many applications including image editing, object recognition and image retrieval. Most existing interactive segmentation methods only operate on color images. Until recently, very few works have been proposed to leverage depth information from low-cost sensors to improve interactive segmentation. While these methods achieve better results than color-based methods, they are still limited in either using depth as an additional color channel or simply combining depth with color in a linear way. We propose a novel interactive segmentation algorithm which can incorporate multiple feature cues like color, depth, and normals in an unified graph cut framework to leverage these cues more effectively. A key contribution of our method is that it automatically selects a single cue to be used at each pixel, based on the intuition that only one cue is necessary to determine the segmentation label locally. This is achieved by optimizing over both segmentation labels and cue labels, using terms designed to decide where both the segmentation and label cues should change. Our algorithm thus produces not only the segmentation mask but also a cue label map that indicates where each cue contributes to the final result. Extensive experiments on five large scale RGBD datasets show that our proposed algorithm performs significantly better than both other color-based and RGBD based algorithms in reducing the amount of user inputs as well as increasing segmentation accuracy.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Binary image segmentation is the process of separating pixels into foreground and background. It is an important problem for many computer vision applications, e.g. image editing, object recognition, image retrieval, etc. Automatic segmentation is intrinsically ambiguous and thus cannot obtain satisfactory results on an arbitrary image without any high-level understanding of the content. On the other hand, interactive image segmentation allows a user to tell the al- gorithm what should be selected or not. An ideal interactive segmentation algorithm should: 1) require minimal amount of user interaction; 2) achieve good accuracy. However, the colors in an image are affected by illumination, appearance, occlusion, etc., making them less reliable for the segmentation task. Due to this fact, significant effort from users is still necessary to achieve satisfying results on complex images.</p><p>Recent years have witnessed the emergence of low-cost depth sensors, such as Microsoft Kinect, Intel Realsense and Google Project Tango. These sensors are able to acquire a depth image which captures the physical distance of the scene to the camera at each pixel. This information is very useful for image segmentation but is lost in color imaging process. Besides depth, other feature cues can also be extracted from a depth image to describe the scene, e.g. normal map, 3D point cloud, mesh structure, etc. Together with paired RGB color image, an RGBD image allows the possibility of combining multiple complimentary cues for the interactive segmentation problem to reduce user input while maintaining or even improving accuracy.</p><p>Despite this, few works <ref type="bibr" target="#b4">[5]</ref>  <ref type="bibr" target="#b5">[6]</ref> have been published on interactive segmentation on RGBD images. These works either treat depth as an additional color channel or simply perform a global linear combination of different cue confidences to produce the final result, allowing them to achieve better performance than if using color alone. However, objects and scenes in the real world are complicated, as shown in <ref type="figure" target="#fig_0">Fig. 1</ref>. Mixing depth and color cues in a fixed way can reduce the original discriminative power of each individual cue and not allow the algorithm to adapt, e.g. when an object and background are separated in depth <ref type="figure" target="#fig_0">(Fig. 1a)</ref>, the depth is more useful in determining the foreground than when selecting a color region on a single surface <ref type="figure" target="#fig_0">(Fig. 1c)</ref>. Such methods also provide no way of knowing which cues where most useful for achieving a given segmentation.</p><p>To better handle and integrate multiple cues, we propose a novel cue-selection-based interactive RGBD segmentation algorithm within a graph cut framework. We observe that at least one cue will have highest confidence in distinguishing foreground and background locally, which means only one cue per pixel is necessary to infer the final segmentation result. Thus, we convert the standard binary labeling problem into a multi-label problem with each label representing both the segmentation label (foreground or background) and cue label (color, depth, normal). This allows different cues to take effect in different areas of the image, and allows the algorithm to respond to the individual image and the user input. An example result of our algorithm is given in <ref type="figure" target="#fig_1">Fig. 2</ref> where in the first row the algorithm segments out the whole dress based on the depth cue given the first foreground click since the depth cue gives a clear separation of the dress and background. By adding a background click on the upper white part, our algorithm can intelligently obtain only the lower blue part by switching to use the color cue as shown in the second row.</p><p>Our primary contribution is this multi-cue-selectionbased interactive selection paradigm as applied to RGBD image selection. We model the foreground/background probablities using a geodesic-distance-based adaptive foreground confidence map. The pairwise term is designed to ensure smoothness of both segmentation label and cue label. Alpha-beta swap is used to efficiently find the optimal labels. Our approach is similar to applying a dynamic binary weighting among multiple cues at each pixel location where only one cue gets a non-zero cue weight. To evaluate our algorithm, extensive experiments are conducted on five large scale RGBD datasets captured from different depth sensors. Our method is able to achieve similar or better segmentation accuracy with significant fewer user inputs when comparing with color based algorithms and other RGBD based algorithms.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Works</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Interactive segmentation on color images</head><p>A large body of work has been proposed for segmentation on color images. Among them, the graph cut based framework has been very popular since it was introduced by Boycov et. al <ref type="bibr" target="#b17">[18]</ref>. In their work, the image is represented by a graph and user inputs act as hard constraints. Graph cut is used to find a globally optimal segmentation based on an energy function with balanced region and boundary information. However, <ref type="bibr" target="#b17">[18]</ref> is limited in its reliance on color information only, and so can fail in cases where the foreground and background color distributions are overlapping or complicated. Various works tried to improve on this color-based segmentation. GrabCut <ref type="bibr" target="#b13">[14]</ref> iteratively updates a Gaussian Mixture Model (GMM) of the foreground and background to try to improve the segmentation. Bai et al. <ref type="bibr" target="#b1">[2]</ref> uses geodesic paths instead of graph cut to avoid its boundary-length bias. Price et al. <ref type="bibr" target="#b12">[13]</ref> combines geodesics with graph cut to try to take advantage of their relative strengths. Gulshan et al. <ref type="bibr" target="#b6">[7]</ref> introduces a star-convexity shape constraint to work with geodesic distances for segmentation. While these enhancements can improve the interactive experience, they are still limited to the fact that they rely on the color information only and so still struggle in cases of overlapping or complex foreground/background color distributions.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Interactive segmentation on RGBD images</head><p>Unlike the flourish of interactive segmentation methods for color images, there are very few works about interactive segmentation on RGBD images. Diebold et al. <ref type="bibr" target="#b4">[5]</ref> utilizes a segmentation formulation based on total variation. Depth is added as an additional color channel and a joint distribution for foreground pixels is computed by incorporating three Gaussian kernels for distance, color and depth respectively. This method extends the spatially varying color distributions <ref type="bibr" target="#b10">[11]</ref> using 3D geometry and the distance is also computed using depth information. Experiments on a small RGBD dataset shows the proposed method achieves better segmentation quality with less user scribbles required. In another recent work, Ge et al. <ref type="bibr" target="#b5">[6]</ref> employs a binary graph cut framework where color and depth cues are used separately to compute costs that are linearly combined as the final unary term. Histogram and geodesic distance are used for each cue respectively. A hierarchical image pyramid is also used to speed up graph cut process. Experiments performed on the RGBD saliency dataset <ref type="bibr" target="#b11">[12]</ref> and a stereo dataset demonstrates better results than <ref type="bibr" target="#b4">[5]</ref>.</p><p>Although the above methods show the obvious advantage of using RGBD image for interactive segmentation, they either add depth as an additional color channel to compute the foreground confidence or take a simple linear combination with color and depth cues. This additive nature can be problematic when only one cue is useful in segmentation, e.g. different colors on the same depth surface or similar color for foregrounds and backgrounds or differing depth. Adding the cues directly can reduce the discriminability of cues overall thus making it harder to produce good results with limited user inputs. Our approach instead selects only one cue to determine the segmentation locally, resulting in a practical and general method for fusing multiple cues while preserving the original foreground confidence for each cue.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Approach</head><p>We first introduce the basic graph cut framework for color image segmentation. Then we describe how this framework can be adopted for our RGBD segmentation with cue selection capability.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Binary MRF for Interactive Segmentation</head><p>Let i denote a pixel in image I and Ω denote the set of all pixels in I. N is the set of adjacent pixel pairs. Interactive image segmentation is the problem of dividing Ω into two disjoint sets, Ω 1 for foreground and Ω 0 for background, given some user inputs. It is usually formulated as a binary labeling problem via Markov Random Field (MRF) with the following energy function:</p><formula xml:id="formula_0">E(S) = i∈Ω D(S i ) + λ (i,j)∈N f (S i , S j )<label>(1)</label></formula><p>where S i is the segmentation label for pixel i and S is the labeling of all pixels. S i takes the value of 0 or 1 to indicate the pixel belongs to background or foreground respectively. In Eq. 1, D(S i ) represents the cost to assign label S i to pixel i. It is often referred to as unary term which usually takes the form of:</p><formula xml:id="formula_1">D(S i ) = −log P (S i )<label>(2)</label></formula><p>where P (S i ) is the probability of pixel i being assigned to label S i . For user specified foreground or background pixels, the probability is set to 1 for corresponding labels to make sure the final result obeys user inputs. f (S i , S j ) is the cost for assigning a pixel pair S i and S j and is referred to as the pairwise term. In the color image case, f (S i , S j ) has the form:</p><formula xml:id="formula_2">f (S i , S j ) = 0 if S i = S j g(i, j) if S i = S j<label>(3)</label></formula><p>with the similarity between adjacent pixels given by</p><formula xml:id="formula_3">g(i, j) = exp( −|Ii−Ij | 2 2σ 2 )</formula><p>where I i is the color pixel value for pixel i, so the cost will be small if we assign different labels to nearby pixels with low similarity. λ controls the balance between unary and pairwise terms. By minimizing Eq. 1, we are able to get the optimal pixel labeling S * . Graph cut <ref type="bibr" target="#b2">[3]</ref> can be used to efficiently minimize this energy function.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">RGBD Segmentation as Multi-label MRF</head><p>To better handle complex natural scenes, we use three different cues to infer foreground confidence for each pixel. Color is useful for identifying foregrounds with different appearance from their backgrounds. Given a depth map, we extract two types of cues for each pixel. First, we use the depth value directly as one cue since it gives important information about the relative spatial distance between foreground and background. Furthermore, to be able to distinguish objects with different geometry but similar distance, normal vectors are computed from a depth-projected 3D point cloud.</p><p>To tackle segmentation by fusing multiple cues, we propose a cue selection approach based on the assumption that given certain user inputs, only one cue is required to explain the segmentation result for each pixel. More specifically, we want to know 1) if the pixel is foreground or background; 2) which cue is most discriminative in determining the labeling. This assumption aligns well with our intuition, allows our algorithm to determine how to apply the cues on a local basis, and also provides an interpretation of how each cue contributes to the segmentation. Based on this motivation, we form a label pair X i =&lt; S i , C i &gt; for each pixel i. S i is the segment label which takes the value of 0 or 1 to indicate if the pixel is background or foreground respectively. C i is the cue label which takes the value from 0 to N-1 if there are N cues. By linearizing the label pair into a label within a [0, 2 × N ) range, we can reformulate the labeling problem as a multi-label MRF.</p><formula xml:id="formula_4">E(X) = i∈Ω D(X i ) + λ (i,j)∈N f (X i , X j )<label>(4)</label></formula><p>To adapt this model to our problem, we need to provide appropriate energy terms.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.1">Foreground/Background Confidence Maps</head><p>For the unary term, it is similar to the binary case where each label will have a corresponding cost:</p><formula xml:id="formula_5">D(X i ) = 1 − P Ci (S i )<label>(5)</label></formula><p>The probability P Ci (S i ) is based on a confidence map for cue C i that indicates how likely a pixel belongs to foreground or background for that individual feature. We found this form works better than the log form as in Eq. 2. We compute this confidence map using a geodesic distance transform.</p><p>The geodesic distance transform has been used in interactive segmentation methods <ref type="bibr" target="#b1">[2]</ref>  <ref type="bibr" target="#b12">[13]</ref> [7] to achieve very promising results. Geodesic distance inherently encodes spatial information between pixels and is good at separating regions with similar feature values that are not adjacent. This property fits well with interactive segmentation where the target is usually a single connected component. Also, since a depth map shows the physical connectivity of pixels, using geodesic distance can produce a more useful distance measure between pixels and user inputs.</p><p>We compute foreground and background confidence map given user inputs U where U 1 denotes foreground pixels and U 0 the background pixels as indicated by the user. We first construct a weighted graph G = (V, E), where V is a set of nodes and E the edges between nodes. The weight is computed using a different distance measure for each feature cue. For color, we convert RGB value into LAB space and use L2 norm as distance. For depth, the absolute difference between depth values is used. As for normal, cosine similarity is used to compute the similarity score between two unit normal vectors and then converted to a distance measure. The geodesic distance between any two pixels i and j is essentially the length of the shortest path d(i, j) on G. It can be computed exactly with Dijkstra's algorithm. For each pixel i, we calculate a geodesic distance to the closest foreground pixel as d(i, U 1 ) = min j∈U1 d(i, j). Similarly for background, we get d(i, U 0 ). Then we convert the two values into a probability measure:</p><formula xml:id="formula_6">P Ci (S i ) = d(i, US i ) d(i, U Si ) + d(i, US i )<label>(6)</label></formula><p>whereS i is the opposite label of S i (e.g. if S i = 0 then S i = 1). This is done for each feature cue independently.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.2">Multi-cue Pairwise Term</head><p>The pairwise term is similar to the single-cue case in Eq. 3 except modified to handle multiple cues:</p><formula xml:id="formula_7">f (X i , X j ) = 0 if C i = C j and S i = S j g ′ (i, j) otherwise<label>(7)</label></formula><p>where</p><formula xml:id="formula_8">g ′ (i, j) = min exp −D 2 Ci (i, j) 2σ 2 Ci , exp −D 2 Cj (i, j) 2σ 2</formula><p>Cj (8) and D Ci is the raw feature distance between adjacent nodes for cue C i as computed in geodesic distance transform.</p><p>In the case that C i = C j , this is the same as Eq. 3 being applied to the feature C i . No cost is assigned if the segment label does not change, and a cost inverse to the edge strength is assigned if different segment labels are given. In the case that C i = C j , we want the algorithm to always choose the most discriminative cue to decide where to place the boundary versus where to enforce smoothness in the labels. Thus the cost is based on the inverse edge strength of the best cue possible.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.3">Optimization</head><p>Given the unary and pairwise terms, we combine them into the MRF formulation in Eq. 4. Directly minimizing the energy function is an NP-complete problem in general. There exist methods to search for a local minimum such as alpha expansion <ref type="bibr" target="#b3">[4]</ref> and alpha-beta swap <ref type="bibr" target="#b3">[4]</ref>. Since our pairwise term is not a sub-modular function, it can not be optimized by alpha expansion. Thus alpha-beta swap is adopted. This algorithm randomly selects two labels from the label set and tries to reduce the energy by swapping these labels. It usually only takes a few iterations <ref type="bibr" target="#b2">(3)</ref><ref type="bibr" target="#b3">(4)</ref> to converge.</p><p>To ensure good responsiveness for interactive segmentation, we use superpixels instead of pixels as nodes in our graph to reduce the node numbers. We use SLIC <ref type="bibr" target="#b0">[1]</ref> to compute our superpixels due to its regular shaped results and good efficiency. The feature vector of each cue on a superpixel is the mean value of all pixel features. Superpixels are extracted from color image given that depth map is well aligned. The mean feature vector for a superpixel is robust to light misalignment between color and depth. The pixel level confidence map can be created by setting all pixels within the same superpixel to the superpixel score.</p><p>Superpixels may not exactly follow the object boundary at the pixel level. To produce an accurate and smooth boundary, a pixel-level boundary refinement is performed after obtaining the segmentation mask. Only superpixels along the foreground and background boundary are allowed to change. We set pixels within these superpixels to have unknown labels. All other pixels are set to either hard foreground or background based on their corresponding superpixels. GrabCut <ref type="bibr" target="#b13">[14]</ref> is used to infer the labels for boundary pixels.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.4">User Interaction</head><p>In an interactive segmentation problem, user inputs typically can take one of the following forms: 1) fore-ground/background clicks: this gives the least amount of user inputs; 2) foreground/background strokes: this is essentially a series of clicks; 3) bounding box around target object: strong indication of background outside the box and weak indication of object inside the box. These three forms of user inputs can all be converted to a pixel-level input to be used in our problem setting. In this work, we look at the first input type, fg/bg clicks, as it brings the best user experience by imposing the least amount of effort at user side and at the same time is the most challenging one with the least supervision for a segmentation algorithm.</p><p>When starting, a user may provide a foreground click before any background clicks. When this happens, the foreground probability will be computed as d(i, U 1 ) normalized by max i d(i, U 1 ). Because of the cumulative nature of geodesic distance, even the pixels within the same object may receive a big distance value if they are far away from the foreground pixels. To deal with this issue, we adopt a background prior similar with that used in salient object detection <ref type="bibr" target="#b16">[17]</ref>. We treat superpixels touching the image boundary as potential background. To deal with cases where the object is touching the image boundary, we compute a likelihood score for each superpixel. Unlike the 1D saliency measure used in <ref type="bibr" target="#b16">[17]</ref>, the additional depth map provides much stronger evidence of how a boundary superpixel is connected to a foreground superpixel. We use a predefined threshold (0.5) on depth geodesic distance between boundary superpixels and the closest foreground superpixel. Those having a larger distance are classified as background.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Datasets</head><p>We evaluate our RGBD interactive segmentation algorithm on five datasets captured by two popular depth sensors, Microsoft Kinect v1 and Kinect v2. Kinect v1 uses structured light for measuring depth while Kinect v2 uses Time-of-Flight (ToF) to get higher fidelity depth values. For Kinect v1 datasets, we used 3 public datasets: RGBD Salient Object dataset (Saliency) <ref type="bibr" target="#b11">[12]</ref>, Berkeley 3D dataset (B3D) <ref type="bibr" target="#b7">[8]</ref> and NYU Depth2 dataset (NYU2) <ref type="bibr" target="#b14">[15]</ref>. The RGBD salient object dataset contains 1000 images with corresponding depth images. Both indoor and outdoor scenes are covered. Each image contains only one annotated object. The Berkeley dataset contains 849 RGBD images from indoor scenes, each image usually containing more than one object. It was originally collected for object detection, and we use a subset of 554 images with the object masks from <ref type="bibr" target="#b15">[16]</ref>. The NYU2 dataset contains 1449 RGBD images mostly of cluttered scenes that have many small objects. Since the dataset provides category labels for each pixel, we extract object masks from these annotations. For Kinect v2 datasets, we use those provided by the SUN RGBD bench-mark suite <ref type="bibr" target="#b15">[16]</ref>. The benchmark includes two Kinect v2 datasets, one with 300 images (alignedkv2) and the other with 3486 images (kv2data).</p><p>We use all annotated objects in each dataset as a target to segment. To the best of our knowledge, this is by far the largest evaluation task for interactive segmentation both on color and RGBD images. These datasets exhibit diverse real world scenes with various object categories, making segmentation very challenging.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Evaluation Protocol</head><p>For interactive segmentation, the most important performance metrics are segmentation accuracy and the amount of user inputs required. We use the following two protocols to cover both cases.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.1">Accuracy given fixed inputs</head><p>To compute accuracy of an output segment given a ground truth segment, we use Jaccard coefficients as in prior works <ref type="bibr" target="#b8">[9]</ref>  <ref type="bibr" target="#b5">[6]</ref>. It computes the ratio of areas from segment intersection and segment union, aka IoU (Intersection over Union). We give the same inputs to all methods for fair comparison. The inputs are computed as skeleton pixels of both foreground and background regions for each ground truth mask. An example input is shown in <ref type="figure" target="#fig_2">Fig. 3</ref>. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.2">Accuracy vs. Clicks (AvC)</head><p>To show the effort required by a user for the interactive segmentation task, we calculate the average IoU value given a certain number of clicks. In order to conduct large scale evaluation in an automatic way, we designed a method to predict the next best click adaptively given the output segment mask and ground truth mask. First, we compute the intersection of the ground truth and current segmentation mask. We subtract it from the ground truth to obtain regions that need to be added, and subtract it from the current selection to obtain regions that need to be removed. Considering disjoint regions may exist in the mask, we extract the largest connected component from it and compute its centroid. The valid pixel closest to the centroid is selected as the next click with corresponding fg/bg label. This algorithm is guaranteed to eventually converge to the ground truth. Given an input image, we iteratively predict the next best pixel to click and get an output segment mask. IoU is then computed. The process terminates when the maximum click number is reached and we keep tracking of the average IoU given the number of clicks on all images from each dataset. This metric is referred to as AvC.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Comparison Methods</head><p>We compare with segmentation algorithms on both color and RGBD. For color, we compare with 3 algorithms: 1) GrabCut <ref type="bibr" target="#b13">[14]</ref>; 2) Lazy Snapping <ref type="bibr" target="#b9">[10]</ref>; 3) Geodesic Graph Cut <ref type="bibr" target="#b12">[13]</ref>. For RGBD based segmentation, we look at two interactive segmentation methods which were published very recently, RGBD Linear Comb <ref type="bibr" target="#b5">[6]</ref> and RGBD TVSeg <ref type="bibr" target="#b4">[5]</ref>. We use the GrabCut implementation from OpenCV by changing the bounding box input to a pixel mask input. Three iterations are applied for each cut. The Geodesic graph cut code is kindly provided by the authors. RGBD TVSeg has an open source implementation. For all other methods, we implemented them ourselves.</p><p>For our method, we show results using only color and depth cues, and using color, depth, and normal cues. This allows more fair comparison to the RGBD methods that do not use normals.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Implementation Details</head><p>Normals are computed using the average cross-product of vertex vectors within a neighborhood. It gives similar accuracy to plane fitting but runs more efficiently. For each image, we generate approximately 800 superpixels to have accurate separation along the object boundary. The multilabel MRF optimization is carried out using the gco library from <ref type="bibr" target="#b2">[3]</ref>. The pairwise weight is set to 0.1 which we find produces the best results for our algorithm.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.5.">Results</head><p>We first show segmentation accuracy given fixed input on three Kinect v1 datasets in <ref type="table">Table 1</ref>. Our method achieves consistently higher accuracy compared to both color and RGBD methods. Close to 10% improvement can be seen by effectively incorporating depth compared to color only methods. Our method achieves an average 3 − 5% higher accuracy compared to other RGBD based algorithms.</p><p>The first row in <ref type="figure" target="#fig_4">Fig. 4</ref> shows the AvC curves on Kinect v1 datasets. Our algorithm is able to get best performance across all datasets with a clear margin. On RGBD saliency dataset, due to its relative simplicity, all methods perform much better than on B3D and NYU2. To achieve an IoU accuracy of 90%, our method only needs 5 clicks compared to 15 clicks required by the best color model Geodesic Graph Cut. With the same amount of clicks, the proposed method gets about 8-10% higher for absolute accuracy than competing RGBD segmentation methods. The other two datasets are much more challenging due to small objects, clutter and noisy depth input, so the performance of all methods decrease noticeably. Yet, our method is able to improve its accuracy more stably while clicks are added. Our method gets much better accuracy when only a few clicks (5-10) are present. By adding normal cue, the performance of our algorithm can be further improved on almost all datasets. Up to 5% gain can be seen on B3D dataset. This shows the power of cue selection which fuses multiple cues for segmentation while preserving the discriminability of each cue. We use RGBD Saliency dataset as a testbed to further conduct comparisons with two additional methods. First is a recent color based method <ref type="bibr" target="#b10">[11]</ref>. It performs much better than other color based methods but still fall behind our method with color and depth cues by a margin. The other method is binary graph cut using geodesic distance on the joint feature vector of each cue. It manages to beat other two RGBD approaches but is clearly worse than our method both using color and depth or all three cues. This indicates the proposed multi-label formulation for cue selection is more advanced than binary energy which is also limited to produce only segmentation label.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Method</head><p>Saliency B3D NYU2 GrabCut <ref type="bibr" target="#b13">[14]</ref> 0.78 0.65 0.58 Lazy Snapping <ref type="bibr" target="#b9">[10]</ref> 0.75 0.60 0.50 Geodesic Graph Cut <ref type="bibr" target="#b12">[13]</ref> 0.80 0.71 0.64 RGBD TVSeg <ref type="bibr" target="#b4">[5]</ref> 0.84 0.76 0.73 RGBD Linear Comb <ref type="bibr" target="#b5">[6]</ref> 0 </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Method</head><p>Aligned KV2 KV2data GrabCut <ref type="bibr" target="#b13">[14]</ref> 0.56 0.58 Lazy Snapping <ref type="bibr" target="#b9">[10]</ref> 0.52 0.51 Geodesic Graph Cut <ref type="bibr" target="#b12">[13]</ref> 0.55 0.53 RGBD TVSeg <ref type="bibr" target="#b4">[5]</ref> 0.65 0.60 RGBD Linear Comb <ref type="bibr" target="#b5">[6]</ref> 0.66 0.  Besides the three Kinect v1 datasets, we also evaluated all methods on two Kinect v2 datasets. The fixed input accuracy is shown in <ref type="table" target="#tab_2">Table 2</ref>. Again, our algorithm has much higher performance comparing to other color based and RGBD based algorithms.</p><p>The second row in <ref type="figure" target="#fig_4">Fig. 4</ref> plots AvC curves on Kinect GrabCut <ref type="bibr" target="#b13">[14]</ref> Lazy Snapping <ref type="bibr" target="#b9">[10]</ref> Geodesic Graph Cut <ref type="bibr" target="#b12">[13]</ref> RGBD TVSeg <ref type="bibr" target="#b4">[5]</ref> RGBD Linear Comb <ref type="bibr" target="#b5">[6]</ref> Nieuwenhuis et al. <ref type="bibr" target="#b10">[11]</ref> High-dim Geodesic + Binary Cut Ours: Color+Depth Ours: Color+Depth+Normal v2 datasets. On both datasets, our method performs significantly better than all other methods. For alignedkv2, at least 12% improvement can be seen when only 5 clicks are given. With the inclusion of the normal cue, our accuracy under same number of clicks improves about 5%. This is due to the existance of many objects touching the ground like chairs and tables. Noticeably, our method also shows better stability (less zigzag up and down) when more clicks are given as compared with other methods, including the two RGBD based methods.</p><p>We show example segmentation results from each dataset in <ref type="figure">Fig. 5</ref>. These examples cover various real world scenarios where selection can be challenging. Row 1 shows a case where the object has similar color as the background. By leveraging depth, it can be selected by our algorithm effortlessly. In row 2, depth information is almost useless in selecting the world map on the wall. After placing a background click outside it on the wall, the algorithm knows the color cue is more useful to distinguish foreground from background and uses it for the selection.</p><p>Rows 3-6 contain objects that are within complex backgrounds and are not uniformly colored, especially for the footrest and bed in row 5 and 6 where other objects, e.g. magazine, toys are also part of them. Depth alone is not sufficient due to the similar depth where they touch the ground.</p><p>However, our multi-cue paradigm is able to combine different cues to get the best selection results with only 1-2 clicks. Note the cue switch in rows 4 and 5 where a transition from depth cue to normal cue happens inside the object. This allows the algorithm to use the more discriminative normal cue for separating the ground and the object.</p><p>Rows 7 and 8 showcase selection in a cluttered scenes with large color and depth variation. There are also other objects with similar appearance and depth close to our targets. Our algorithm still performs well, requiring only few clicks. In the last row, the depth image is very noisy and even incorrect in some image regions, e.g. upper left background. Our algorithm is quite robust to avoid incorrect background depth and use the more confident color cue to determine background region while still leveraging the depth cue to obtain the complete multi-colored traffic sign with only 1 click.</p><p>This adaptive cue selection characteristic makes our algorithm very effective in producing good segmentation results based on user intention. Additionally, by looking at the cue map, we can understand how each feature cue is behaving to get the final results and which cues are more useful in the given scene context.</p><p>Failure Cases While we can always converge to a desired result given enough user interaction, some images re- <ref type="figure">Figure 5</ref>: Example results of our RGBD segmentation algorithm. Foreground click is colored green and background click is red (note the input is only the clicked pixel, the click circle is only for visualization). Each row is an example, from left to right: depth image, color coded normal map, input clicks and result contour, feature cue map. The meanings of cue labels are shown in the top bar. quire more interaction than desired. Example failure cases are shown in <ref type="figure" target="#fig_5">Fig. 6</ref>. Most of the failures we observed can be attributed to two reasons.</p><p>The first is highly unreliable depth quality. Row 1 in <ref type="figure" target="#fig_5">Fig. 6</ref> shows an example where the scene is captured outdoor. Current low-cost depth sensors cannot deal well with outdoor scenes under direct sunlight. The depth map is severely corrupted, which causes our depth foreground map to be incorrect, resulting inaccurate segmentation.</p><p>The second reason is misalignment between color and depth. In row 2, with the color superpixel boundary overlaid on top of depth image, it is obvious the superpixels from the color image are not aligned well with the boundary in the depth image, e.g. zoom in to the lower right boundary of the dress. When this happens, our algorithm still tries to use the strongest cue to figure out the boundary, which in this case is depth background. Our boundary refinement is able to recover certain part of the true boundary without adding more inputs.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>We proposed a novel RGBD interactive image segmentation algorithm based on cue selection. The method effectively fuses multiple feature cues into a unified multilabel MRF framework. Foreground confidence is adaptively computed based on user inputs using a geodesic distance transform. A pairwise term considering both segmentation label and cue label is designed to allow selection of one cue for determining the segmentation result locally while encouraging smooth labeling overall. Extensive experiments on five large scale RGBD datasets captured by Kinect v1 and v2 show our algorithm achieves much better performance than algorithms using only color information by effectively applying depth information. Also, significant improvement is obtained beyond the state-of-the-art RGBD interactive segmentation algorithm.</p><p>Future work will be devoted to investigate other important cues for RGBD segmentation and to extend to automatic object segmentation. Additionally, our proposed multi-label MRF is a general approach that can be used given different cues like texture or motion and applied to different problems such as semantic or video segmentation.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Example foreground/background cases. (a) complex appearance, clean depth separation; (b) touching surface; (c) same surface, different appearance; (d) touching surface, similar appearance, background clutter.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>Example result of our algorithm. Foreground click is colored in green and background click is red.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 :</head><label>3</label><figDesc>Example skeleton input. From left to right: color image, ground truth mask, foreground skeleton, background skeleton.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 4 :</head><label>4</label><figDesc>AvC on 5 RGBD datasets (best viewed in color).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 6 :</head><label>6</label><figDesc>Failure cases. Row 1 (left to right): depth image, foreground confidence on depth map, user click and segmentation result, cue map. Row 2 (left to right): color superpixel contour overlayed on depth image, user click and segmentation result, refined segmentation, cue map.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Table 1: IoU values with fixed inputs on Kinect v1 datasets.</figDesc><table>.85 
+0.77 
+0.74 
+Ours: Color+Depth 
+0.87 
+0.82 
+0.77 
+Ours: Color+Depth+Normal 
+0.87 
+0.81 
+0.78 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 2 :</head><label>2</label><figDesc>IoU values with fixed inputs on Kinect v2 datasets.</figDesc><table></table></figure>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Slic superpixels compared to state-of-the-art superpixel methods. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Achanta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Shaji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Smith</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lucchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Susstrunk</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page">4324</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">A geodesic framework for fast interactive image and video segmentation and matting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Bai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Sapiro</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision, 2007. ICCV 2007. IEEE 11th International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2007" />
+			<biblScope unit="volume">4322</biblScope>
+			<biblScope unit="page">4324</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">An experimental comparison of min-cut/max-flow algorithms for energy minimization in vision. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Boykov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Kolmogorov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page">4326</biblScope>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Fast approximate energy minimization via graph cuts. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Boykov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Veksler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zabih</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">23</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page">4324</biblScope>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Interactive multi-label segmentation of rgb-d images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Diebold</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Demmel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Hazırbaş</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Moeller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Scale Space and Variational Methods in Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">4321</biblScope>
+			<biblScope unit="page">4326</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Interactive rgb-d image segmentation using hierarchical graph cut and geodesic distance</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ju</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Wu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Multimedia Information Processing-PCM 2015</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">4321</biblScope>
+			<biblScope unit="page">4326</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Geodesic star convexity for interactive image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Gulshan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Criminisi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Blake</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2010 IEEE Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">4322</biblScope>
+			<biblScope unit="page">4324</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">A category-level 3d object dataset: Putting the kinect to work</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Janoch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Karayev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Barron</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Fritz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Saenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Consumer Depth Cameras for Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page">4325</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Geodesic object proposals</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krähenbühl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision-ECCV 2014</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page">4325</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Lazy snapping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-K</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-Y</forename><surname>Shum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In ACM Transactions on Graphics</title>
+		<imprint>
+			<biblScope unit="volume">23</biblScope>
+			<biblScope unit="page">4326</biblScope>
+			<date type="published" when="2004" />
+			<publisher>ACM</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Spatially varying color distributions for interactive multilabel segmentation. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Nieuwenhuis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page">4326</biblScope>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Rgbd salient object detection: a benchmark and algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Peng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Xiong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ji</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">4323</biblScope>
+			<biblScope unit="page">4325</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Geodesic graph cut for interactive image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Price</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Morse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Cohen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2010 IEEE Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">4322</biblScope>
+			<biblScope unit="page">4326</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Grabcut: Interactive foreground extraction using iterated graph cuts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Kolmogorov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Blake</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics (TOG)</title>
+		<imprint>
+			<biblScope unit="volume">23</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page">4326</biblScope>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Indoor segmentation and support inference from rgbd images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Silberman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision-ECCV 2012</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page">4325</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Sun rgb-d: A rgbd scene understanding benchmark suite</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">P</forename><surname>Lichtenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2015 IEEE Conference</title>
+		<imprint>
+			<biblScope unit="page">4325</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Geodesic saliency using background priors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Wen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision-ECCV 2012</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page">4325</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Interactive graph cuts for optimal boundaryand region segmentation of objects in nd images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Yuri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Marie-Pierre</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEEInternational Conference on Computer Vision. USA: IEEE</title>
+		<imprint>
+			<date type="published" when="2001" />
+			<biblScope unit="volume">112</biblScope>
+			<biblScope unit="page">4322</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

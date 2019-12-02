@@ -1,0 +1,969 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Efficient Point Process Inference for Large-scale Object Detection</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><roleName>Seyed</roleName><forename type="first">Trung</forename><forename type="middle">T</forename><surname>Pham</surname></persName>
+							<email>trung.pham@adelaide.edu.au</email>
+							<affiliation key="aff0">
+								<orgName type="department">School of Computer Science</orgName>
+								<orgName type="institution">The University of Adelaide</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hamid</forename><surname>Rezatofighi</surname></persName>
+							<email>hamid.rezatofighi@adelaide.edu.au</email>
+							<affiliation key="aff0">
+								<orgName type="department">School of Computer Science</orgName>
+								<orgName type="institution">The University of Adelaide</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Reid</surname></persName>
+							<email>ian.reid@adelaide.edu.au</email>
+							<affiliation key="aff0">
+								<orgName type="department">School of Computer Science</orgName>
+								<orgName type="institution">The University of Adelaide</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tat-Jun</forename><surname>Chin</surname></persName>
+							<email>tjchin@adelaide.edu.au</email>
+							<affiliation key="aff0">
+								<orgName type="department">School of Computer Science</orgName>
+								<orgName type="institution">The University of Adelaide</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Efficient Point Process Inference for Large-scale Object Detection</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:40+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We tackle the problem of large-scale object detection in images, where the number of objects can be arbitrarily large, and can exhibit significant overlap/occlusion. A successful approach to modelling the large-scale nature of this problem has been via point process density functions which jointly encode object qualities and spatial interactions. But the corresponding optimisation problem is typically difficult or intractable, and many of the best current methods rely on Monte Carlo Markov Chain (MCMC) simulation, which converges slowly in a large solution space.</p><p>We propose an efficient point process inference for largescale object detection using discrete energy minimization. In particular, we approximate the solution space by a finite set of object proposals and cast the point process density function to a corresponding energy function of binary variables whose values indicate which object proposals are accepted. We resort to the local submodular approximation (LSA) based trust-region optimisation to find the optimal solution. Furthermore we analyse the error of LSA approximation, and show how to adjust the point process energy to dramatically speed up the convergence without harming the optimality. We demonstrate the superior efficiency and accuracy of our method using a variety of large-scale object detection applications such as crowd human detection, birds, cells counting/localization.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Object detection in images and video is one of the fundamental problems in computer vision. While there has been remarkable progress in detecting small and moderate numbers of potentially complex deformable objects in 2D images <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b10">11]</ref>, in this work we focus on large-scale object detection, considering images that may capture hundreds or even thousands of objects; <ref type="figure" target="#fig_0">Figure 1</ref> shows typical examples. Such scenarios are encountered in many useful real-world applications ranging from estimating crowds in video surveillance <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b24">25]</ref> to counting cells in micro-scope images <ref type="bibr" target="#b19">[20]</ref>, bird populations (e.g., flamingos) <ref type="bibr" target="#b5">[6]</ref> and tree crowns <ref type="bibr" target="#b22">[23]</ref> in remotely sensed images. Beside being large-scale, these scenarios often include significant overlap/occlusion of objects, which significantly complicates the process of localizing individual objects.</p><p>Traditional object detection methods usually take a twostage approach. First, a large number of object hypotheses are generated by running a scanning window detector at different scales and locations. This procedure unavoidably returns many imprecise overlapping object hypotheses. To prune out redundant object detections, a greedy nonmaximum suppression (NMS) step is often applied, which basically selects the maximum responses at each location. However such a heuristic elimination suffers from several limitations such as inability to detect nearby or overlapping objects <ref type="bibr" target="#b16">[17]</ref>.</p><p>On the other hand, global methods <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b27">28]</ref> jointly optimize object detection and selection. Almost all of these methods fall under the stochastic geometry framework <ref type="bibr" target="#b1">[2]</ref>, which utilises point processes to model global object configurations. Point processes allow convenient modelling of the spatial pattern of the object configuration, as well as the interaction between objects, with the optimal object configuration inferred by optimizing the point process probability density. Typically the inference uses Reversible Jump Markov Chain Monte Carlo (RJMCMC) simulation with simulated annealing, whose convergence is slow, especially for large-scale problems.</p><p>In this paper we propose a novel global method for largescale object detection, which utilizes both the elegant point process formulation and efficient discrete energy minimization. As in <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b27">28]</ref>, we define an energy function of object configurations pertaining to the point process, whose minimizer will give rise to an optimal set of objects. The energy simultaneously encodes object detection scores (e.g. confidences) and spatial object interactions (e.g. overlapping). Unlike <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b27">28]</ref> where the optimization is solved over a continuous object state space using RJMCMC simulation, we instead approximate the state space by a finite set of all possible objects-for example proposing objects at all pixel locations with all possible (discrete) sizes, orientations. We will show that such a discretization not only does not greatly affect the detection accuracy, but also permits efficient discrete optimization. We begin by constructing an energy function of binary variables whose values indicate which of all possible object proposals are selected. Since the resulting energy is non-submodular in general, we resort to the local submodular approximations (LSA) based trust region method <ref type="bibr" target="#b14">[15]</ref>. Though <ref type="bibr" target="#b14">[15]</ref> provides for efficient optimization, the approximation error of LSA for a naive implementation of the point process energy could be arbitrarily large (and hence cause the trust-region optimisation to converge slowly or to become stuck at a low quality solution). As the approximation error is caused by sub-modularizing the pairwise object energies (which are used to encode spatial object constraints), we propose to reduce the hurdles of the pairwise sub-modularization by conditionally decreasing the pairwise energies to their minima such that inter-object constraints are still guaranteed. Technically the new energy function will admit the same global optimum as the original one. We empirically validate the superior efficiency and accuracy of our framework using a variety of large-scale object detection problems including bird detection from remotely sensed images, cell detection/counting from microscope images and crowd human detection from surveillance cameras.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>In computer vision, object detection is a process of identifying individual object instances in images or video sequences. Objects of interest can be anything ranging from semantic categories <ref type="bibr" target="#b9">[10]</ref> such as humans, cars, animals, furniture to geometric ones such as building outlines <ref type="bibr" target="#b21">[22]</ref>, road networks <ref type="bibr" target="#b23">[24,</ref><ref type="bibr" target="#b17">18]</ref>. To this end, one would need to have an object model, which is used to measure the likelihood of an object instance (with location and shape parameters) appearing in the input image. Depending on object com-plexities and scene contexts, the object likelihood can be computed using simply pixel intensities <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b5">6]</ref> (e.g. contrast) or sophisticated deformable part models (DPM) <ref type="bibr" target="#b10">[11]</ref> learned from annotated training data. Also depending on the specific applications the number of objects in a single image could vary from a few <ref type="bibr" target="#b10">[11]</ref> to thousands (e.g. bird colony <ref type="bibr" target="#b5">[6]</ref>).</p><p>In this work we are interested in large-scale object detection, where hundreds to thousands of objects present in each image, and objects heavily overlap (see <ref type="figure" target="#fig_0">Fig. 1</ref>). Dollar et al. <ref type="bibr" target="#b8">[9]</ref> have shown that the object detection performance degrades disproportionately to the degree of object occlusion. Though the work <ref type="bibr" target="#b8">[9]</ref> has been validated on human detection, the conclusion on the negative effects of occlusion generalizes well to other objects.</p><p>Large-scale object detection has been encountered in various vision applications such as bird counting from remotely sensed images (e.g., flamingo <ref type="bibr" target="#b5">[6]</ref>), or line-network <ref type="bibr" target="#b17">[18]</ref> and building <ref type="bibr" target="#b21">[22]</ref> extraction from digital elevation models. In common, all these works rely on stochastic point processes <ref type="bibr" target="#b1">[2]</ref> to model spatial distribution of objects, which could account for object overlaps, angles between line segments or alignments between rectangles. Though demonstrated promising results, the simulation of the point process framework is often computationally expensive and converges unstably <ref type="bibr" target="#b27">[28]</ref>. In fact, these works use simulated annealing coupled with RJMCMC sampling techniques to infer the optimal object configuration that best explains the input data. Basically, RJMCMC performs a sequence of births, deaths or updates on the state space until convergence which is usually very slow in practice. More advanced samplers such as multiple birth and death <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b5">6]</ref> or jump diffusion dynamics <ref type="bibr" target="#b18">[19]</ref> have been proposed to speed up the convergence. Unsurprisingly, GPU based parallelization has also been exploited to reduce the computation time <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b27">28]</ref>. Although the efficiency of these advanced samplers is improved over the standard RJMCMC, the computational expense for large scale problems is still problematic, as we will show experimentally.</p><p>The object detection framework introduced in this paper also utilizes the point process formulation, in which the spatial distribution of objects and their detection scores are globally modelled. However rather than using slow MCMC based inference, we show that the point process inference can be solved efficiently using advanced discrete energy minimization (e.g. <ref type="bibr" target="#b14">[15]</ref>) without performance degradation.</p><p>Many object detection systems still rely on the heuristic non-maximum suppression (NMS) algorithm to eliminate false positive detections. Basically NMS works by sequentially extracting local maxima which hopefully correspond to the underlying objects. Clearly, NMS fails to tackle overlapping objects, which happens frequently in crowded scenes. In contrast, our method overcomes the limitations of NMS by encoding spatial object constraints (e.g., overlap) into the point process density function, which is then solved globally.</p><p>Actually there has been work proposed to tackle the limitations of NMS previously, e.g., <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b4">5]</ref>. Similar to ours, these methods optimise a global energy (objective) function which jointly models detection scores and inter-object relations. However what makes our work different from <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b4">5]</ref> is the scale of the problem. While <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b4">5]</ref> detect only dozens of objects from the images, we extract thousands of object instances. This often leads to energy functions with millions of variables, which can not be solved efficiently and effectively by using greedy optimization methods as done in <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b4">5]</ref>.</p><p>Large-scale object detection is clearly also closely related to object counting problems such as <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b0">1]</ref> in which the objective is to determine the number of objects present. Obviously our detection results can be used for counting purposes. However, unlike <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b0">1]</ref> where only the quantity of objects is estimated, our method returns also object locations which can be used for analysing object spatial distributions, or object tracking.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Spatial Point Process for Object Detection</head><p>A spatial point process (SPP) is a random collection of points describing phenomena occurring at random locations. A spatial point process can be formulated as a finiteset-valued random variable u = {u 1 , u 2 , . . . , u n } and what distinguishes a SPP from a random vector is that the number of constituent variables is random and the variables themselves are random, distinct and unordered. A statistical function describing a point process p(u) is a combinatorial probability density function which consists of a discrete cardinality distribution, and a family of probability densities of the constituent variables, respectively. We refer readers to <ref type="bibr" target="#b1">[2]</ref> for details of spatial point processes.</p><p>Clearly the point process formulation is a principled approach for problems with unknown cardinality and states, and is therefore well-suited to modelling the large-scale ob-ject detection problem in which we seek to simultaneously estimate the number of objects and their state parameters (i.e. locations and bounding box sizes). More formally, let u i ∈ U ⊂ R d be i th object state where U denotes a state space describing the object's location and shape (e.g. the class of bounding boxes with different widths and heights). Then, the problem becomes to estimate the optimal subset (object configuration) u * = {u 1 , u 2 , . . . , u m } ⊂ U (from a finite set of feasible object configurations generated by U), that best describes the image data D. For most applications, an optimal object configuration u * should satisfy two main properties. First, each object u i must be attractivereflecting the true object in the image. Second, the objects should follow a favoured spatial pattern (e.g., minimal overlaps). The latter constraint implicitly forbids duplicated objects in the solution.</p><p>The optimal subset u * can be attained by solving the following combinatorial MAP problem:</p><formula xml:id="formula_0">u * = argmax u⊂U p(u|D),<label>(1)</label></formula><p>where p(u|D) is the posterior distribution of the object configuration, given the image data D. For notational simplicity, we drop the input image data D and simply denote p(u|D) as p(u).</p><p>To model populations of objects, Markov point processes <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b12">13]</ref> are widely used. Markov point processes model pairwise interactions between objects giving rise to global spatial patterns and effectively control the number of objects (cardinality). A commonly used <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b12">13]</ref> Markov point process density function for modelling populations is the Gibbs distribution:</p><formula xml:id="formula_1">p(u) ∝ ui∈u ψ(u i ) (ui∼uj )∈u φ(u i , u j ),<label>(2)</label></formula><p>where ψ(u i ) is the density function representing data term, and φ(u i , u j ) is the interaction function between neighbouring objects u i ∼ u j . The corresponding Gibbs energy is</p><formula xml:id="formula_2">E(u) = ui∈u D(u i ) + ui∼uj ui,uj ∈u V (u i , u j ) (3) such that p(u) ∝ e −(E(u)+λ) ,</formula><p>where λ is a positive constant used to ensure E(u) + λ ≥ 0.</p><p>The functions D and V are the unary and pairwise interaction energies respectively. Typically, D(u i ) computes the confidence of u i being a true object. Without loss of generality we assume that the values of function D(.) have been normalized to [−d, +d], in which smaller values indicate better object hypotheses. V (u i , u j ) measures spatial pattern cost, i.e.</p><formula xml:id="formula_3">V (u i , u j ) = g(R(u i , u j )) if R(u i , u j ) &lt; T o K if R(u i , u j ) ≥ T o ,<label>(4)</label></formula><p>where R(u i , u j ) ∈ [0, 1] evaluates spatial consistency between u i and u j , T o ∈ [0, 1] is a tolerance threshold, and g is a non-negative monotonically increasing function (we used g(x) = x), and K is a constant number. Note that K needs to be a very large number to forbid spatial object inconsistencies. In Sec. 4, we provide a theoretically justifiable way of selecting K, so as to speed up the optimization without introducing extra errors. Intuitively, u i and u j are disallowed from appearing together if they are spatially inconsistent with respect to the threshold T o , otherwise they could be both selected by paying a cost g(R(u i , u j )). A typical example of R is the degree of overlapping between u i and u j , and solutions with strong object overlaps (e.g.</p><p>T o ≥ 0.5) should not be accepted.</p><p>Consequently the optimal object configuration can be equivalently calculated by</p><formula xml:id="formula_4">u * = argmin u⊂U E(u)<label>(5)</label></formula><p>Since there is no analytical solution for solving <ref type="formula" target="#formula_4">(5)</ref>, previous methods <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b5">6,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b27">28]</ref> resorted to simulated annealing coupled with sampling techniques (e.g., MCMC). However such simulations are slow in practice. In the following we show that the continuous object state space U can be discretized without losing much information, and subsequently the point process inference can be solved efficiently using global discrete optimization techniques.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Efficient Point Process Inference</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">State Space Discretization</head><p>Recall that each object u i is described by a set of state parameters including its location and shape, i.e. u i ∈ U ⊂ L × S. L and S are location and shapes space respectively, for example L = R 2 , S = R s , where s is the object shape dimension (e.g. two for boxes, three for ellipses). As optimizing the object configuration u over the continuous space U is difficult, we instead perform a fine discretization of U (L and S) so that it permits the usage of efficient discrete optimization (see Sec. 4.2).</p><p>Specifically, we approximate the location space L by the discrete image space (i.e. pixel locations), i.e. L ≈ {1, 2, . . . , W } × {1, 2, . . . , H}; W and H are width and height of the image.</p><p>The object shape can also be discretized similarly-for instance considering the bounding box shape, S ≈ {w min , w min + 1, . . . , w max } × {h min , h min + 1, . . . , h max }, in which w min , h min , w max , h max are the minimum and maximum width and heigh of objects. (See Sec. 5 for specific discretizations for different types of objects). We will show in Sec. 5 that such a fine discretization does not really affect the detection performance.</p><p>Consequentially, the state space U can be sufficiently approximated by a finite set of all possible object hypothesesÛ = {u 1 , u 2 , . . . , u N } (by combining all possible locations and shapes). Note that N can be huge -in the example</p><formula xml:id="formula_5">above N = W × H × (w max − w min ) × (h max − h min ).</formula><p>The object detection becomes</p><formula xml:id="formula_6">u * = argmin u⊂Û E(u).<label>(6)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Binary Energy Minimization</head><p>Given a set of all possible object proposalsÛ (with a fixed ordering), denote X = [x 1 , x 2 , . . . , x N ] as a vector of binary variables in which x i = 1 denotes that proposal u i participates in the object configuration u. We define the following binary energy function</p><formula xml:id="formula_7">E(X) = N i=1 D(u i )x i + xi∼xj V (u i , u j )x i x j . (7)</formula><p>x i and x j are linked (indicated with the notation x i ∼ x j ) if the corresponding u i and u j are linked, u i ∼ u j (for example, if they are neighbors). It is clear that minimizing the energy E(X) (7) corresponds to minimizing the energy E(u) overÛ. As a result, the optimal object configuration can be obtained by solving:</p><formula xml:id="formula_8">X * = arg min X E(X).<label>(8)</label></formula><p>Unfortunately, since the energy <ref type="formula">(7)</ref> is non-submodular 1 , minimizing <ref type="formula">(7)</ref> is NP-hard. In our large-scale object detection problem, the dimension of X can be extremely large (up to millions of variables depending on the image sizes), ruling out standard quadratic programming solvers. Thus we resort to the local approximation based trust-region method <ref type="bibr" target="#b14">[15]</ref> due to its proven effectiveness and efficiency. However care must be taken when using <ref type="bibr" target="#b14">[15]</ref> for large problems as its accumulated approximation errors could lead to unsatisfactory results as well as slow convergences, as we will show shortly.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.1">LSA Trust-region Optimization</head><p>Trust-region methods are a class of optimization algorithms that iteratively optimize an approximate energy function constructed near the current best solution within a "trust" region. The approximate functions should be chosen such that they are "close" to the true energy function and can be optimized efficiently. The convergence will be reached when the improvement is too subtle.</p><p>Actually what makes the energy (7) hard to optimize is the nonsubmodular quadratic terms (i.e. V (u i , u j )x i x j ). Inspired by <ref type="bibr" target="#b14">[15]</ref>, we approximate them by submodular functions (e.g. linear functions). In particular, letting X t = [x t 1 , x t 2 , . . . , x t N ] be the current solution, we construct the following energy</p><formula xml:id="formula_9">E t (X) = N i=1 D(u i )x i + xi∼xj A(x i , x j |x t i , x t j ),<label>(9)</label></formula><p>where</p><formula xml:id="formula_10">A(x i , x j |x t i , x t j ) = 1 2 V (u i , u j )x t j x i + 1 2 V (u i , u j )x t i x j .<label>(10)</label></formula><p>It can be seen that the pairwise terms have been decomposed into linear terms, and the energy E t (X) can be rewritten as:</p><formula xml:id="formula_11">E t (X) = N i=1 [D(u i ) + xj ∼xi 1 2 V (u i , u j )x t j ]x i . (11)</formula><p>Given X t , the next solution X t+1 can be obtained by minimizing the following energy function</p><formula xml:id="formula_12">L t (X) = E t (X) + λ t ||X − X t ||.<label>(12)</label></formula><p>||.|| is Hamming distance. The parameter λ t controls the trust region size, which is updated at each iteration based on the quality of the current solution. Notice that the local approximate energy function <ref type="formula" target="#formula_0">(12)</ref> is linear and contains no constraints, thus minimizing L t (X) can be done efficiently using simple min operators. Nevertheless the performance (accuracy and efficiency) of the trust region method highly depends on how accurate E t (X) approximates E(X) at each iteration. If the approximation is poor, one needs to tighten the trust region. Consequently the algorithm might either get stuck at bad local optimum or take an enormous number of iterations before convergence. For our problem we note that the approximation error is proportional to the value of function V (see Eq. (10)), which can be arbitrarily large (see Eq. <ref type="formula" target="#formula_3">(4)</ref>).</p><p>Recall that the function V (u i , u j ) measures the spatial inconsistency between two objects u i and u j . If u i and u j are inconsistent (with respective to some threshold), V pays a very large penalty K to prevent u i and u j from appearing together in the solution. Thus, the approximation error mainly depends the value of K.</p><p>One naive way to soften the hurdles of the above approximation errors is to carefully choose a small K which still guarantees inter-object constraints. However manually picking a proper K is tedious and time-consuming. Alternatively, one could use training data to learn the value of K, however for large-scale object detection problems, ground truth data is not always available. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.2">Adaptive Pairwise Energies</head><p>Here we propose to a simple way for automatically computing the smallest inconsistent penalty for u i and u j , but still guaranteeing valid solutions. In particular, we adaptively adjust V (u i , u j ) based on the qualities of u i and u j , and will show that such modification does not change the global optimality. Specifically we definê</p><formula xml:id="formula_13">V (u i , u j ) = g(R(u i , u j )) if R(u i , u j ) &lt; T o α if R(u i , u j ) ≥ T o ,<label>(13)</label></formula><p>where α = max(|D(u i )|, |D(u j )|) + ǫ; ǫ is a small positive number; We set ǫ = 0.001. The corresponding modified energy function iŝ</p><formula xml:id="formula_14">E(X) = N i=1 D(u i )x i + xi∼xjV (u i , u j )x i x j .<label>(14)</label></formula><p>Proposition 1. If X * is the globally minimal solution of the energy function <ref type="formula" target="#formula_0">(14)</ref>, X * is also the global minimizer of the function <ref type="formula">(7)</ref>, and vice versa.</p><p>The proof is given in the supplementary material. Basically, the proposition 1 reveals that the two energy functions E(X) (7) andÊ(X) <ref type="bibr" target="#b13">(14)</ref> admit the same globally optimal solution. To demonstrate the advantage of opti-mizingÊ(X) over E(X), we synthetically generate energy functions of different sizes ranging from 100 to 10000 variables. For each problem size, we run the LSA trust-region optimisation on the energiesÊ(X) and E(X) respectively, and record the numbers of iterations before convergences. <ref type="figure" target="#fig_1">Fig. 2</ref> shows the difference, where as expected, optimising energyÊ(X) requires much less number of iterations than that of E(X). Also we observe that E(X * ), on average, are slightly lower than E(X * ), whereX * and X * are the solutions of minimizingÊ(·) and E(·) respectively.   <ref type="bibr" target="#b27">[28]</ref>. For each image, the best results are boldfaced. It can be seen that our method is an order of magnitude faster than others. Also in most cases our method is more accurate, except the Yellow Cabs image. This is because the unary term we used (15) which relies on simple intensity contrast does not robustly detect yellow objects. In contrast we believe that the unary model used in <ref type="bibr" target="#b27">[28]</ref> is much stronger, but this is not detailed in <ref type="bibr" target="#b27">[28]</ref>. GT = Ground truth number of objects; rmin, rmax are the minimum and maximum radii of objects respectively.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experimental Results</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">2D Parametric Object Detection</head><p>We first compare the performance of our method against the state-of-the-art point process inference method using parallel Monte Carlo <ref type="bibr" target="#b27">[28]</ref>, denoted as PMC. While our method is implemented using MATLAB and CPU, PMC used C++ and GPU parallel implementation. We also include multiple births and deaths (MBD) method <ref type="bibr" target="#b5">[6]</ref> for comparison though their low performance relative to PMC has been reported in <ref type="bibr" target="#b27">[28]</ref>. We used the benchmarking datasets <ref type="bibr" target="#b27">[28]</ref> for experiments. These datasets are equipped with ground truth information so that the accuracy can be measured. The objects of interest in these images are birds, cells, stomata and yellow cabs, which can be modelled using ellipses. The unary energy is defined as:</p><formula xml:id="formula_15">D(u) = 1 − du d0 if d u &lt; d 0 exp(− du−d0 d0 ) − 1 if d u ≥ d 0 ,<label>(15)</label></formula><p>where d u is the contrast between object u and background (computed as the Bhattacharyya distance between the inside and outside rings of the object <ref type="bibr" target="#b27">[28]</ref>), d 0 is a tuning parame-  <ref type="table">Table 2</ref>. Performance comparison results for counting bacterial cells in fluorescence-light microscopy images. The method <ref type="bibr" target="#b20">[21]</ref> comes with two different regularizations, i.e. L1 and Tikhonov. N is the number of training images. All the methods are tested on 100 cell images.</p><p>The best results are boldfaced (smaller is better). It is clear that our method not only performs better but also is more stable, with less computational cost. Note that the main computation cost of Lempitsky and Zisserman's method is for feature extraction. ter. The non-overlapping constraint is imposed on the object configuration, i.e.</p><formula xml:id="formula_16">R(u i , u j ) = A(u i ∩ u j ) min(A(u i ), A(u j ))</formula><p>.</p><p>A(u i ) returns the area of u i . The angles of ellipses are selected from a range [0, π/8, 2π/8, . . . , π], and the ranges of radii for different objects are given in Tab 1.</p><p>The comparison results are given Tab. 1. It is clear that our method is significantly faster than the competitors while our accuracies are comparable, if not superior. <ref type="figure" target="#fig_2">Fig. 3</ref> shows an example of detecting flamingoes using our method.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Object Counting</head><p>As our method can be used for object counting, we apply our method for counting bacterial cells in fluorescence-light microscopy images <ref type="bibr" target="#b19">[20]</ref>. Cells are modelled using ellipses. We compare against the learning based method <ref type="bibr" target="#b20">[21]</ref>. Note that the method in <ref type="bibr" target="#b20">[21]</ref> only returns an estimated number of cells in each image, whereas our method additionally gives cell locations, which are useful for cell tracking. Moreover our method does not require any training. The results reported in Tab. 2 show that our method is not only more accurate but also more stable than <ref type="bibr" target="#b20">[21]</ref>. The method <ref type="bibr" target="#b20">[21]</ref> only performs better when using more training data. Furthermore it can be seen that our method is very efficient, which takes about 0.3 seconds per image. <ref type="figure">Fig. 4</ref> shows a sample of qualitative cell detection results using our method.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">Crowd Human Detection</head><p>Crowd human detection and counting is another interesting problem which has many real-world applications such as event management (i.e. protests, marathons), video surveillance and anomaly detection. Here we aim to test the performance of our algorithm on detecting humans in crowd scenes. We used the UCF-HDDC dataset recently published in <ref type="bibr" target="#b16">[17]</ref> for evaluations. In this application, human are rep-  <ref type="figure">Figure 6</ref>. The graphs report quantitative comparison results for the large-scale human detection application using UCF-HDDC dataset <ref type="bibr" target="#b16">[17]</ref>. (a) compares our method against NMS. (b) shows the improvement of the global occlusion reasoning <ref type="bibr" target="#b16">[17]</ref> over NMS (the results are taken from <ref type="bibr" target="#b16">[17]</ref>.) Note that the set of human proposals in our experiment is different from <ref type="bibr" target="#b16">[17]</ref>, which leads to the difference in the overall accuracies.</p><p>resented as bounding boxes. Unlike previous applications, which only consider the object overlap, the pairwise potential functions here jointly penalize both strong object overlap and scale inconsistency between nearby objects. In particular R(u i , u j ) is defined as below:</p><formula xml:id="formula_18">R(u i , u j ) = A(u i ∩ u i ) min(A(u i ), A(u j ))<label>(17)</label></formula><formula xml:id="formula_19">+ 1 − min( s ui s uj , s uj s ui exp( −d(u i , u j ) σ p ),</formula><p>where s ui is the scale of object u i , d(u i , u j ) computes the Euclidean distance between the centres of u i and u j , σ p is the deviation threshold (we set σ p = 200). As full bodies are hardly visible in crowd images, we adapt the DPM human detector <ref type="bibr" target="#b10">[11]</ref> to detect combination-of-parts (CoP), namely upper bodies and head-shoulders, as done in <ref type="bibr" target="#b16">[17]</ref>. Also similar to <ref type="bibr" target="#b16">[17]</ref> we re-score the detections using confidence and scale priors. We refer readers to <ref type="bibr" target="#b16">[17]</ref> for details. For each object proposal, the unary function is defined as D(u i ) = −S(u j ), where S(u i ) is the detection score. We compare our global point process object selection algorithm against the standard local non-maximal suppression (NMS). Both methods take the same set of object proposals (head bounding boxes only) as input. <ref type="figure">Fig. 5</ref> shows a sample of qualitative comparison results between the two methods. For this image, we select a detection threshold for each method such that both methods have approximately the same recall. Our corresponding precision is 82.84% while that of NMS is only 61.08%. Notice that NMS returns many false positives, and also its detection scales are not globally consistent. In contrast, the scales of our detections change gradually.</p><p>Quantitative comparison results over 100 test images are reported in <ref type="figure">Fig. 6(a)</ref>. As expected, our result is clearly superior to that of NMS, providing a boost in performance of around 10% for recall values greater than 0.25. Ideally, we would also compare our method directly against that of <ref type="bibr" target="#b16">[17]</ref>, but this is not possible because of the different factors in particular closed implementations of CoP and scale estimation that contribute to their overall result. Instead we show in <ref type="figure">Fig. 6</ref>(b), their result against NMS, taken directly from <ref type="bibr" target="#b16">[17]</ref>. The salient points to note here are that: (i) their improvement over the NMS baseline is considerably lower than ours, at around only 3-4%; (ii) our method is orthogonal to the value added by the better proposals that are the key to their good performance. We therefore believe that with access to <ref type="bibr" target="#b16">[17]</ref>'s object proposals, our method would provide a further boost in performance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>We have proposed a general framework for large-scale object detection. We formulate the object detection problem using a point process probabilistic model whose density function includes object confidences and spatial object patterns. These two terms can be arbitrarily defined depending on the specific applications. As the point process inference is difficult and expensive, we developed a highly efficient point process inference based on a fine discretization of the object state space and discrete energy minimization. We showed that our algorithm is just as accurate, but significantly faster than a state-of-the-art point process inference that uses a GPU implementation. We also demonstrated the superior performance of our algorithm over the standard non-maximal suppression (widely used for object detection) using a crowd human detection application. As our framework is general, it could be extended to detect objects in 3D or higher dimensional spaces, which we consider in our future work.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Best viewed electronically. Typical examples of large-scale object detection. (a) and (b) respectively show an image of stem cells and the detection result using our proposed method, where 4144 stem cells are detected. (c) displays an image of a crowd participating in a marathon. (d) Our method is able to detect 492 runners.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .</head><label>2</label><figDesc>Comparing the numbers of iterations before convergences when optimizing the two energy functions E(X) and E(X), respectively.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 .</head><label>3</label><figDesc>Flamingo detection and counting from remotely sensed images. (a) and (b) display an input image and a cropped region, respectively. Our algorithm is able to detect 10687 flamingoes in 13 seconds (the ground truth is 10800). (c) and (d) show qualitative results, where ellipses indicate detected objects. Data Methods Detection True Pos. False Pos. False Neg. Precision Recall Time (s) Bird colony GT = 10800 r min = 1, r max = 4</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 5 .Figure 4 .</head><label>54</label><figDesc>Crowd human detection qualitative performance comparison. (a) and (b) display the detection results returned by our method and NMS respectively. At about 67% recall, our precision is 82.84% while the precision of NMS is only 61.08%. Only heads are shown. Bacterial cell detection and counting from fluorescencelight microscopy images. (a) and (b) display an input image with 500 cells and a cropped part, respectively. (c) and (d) show qualitative results, where ellipses indicate detected cells. Our method correctly detects 479 cells in less than 3 seconds.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Table 1. Quantitative results on large-scale object detection. Note that MBC* and PMC* indicate the results obtained from</figDesc><table>OURS 
+10678 
+-
+-
+-
+-
+-
+13.6 
+MBD [6] 
+9891 
+-
+-
+-
+-
+-
+897.3 
+PMC [28] 
+11280 
+-
+-
+-
+-
+-
+187.32 
+MBD* 
+10154 
+-
+-
+-
+-
+-
+813.3 
+PMC* 
+10903 
+-
+-
+-
+-
+-
+266.6 
+
+Bird colony small 
+GT = 148 
+r min = 1r max = 4 
+
+OURS 
+153 
+146 
+7 
+2 
+95.4 
+98.6 
+0.29 
+MBD 
+129 
+126 
+3 
+22 
+97.6 
+85.1 
+37.3 
+PMC 
+153 
+139 
+14 
+9 
+90.55 
+93.99 
+10.74 
+MBD* 
+148 
+143 
+5 
+5 
+96.6 
+96.6 
+10.1 
+PMC* 
+137 
+133 
+4 
+15 
+97.1 
+89.9 
+9.6 
+Stomata 
+GT = 676 
+r min = 2, r max = 5 
+
+OURS 
+750 
+627 
+123 
+49 
+83.6 
+92.7 
+1.4 
+PMC 
+707 
+613 
+94 
+63 
+86.73 
+90.65 
+64.21 
+PMC* 
+716 
+560 
+156 
+116 
+78.2 
+82.4 
+168.0 
+
+Cells 
+GT = 500 
+r min = 6, r max = 10 
+
+OURS 
+479 
+479 
+0 
+21 
+100 
+95.8 
+2.57 
+MBD 
+440 
+436 
+4 
+64 
+99.0 
+87.2 
+433.6 
+PMC 
+483 
+463 
+20 
+37 
+95.92 
+92.54 
+60.44 
+MBD* 
+447 
+447 
+0 
+53 
+100 
+89.4 
+104.5 
+PMC* 
+482 
+480 
+2 
+20 
+99.6 
+96 
+7.5 
+Yellow Cabs 
+GT = 100 
+r min = 2, r max = 6 
+
+OURS 
+130 
+87 
+43 
+12 
+84.38 
+81.82 
+0.8 
+MBD* 
+-
+-
+-
+-
+-
+-
+-
+PMC* 
+86 
+81 
+5 
+19 
+94.2 
+81.0 
+165.0 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">θ ij (1, 1) + θ ij (0, 0) ≥ θ ij (0, 1) + θ ij (1, 0), where θ ij (x i , x j ) = V (u i , u j )x i x j .</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>This research was supported by the Australian Research Council through the Centre of Excellence for Robotic Vision (CE140100016), Laureate Fellowship (FL130100102) to IDR and Discovery Project DP160103490.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Interactive object counting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Arteta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lempitsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Noble</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">8691</biblScope>
+			<biblScope unit="page" from="504" to="518" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Stochastic geometry models in high-level vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Baddeley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">N M V</forename><surname>Lieshout</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Applied Statistics</title>
+		<imprint>
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="issue">5-6</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="1993" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">On detection of multiple object instances using hough transforms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Barinova</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lempitsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Privacy preserving crowd monitoring: Counting people without people models or tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Chan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z.-S</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Vasconcelos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Discriminative models for multi-class object layout</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Desai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">C</forename><surname>Fowlkes</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">95</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="1" to="12" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Automatic flamingo detection using a multiple birth and death process</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Descamps</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Descombes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bechet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zerubia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICASSP</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Object extraction using a stochastic birth-and-death dynamics in continuum</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Descombes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Minlos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Zhizhina</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J. Math. Imaging Vis</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Marked point process in image analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Descombes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zerubia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Signal Processing Magazine</title>
+		<imprint>
+			<biblScope unit="volume">19</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="77" to="84" />
+			<date type="published" when="2002" />
+			<publisher>IEEE</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Pedestrian detection: An evaluation of the state of the art. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wojek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="743" to="761" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">The pascal visual object classes challenge: A retrospective</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Eslami</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">111</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="98" to="136" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Object detection with discriminatively trained partbased models. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Felzenszwalb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1627" to="1645" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">A discriminatively trained, multiscale, deformable part model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Felzenszwalb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2001" />
+			<biblScope unit="page" from="1" to="8" />
+		</imprint>
+	</monogr>
+	<note>CVPR 2008. IEEE Conference on</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Multiple birth and cut algorithm for point process optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gamal-Eldin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Descombes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zerubia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SITIS</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Marked point processes for crowd counting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Ge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Collins</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Submodularization for binary pairwise energies</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Gorelick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Boykov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Veksler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><forename type="middle">B</forename><surname>Ayed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Delong</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 2014 IEEE Conference on Computer Vision and Pattern Recognition, CVPR &apos;14</title>
+		<meeting>the 2014 IEEE Conference on Computer Vision and Pattern Recognition, CVPR &apos;14<address><addrLine>Washington, DC, USA</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Multi-source multi-scale counting in extremely dense crowd images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Idrees</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Saleemi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Seibert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 2013 IEEE Conference on Computer Vision and Pattern Recognition, CVPR &apos;13</title>
+		<meeting>the 2013 IEEE Conference on Computer Vision and Pattern Recognition, CVPR &apos;13<address><addrLine>Washington, DC, USA</addrLine></address></meeting>
+		<imprint>
+			<publisher>IEEE Computer Society</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="2547" to="2554" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Detecting humans in dense crowds using locally-consistent scale prior and global occlusion reasoning. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Idrees</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Soomro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">37</biblScope>
+			<biblScope unit="issue">10</biblScope>
+			<biblScope unit="page" from="1986" to="1998" />
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Point processes for unsupervised line network extraction in remote sensing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Lacoste</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Descombes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zerubia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE TPAMI</title>
+		<imprint>
+			<biblScope unit="volume">27</biblScope>
+			<biblScope unit="issue">10</biblScope>
+			<biblScope unit="page" from="1568" to="1579" />
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Geometric feature extraction by a multimarked point process</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Lafarge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Descombes</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE TPAMI</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1597" to="1609" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Computational framework for simulating fluorescence microscope images with cell populations. Medical Imaging</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lehmussola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Ruusuvuori</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Selinummi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Huttunen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Yli-Harja</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<biblScope unit="page" from="1010" to="1016" />
+			<date type="published" when="2007-07-01" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Learning To Count Objects in Images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lempitsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS 23</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Building outline extraction from digital elevation models using marked point processes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ortner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Descombes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zerubia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">72</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="107" to="132" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Adaptive simulated annealing for energy minimization problem in a marked point process application</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Perrin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Descombes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zerubia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">EMMCVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">A gibbs point process for road extraction from remotely sensed images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Stoica</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Descombes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zerubia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">57</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="121" to="136" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">A 3-d marked point process model for multi-view people detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Utasi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Benedek</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Markov Point Processes and Their Application</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Van Lieshout</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2000" />
+			<publisher>Imperial College Press</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Efficient monte carlo sampler for detecting parametric objects in large scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Verdié</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Lafarge</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Detecting parametric objects in large scenes by monte carlo sampling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Verdi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Lafarge</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">106</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page">6</biblScope>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">A review of trust region algorithms for optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-X</forename><surname>Yuan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICIAM 99 (Edinburgh)</title>
+		<meeting><address><addrLine>Oxford</addrLine></address></meeting>
+		<imprint>
+			<publisher>Oxford Univ. Press</publisher>
+			<date type="published" when="2000" />
+			<biblScope unit="page" from="271" to="282" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

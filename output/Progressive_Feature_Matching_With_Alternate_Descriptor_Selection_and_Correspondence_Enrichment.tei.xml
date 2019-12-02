@@ -1,0 +1,982 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Progressive Feature Matching with Alternate Descriptor Selection and Correspondence Enrichment</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuan-Ting</forename><surname>Hu</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yen-Yu</forename><surname>Lin</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Academia</forename><surname>Sinica</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Taiwan</forename></persName>
+						</author>
+						<title level="a" type="main">Progressive Feature Matching with Alternate Descriptor Selection and Correspondence Enrichment</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:44+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We address two difficulties in establishing an accurate system for image matching. First, image matching relies on the descriptor for feature extraction, but the optimal descriptor often varies from image to image, or even patch to patch. Second, conventional matching approaches carry out geometric checking on a small set of correspondence candidates due to the concern of efficiency. It may result in restricted performance in recall. We aim at tackling the two issues by integrating adaptive descriptor selection and progressive candidate enrichment into image matching. We consider that the two integrated components are complementary: The high-quality matching yielded by adaptively selected descriptors helps in exploring more plausible candidates, while the enriched candidate set serves as a better reference for descriptor selection. It motivates us to formulate image matching as a joint optimization problem, in which adaptive descriptor selection and progressive correspondence enrichment are alternately conducted. Our approach is comprehensively evaluated and compared with the state-of-the-art approaches on two benchmarks. The promising results manifest its effectiveness.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Image matching aims to seek the correspondences of common regions across images. It is an active and fundamental research topic in computer vision, since it has been an inherent part in a broad set of vision applications, such as panoramic stitching <ref type="bibr" target="#b5">[6]</ref>, common pattern discovery <ref type="bibr" target="#b26">[27]</ref>, object recognition <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b27">28]</ref>, image retrieval <ref type="bibr" target="#b30">[31]</ref> and 3D reconstruction <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b31">32]</ref>. A predominant paradigm of image feature matching, e.g., <ref type="bibr" target="#b27">[28]</ref> involves three steps: 1) detecting feature points and characterizing the detected points with a chosen descriptor, 2) establishing a reduced set of correspondence candidates, and 3) removing outliers from the reduced set by referring to both photometric and geometric consistency to get the final matching results.</p><p>Despite the popularity, there are still two main obstacles preventing us from getting satisfactory results for feature matching. First, most matching algorithms choose a specific descriptor. However, existing descriptors are designed with the trade-off between distinctiveness and invariance. The effectiveness of a descriptor depends on not only intraimage appearance but also inter-image variation. Thus, the optimal descriptor for matching is often image-dependent or even region-dependent. Most matching methods do not consider this issue. Second, geometric checking for outlier removal is widely adopted to enhance feature matching, but it is of a high computational complexity. The trade-off between accuracy and efficiency results in a compromising mechanism. Namely, geometric checking is applied only to a small, putative set of correspondence candidates. It degrades the performance in recall.</p><p>We aim at address the two aforementioned issues and design an algorithm that adaptively and efficiently selects good descriptors. We observe that descriptor selection and candidate enrichment are complementary to each other. High-quality matching results by adaptively selected descriptors reveal the transformations, which give a more authentic guidance on candidate enrichment. On the other hand, the enriched candidate set serves as a better reference for descriptor selection. This observation motivated us to cast image matching as a joint optimization problem in which descriptor selection and candidate enrichment are alternately carried out. Specifically, it is formulated as a labeling problem over a graph structure, and can be iteratively optimized by using only graph cut <ref type="bibr" target="#b4">[5]</ref>. It turns out that our approach can produce matching results with high quality by leveraging multiple descriptors, and does not compromise in running time owing to dynamic candidate enrichment.</p><p>As an illustration, <ref type="figure" target="#fig_0">Figure 1</ref> shows the matching results on two pairs of images, jigsaws and painted ladies, by using three different descriptors, SIFT <ref type="bibr" target="#b27">[28]</ref>, LIOP <ref type="bibr" target="#b36">[37]</ref> and GB <ref type="bibr" target="#b2">[3]</ref>, and our approach. For each feature point that has corresponding point in the opposite image, we seek its match by the nearest neighbor search with one of the  <ref type="bibr" target="#b27">[28]</ref>, LIOP <ref type="bibr" target="#b36">[37]</ref> and GB <ref type="bibr" target="#b2">[3]</ref>, and our approach. Only correct matches are drawn with colors corresponding to the used descriptors.</p><p>three descriptors, and draw the match if it is correct. SIFT shows good results owing to the highly textured patterns in jigsaws, while the shape-based descriptor GB gives better performance due to the strong coherence in shape in painted ladies and fails to match jigsaws due to the cluttered backgrounds and large view point change. This example points out that the optimal descriptor varies from image to image. In contrast, our method yields more correct matchings by adaptively selecting a descriptor for matching each point, like those shown in <ref type="figure" target="#fig_0">Figure 1</ref>(d) and 1(h).</p><p>To sum up, we integrate adaptive descriptor selection and progressive candidate enrichment into the process of image matching, and cast it as a graph optimization problem. The proposed approach is comprehensively evaluated on two benchmarks of image matching, including SNU dataset <ref type="bibr" target="#b11">[12]</ref> and SYM dataset <ref type="bibr" target="#b17">[18]</ref>. The results demonstrate that our approach can effectively recommend few but accurate correspondence candidates and select a proper descriptor for matching each feature point, thus resulting in a remarkable performance gain.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related work</head><p>In this section, we briefly review a few relevant topics.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Image matching with geometric checking</head><p>Geometric checking addresses the ambiguity arisen in matching by detecting outliers, correspondences with inconsistent transformations here. Voting-based approaches, e.g., <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b16">17]</ref>, are popular for their simplicity and efficiency. RANSAC <ref type="bibr" target="#b16">[17]</ref> is a representative method of this class. It estimates the underlying transformation and removes outliers simultaneously. Chen et al. <ref type="bibr" target="#b6">[7]</ref> and Avrithis and Tolias <ref type="bibr" target="#b1">[2]</ref> performed Hough voting in the transformation space for identifying correct matches. Clusteringbased approaches, such as <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b39">40]</ref>, can introduce extra constraints to aggregate consistent clusters of matches, and show their effectiveness in unconstrained matching cases. However, the values of parameters for clustering, such as the number of clusters and the thresholds for merging or splitting clusters, vary from case to case, and are difficult to set in advance.</p><p>Graph-based approaches are another popular branch of geometric checking. Methods, e.g., <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b40">41]</ref>, model the coherence between potential matches by employing a graph structure and geometric checking is accomplished by graph partition. However, graph partition is an NP hard problem, and is usually solved with the continuous relaxation. Torresani et al. <ref type="bibr" target="#b33">[34]</ref> efficiently solve the graph matching problem by breaking it into subproblems. Liu and Yan <ref type="bibr" target="#b26">[27]</ref> handle multi-object matching via discovering strongly connected subgraphs. In the formulation of these methods, a vertex on the graph corresponds to a correspondence. Thus, the complexity increases when the number of correspondences becomes large. Our approach belongs to the graph-based branch. However, unlike most approaches, e.g., <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b33">34]</ref>, of this category, the vertices in our approach are associated with feature points instead of matches, so our approach scales better in a large set of match candidates. Furthermore, our approach explores the locality of spatial dependency. Thus, it can match multiple objects, and has a sparse graph and hence is more efficient.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Correspondence enrichment</head><p>Due to the high complexity, geometric checking is usually applied to a reduced set of match candidates, thus leading to low recall. Correspondence enrichment alleviates this unfavorable effect. Ferrari et al. <ref type="bibr" target="#b14">[15]</ref> duplicated matches to the surrounding areas with similar appearance to expand the candidate set. Chen et al. <ref type="bibr" target="#b6">[7]</ref> investigated boundary preserving local regions <ref type="bibr" target="#b20">[21]</ref>, and increased reliable matchings inside the regions. Cho and Lee <ref type="bibr" target="#b10">[11]</ref> proposed a Bayesian framework for re-estimating a new reduced set, and improved graph matching results. Wang et al. <ref type="bibr" target="#b35">[36]</ref> presented a progressive mode-seeking approach that efficiently explores the huge matching space through density sampling guided by a smaller, confident set. The common issue of approaches to correspondence enrichment is their sensitivity to the quality of the initial matches, because the enriched correspondences are biased towards the initial set. Our approach performs unsupervised descriptor selection, and can compile a better initial set. Besides, we recommend candidates that are either consistent with or complementary to the initial set, and enhance the diversity of the candidate set.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.">Multiple descriptor fusion</head><p>Different descriptors capture diverse visual evidences. Research efforts have been made on descriptor fusion for performance improvement. A number of studies such as <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b29">30,</ref><ref type="bibr" target="#b34">35,</ref><ref type="bibr" target="#b38">39]</ref> have demonstrated the effectiveness of using multiple descriptors for image matching and classification. These approaches use fixed weights for descriptor fusion, and neglect that optimal features for image description are different from image to image. To address this issue, adaptive feature fusion has been carried out in recent studies such as <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b19">20]</ref>. Xu et al. <ref type="bibr" target="#b37">[38]</ref> fused gradient and color data models by an adaptive selection. Kim et al. <ref type="bibr" target="#b21">[22]</ref> proposed a locally varying data term where multiple data models are merged based on their discriminant powers in the surrounding area. However, features in diverse descriptors are typically of different dimensions and with different scales of statistics. Fusion by directly combining the resulting features may be infeasible. Hu et al. <ref type="bibr" target="#b19">[20]</ref> carried out descriptor selection in the homography space. However, their method trains one-class SVM by taking all correspondence candidates as input, and may be less efficient. Lempitsky et al. <ref type="bibr" target="#b22">[23]</ref> and Hsu et al. <ref type="bibr" target="#b18">[19]</ref> adaptively fuse multiple flow proposals and compile the final flow map. These methods are designed to optimize over dense flow proposals, and cannot be applied to sparse feature matching.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Problem statement</head><p>Given two images I P and I Q with detected feature points</p><formula xml:id="formula_0">U P = {u P i } N P i=1 and U Q = {u Q i } N Q i=1</formula><p>, we aim at finding the corresponding point in U Q for each u P i ∈ U P , if it exists. In this work, Hessian-Affine <ref type="bibr" target="#b28">[29]</ref> detector is used for its efficiency and high repeatability. Thus, the support region of each feature point is an ellipse. Multiple descriptors are applied to each feature point u i ∈ U P ∪ U Q . The yielded feature vectors of u i are denoted by {x i,m } M m=1 , where M is the number of the adopted descriptors. For each u P i ∈ U P , we compile the set of its most plausible R matched points in</p><formula xml:id="formula_1">I Q , C i,m = {u Q ir,m } R r=1 , with descrip- tor m and distance measure x P i,m − x Q j,m .</formula><p>After repeating this process for each feature point in image I P , the set of correspondence candidates C is constructed:</p><formula xml:id="formula_2">C = N P i=1 C i , where C i = M m=1 C i,m .</formula><p>(1)</p><p>C contains at most N P × R × M correspondences after removing the duplicates. When R is set to N Q , C covers all the possible matches. However, it becomes too large to be efficiently dealt with, especially for geometric checking. In this work, we set R = 1. The resulting C acts as the initial match set, and will be gradually enriched.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">The proposed approach</head><p>Our approach formulates the task of image matching as an energy minimization problem on a graph. In this section, we introduce the graph structure, energy function, optimization process and implementation details of our approach.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Graph construction</head><p>We construct a graph G = (V, E). In G, each vertex v i ∈ V corresponds to feature point u P i in image I P , and the number of vertices |V| is N P . The edge e ij ∈ E is added to link v i and v j if u P j is one of the spatially k near-</p><formula xml:id="formula_3">est neighbors of u P i . Each vertex v i is associated with a composite variable ℓ i = [s i , t i ], which represents that u P i is matched to u Q si by using selected descriptor t i . Therefore, the domain of ℓ i is L = S × T , where S = {1, 2, ..., N Q } and T = {1, 2, ..., M }.</formula><p>By the constructed graph G, the task of image feature matching in this work becomes a graph labeling problem. Specifically for matching images I P and I Q , it is cast as seeking a plausible labeling ℓ = [ℓ 1 ... ℓ i ... ℓ N P ], which specifies which corresponding point in I Q is and which descriptor is selected for matching each feature point u P i in I P . For the ease of explanation, we similarly define s and t as s = [s 1 ... s N P ] and t = [t 1 ... t N P ], respectively.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Energy Function</head><p>For boosting the performance in both accuracy and efficiency, we incorporate adaptive descriptor selection, geometric checking, and correspondence enrichment into image matching. To that end, we seek a good labeling ℓ = [ℓ 1 ... ℓ N P ] by minimizing the following energy function</p><formula xml:id="formula_4">J(ℓ) = vi∈V D i p (ℓ i , C i ) + λ 1 vi∈V D i d (ℓ i ) + λ 2 eij ∈E V ij g (ℓ i , ℓ j ) + λ 3 eij ∈E V ij s (ℓ i , ℓ j ),<label>(2)</label></formula><p>where λ 1 , λ 2 , and λ 3 are three non-negative constants.</p><formula xml:id="formula_5">G = (V, E) is the constructed graph. C i in Eq.</formula><p>(1) is set of the initial match candidates for feature point u P i , and will be gradually expanded during matching.</p><p>There are four terms introduced in the designed energy function Eq. (2), including two data terms, D i p and D i d , and two pairwise terms, V ij g and V ij d . For data terms, D i p considers the photometric similarity of the matched points, while D i d estimates the discriminant power of the selected descriptor in the surrounding region. For pairwise terms, V ij g ensures the geometric consistence between neighboring correspondences, while V ij s enforces the smoothness of the selected descriptors. The definitions of the four terms and their justification are given in the following.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.1">Data term D i p</head><p>Set C i covers the matched candidates of feature point u P i . The variable ℓ i = [s i , t i ] specifies the match (u P i , u Q si ) and the selected descriptor t i for u P i . We take the photometric consensus into account, and define data term D p as</p><formula xml:id="formula_6">D i p (ℓ i , C i ) = ∞, if u Q si / ∈ C i , f (i,si,ti) max(f (i,i * ,ti),ǫ) , otherwise,<label>(3)</label></formula><p>where ǫ is a small constant used to avoid the problem of dividing by zero. The photometric dissimilarity function f (a, b, c) between u P a and u Q b under descriptor c is given as</p><formula xml:id="formula_7">f (a, b, c) = dist(x P a,c , x Q b,c ),<label>(4)</label></formula><p>where dist(x i , x j ) is the distance between x i and x j and we use Euclidean distance in all the experiments.</p><formula xml:id="formula_8">i * is index of the most matched point of u P i , i.e., i * = arg min j∈S f (i, j, t i ).<label>(5)</label></formula><p>Data term D i p in Eq. (3) excludes the matches that do not belong to the candidate set by setting their energy as infinity. For candidates, we consider normalized photometric dissimilarity via dividing by the distance to its the nearest neighbor. The normalized dissimilarity measure alleviates the variety of descriptors, and allows us to conduct crossdescriptor comparisons. In brief, the larger the value is, the less possible u P i matches to u Q si with descriptor t i .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.2">Data term D i d</head><p>While D i p measures the appearance dissimilarity between matched points with a descriptor, D i d estimates the discriminant power of that descriptor at the feature point. Specifically, it is defined as</p><formula xml:id="formula_9">D i d (ℓ i ) = f (i, s i , t i ) 1 k eij ∈E f (j, s i , t i ) ,<label>(6)</label></formula><p>where k is the number of the spatial neighbors of u P i , and distance f is given in Eq. (4).</p><p>The idea behind Eq. <ref type="formula" target="#formula_9">(6)</ref> is that descriptor t i is considered effective at u P i if it is discriminant enough within the neighborhood of u P i . Otherwise, it introduces unfavorable ambiguity in matching, and is no longer an effective descriptor. Thus, this term penalizes descriptors that cannot distinguish the correspondence (u P i , u Q si ) from its neighboring correspondence (u P j , u Q si ).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.3">Pairwise term V ij g</head><p>For two neighboring points u P i and u P j , i.e., e ij ∈ E, their correspondences c i = (u P i , u Q si ) and c j = (u P j , u Q sj ) are obtained by referring to ℓ i and ℓ j , respectively. Since the support region of each feature point is an ellipse in this work, the affine transformation with 6 degrees of freedom, T i , can be inferred for correspondence c i , and reveals the geometric evidence around u P i . Similarly, T j is inferred for c j . Pairwise term V ij g is developed upon the observation that nearby feature points usually reside in the same object, and hence undergo similar transformations. We hence prefer a geometrically smooth matching field by defining V ij g as</p><formula xml:id="formula_10">V ij g (ℓ i , ℓ j ) = 1 − exp (−f rep (c i , c j , T i , T j )/σ),<label>(7)</label></formula><p>where σ is a positive constant, and f rep is the reprojection error <ref type="bibr" target="#b12">[13]</ref>, which measures the geometric inconsistency between two correspondences c i and c j with respectively associated affine transformations T j and T i , i.e.,</p><formula xml:id="formula_11">f rep (c i , c j , T i , T j ) = (d ci|Tj + d cj |Ti )/2,<label>(8)</label></formula><p>where</p><formula xml:id="formula_12">d ci|Tj = ( T j (u P i ) − u Q si + T −1 j (u Q si ) − u P i )/2,<label>(9)</label></formula><p>and d cj |Ti is similarly defined.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.4">Pairwise term V ij s</head><p>The effective descriptors for two neighboring feature points on the same object are usually the same due to repeatedly appeared patterns within the object. Take <ref type="figure" target="#fig_0">Figure 1</ref> for an example. SIFT descriptor is consistently better in the whole image jigsaws, and GB descriptor is consistently better for the second image painted ladies. This observation can serve as a good prior for descriptor selection, and alleviates the effect caused by noises. To this end, the pairwise term V ij s is given by</p><formula xml:id="formula_13">V ij s (ℓ i , ℓ j ) = 0, if t i = t j , 1, otherwise, .<label>(10)</label></formula><p>It encourages the smoothness of the selected descriptors.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Optimization</head><p>Directly solving Eq. (2) to optimize the labeling ℓ is feasible by using existing solvers, such as graph cut. Nevertheless, we want to further speed up the optimization, and carry out progressive enrichment of match candidates. To this end, we divide labeling ℓ into two parts, s and t. An iterative, alternate strategy is adopted to optimize s and t and enrich</p><formula xml:id="formula_14">C = {C i } N P i=1 in Eq.</formula><p>(1). At each iteration, one of the three variables is optimized or enriched while keeping the others fixed, and then their roles are switched sequentially. Iterations are repeated until convergence or the maximum number of iterations is reached.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.1">On optimizing t</head><p>The pairwise term V ij g in Eq. <ref type="formula" target="#formula_10">(7)</ref> is irrelevant to t. By fixing s and C, the optimization problem in Eq. (2) becomes</p><formula xml:id="formula_15">J(t) = vi∈V D i p ([s i , t i ], C i ) + λ 1 vi∈V D i d ([s i , t i ]) + λ 3 eij ∈E V ij s ([s i , t i ], [s j , t j ]).<label>(11)</label></formula><p>The first two terms in the right-hand side of Eq. (11) jointly yield the new data term, in which the cost of assigning t i to vertex v i is computable. Thus, we efficiently optimize t in Eq. (11) by using graph cut <ref type="bibr" target="#b4">[5]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.2">On optimizing s</head><p>By fixing t and C, the optimization problem in Eq. <ref type="formula" target="#formula_4">(2)</ref> is similarly reduced to</p><formula xml:id="formula_16">J(s) = vi∈V D i p ([s i , t i ], C i ) + λ 1 vi∈V D i d ([s i , t i ]) + λ 2 eij ∈E V ij g ([s i , t i ], [s j , t j ]),<label>(12)</label></formula><p>and can also be solved via graph cut <ref type="bibr" target="#b4">[5]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.3">On enriching C</head><p>For each feature point u P i , the candidate set C i is gradually enriched to improve recall. We have tried several ways for enriching C i , and found that two diverse ways jointly work best in our implementation. Namely, we seek two of the k nearest neighbors of u P i as references, and each reference recommends u P i an additional match. The first reference, denoted by u P i * 1 , is the most concerted neighbor, i.e., the one that contributes the least energy in Eq. (2). It is most likely to be matched correctly. The other, denoted by u P i * 2 , is the one with the strongest geometrically inconsistency with u P i . It brings the complementary information. Specifically, the two references are defined as</p><formula xml:id="formula_17">i * 1 = arg min {j|eij ∈E} D j p (ℓ j , C j ) + λ 1 D j d (ℓ j ) + {n|ejn∈E} λ 2 V jn g (ℓ j , ℓ n ) + λ 3 V jn s (ℓ j , ℓ n ) ,<label>(13)</label></formula><p>and</p><formula xml:id="formula_18">i * 2 = arg max {j|eij ∈E} V ij g (ℓ i , ℓ j ).<label>(14)</label></formula><p>We apply the affine transformations of the two reference neighbors to u P i , seek the closest feature points in image I Q , and add the sought feature points to C i . </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Implementation details</head><p>We initialize the label ℓ i = (s i , t i ) for each vertex v i by calculating the ratio between the distance to its nearest neighbor and to its 2 nd nearest neighbor by each descriptor, and get M ratios. Then we initialize t i as the descriptor with the smallest ratio, and s i as the nearest neighbor measured by descriptor t i .</p><p>There are five parameters in our approach, including neighborhood size k in Section 4.1, leading coefficients λ 1 , λ 2 , and λ 3 in Eq. (2), and hyperparameter σ in Eq. (7). They are tuned and fixed for each adopted dataset. To conclude this section, we summarize our approach in Algorithm 1.</p><p>Using multiple descriptors helps improve the performance, but extracting multiple descriptors increases the computational cost. There exists a trade-off between matching accuracy and efficiency while our approach offers a flexible and practical framework for both single-descriptor and multiple-descriptor matching.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experimental results</head><p>A comprehensive study of our approach is presented in the section. First, we introduce the experimental setup and the evaluation metrics. Then, three sets of experiments are conducted, including the comparisons with the state-of-theart approaches on two benchmarks, the effect of enrichment, and the advantages of employing multiple descriptors.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Experimental setup</head><p>SNU dataset <ref type="bibr" target="#b11">[12]</ref> and SYM dataset <ref type="bibr" target="#b17">[18]</ref> are used in our experiments. They consist of 6 and 46 pairs of images to be matched, respectively. Various challenges such as multiple object matching with cluttered backgrounds in SNU dataset and variations in lighting conditions (day/night), ages (old/nowadays scene) and rendering styles (photograph/drawing) in SYM dataset make the two datasets a <ref type="table">Table 1</ref>. Performance in mAP (%) on SNU dataset <ref type="bibr" target="#b11">[12]</ref>. Descriptor SIFT LIOP DAISY RI GB ALL SM <ref type="bibr" target="#b24">[25]</ref> 55. <ref type="bibr" target="#b29">30</ref>  good test bed for performance evaluation. We use Hessianaffine detector <ref type="bibr" target="#b28">[29]</ref> for its high repeatability and we adopt five complementary descriptors for capturing diverse visual cues, including SIFT <ref type="bibr" target="#b27">[28]</ref>, LIOP <ref type="bibr" target="#b36">[37]</ref>, DAISY <ref type="bibr" target="#b32">[33]</ref>, raw intensities (RI) and geometric blur (GB) <ref type="bibr" target="#b2">[3]</ref>. The RI descriptor extracts the grey-level pixel intensities of the feature regions in a raster scan order. Four state-of-the-art approaches are adopted for comparison, including SM <ref type="bibr" target="#b24">[25]</ref> (a graph-based method), ACC <ref type="bibr" target="#b8">[9]</ref> (a clustering-based approach), HV <ref type="bibr" target="#b6">[7]</ref> (a voting-based method) and PGM <ref type="bibr" target="#b10">[11]</ref> (a correspondence recommendation framework). The four compared approaches are designed to work with a single descriptor. We can extend them for handling multiple descriptors by concatenating all the initial candidates produced by the five descriptors. For fair comparison, the reprojection error is used as the dissimilarity measure between correspondences. When using a single descriptor, we set R = 5 for all approaches, including ours. R is set as 1 in the cases where multiple descriptors are adopted. We also implement the method in <ref type="bibr" target="#b29">[30]</ref>, CONCAT., which concatenates multiple descriptors to match images. In our implementation, we concatenate all the five adopted descriptors, and apply the method in <ref type="bibr" target="#b6">[7]</ref> for geometric verification.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Evaluation metrics</head><p>The performance of a matching algorithm is presented in the forms of precision and recall jointly. The two measures are defined as</p><formula xml:id="formula_19">PRECISION = nTP nTP + nFP and RECALL = nTP nP ,<label>(15)</label></formula><p>where nTP and nFP is the returned numbers of correspondences which are correctly and wrongly identified by a matching method, respectively, and nTP + nFP is the number of total returned correspondences. nP is the number of points in I P whose corresponding points exist. For each matching approach, all the detected correspondences are sorted by its own criterion, such as the density values in HV and the contributed energy values in our approach. Specifically, the energy value for correspondence c i = (u P i , u Q ℓi ) is defined as  By sampling on the sorted lists, we get a set of precisions and recalls and present them with a "1−precision" vs. "recall" curve (PR curve) on an image pair, or mean average precision (mAP) and mean accuracy (mAccu) on a dataset. The mAP is the mean of the average precision of each image pair in a dataset, while the average precision is calculated as the mean of precisions with different numbers of returned correspondences. Besides, we set the constraint that every matching algorithm can detect at most one corresponding point for each u P i , so the number of returned correspondences, namely nTP + nFP, is at most N P . We then term the recall when we set nTP + nFP to its largest value as accuracy and mean accuracy (mAccu) is the average accuracy of a dataset.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">Comparisons on two benchmark datasets</head><p>In this set of experiments, we compare our approach with the state-of-the-art approaches on SNU and SYM datasets. The five descriptors, SIFT, LIOP, DAISY, RI, and GB are used in the experiments. Each approach, including SM, ACC, HV, PGM, and ours, is applied to work with the five descriptors individually and jointly. The performance in mAP is reported in <ref type="table" target="#tab_1">Table 1 and Table 2</ref>. The best performance by using a single descriptor is underlined and the one with overall best performance is given in bold. Our method with multiple descriptors get 81.81% and 49.35%, the highest performance, on SNU dataset and SYM dataset, respectively. We would like to mention that the performances of directly solving Eq. (2) by graph cut are 81.61% and 48.34%, respectively, which are only slightly different from the performance by the alternate solution. Note that we use the real detector, Hessian-affine detector, so the performance cannot be directly compared to the one reported in <ref type="bibr" target="#b17">[18]</ref> with the grid detector, which is a synthetic detector.</p><p>As reported in <ref type="table">Table 1</ref>, SIFT consistently outperforms the other four descriptors with each baselines on SNU dataset. On the contrary, GB gives the best performance on SYM dataset in <ref type="table" target="#tab_1">Table 2</ref>. The goodness of descriptors varies from dataset to dataset. Our approach allows cross descriptor verification and adaptive descriptor selection. The results show that our approach effectively fuses the five descriptors and gets superior performance compared to the state-of-the-art approaches on the two datasets even when they use multiple descriptors. While these approaches carry out geometric checking, our approach further considers intra-descriptor photometric similarity and the discriminability of each descriptor. The method CON-CAT. doesn't work well because simple concatenation of multiple descriptors neglects that the effectiveness of descriptor is image-dependent. It is notable that our approach with a single descriptor remarkably outperforms the baselines on SNU dataset, and is still comparable to PGM, which can recommend plausible correspondences, on SYM dataset with GB. It is because our approach finds the locally smooth correspondences. The local property works well with multiple object matching on SNU dataset, but it is less favorable on SYM dataset, in which the image pair undergoes a global transformation.</p><p>In order to evaluate the component of descriptor selection in our approach, we turn off this component by setting λ 1 and λ 3 in Eq. (2) to zero and optimizing only label s i described in Section 4.1. <ref type="table" target="#tab_2">Table 3</ref> compares the performance of our approach and this variant. The results with descriptor selection are much better than those without it, indicating the advantage of using descriptor selection in our approach.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.4.">Effect of enrichment</head><p>To show the effect of enrichment, we present two sets of experiments where our method is applied with all the five descriptors under two settings: with enrichment and without enrichment. First, we show the results with and without enrichment with different values of parameter R. R controls the size of C in Eq. (1). The results on SNU dataset and SYM dataset are shown in <ref type="figure">Figure 2</ref> with x axis representing the value of R and y axis standing for mAccu. mAccu measures the portion of correctly matched interest points. It reveals whether we find additional good matches or not in the step of enrichment. With enrichment, we see highly boosted performance. In the second experiment, we compare the results with and without enrichment at each optimization iteration. The results are shown in <ref type="figure">Figure 3</ref>, where x axis represents the iteration number and y axis represents mAccu. The enrichment happens after the first iteration, and we can see the significant performance gain by enrichment on the two datasets. In addition, our approach almost converges after two iterations. Thus, we only alternate the three-step optimization twice for time efficiency. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.5.">Advantages of using multiple descriptors</head><p>We investigate into the performance gain from employing multiple descriptors comparing to a single descriptor by applying our approach. The visualization of the matching results with different descriptors on mickeys of SNU dataset and bdom of SYM dataset are shown in <ref type="figure">Figure 4</ref> and <ref type="figure">Figure 5</ref> respectively. Only correct correspondences are drawn in specific colors with respect to the adopted descriptors (SIFT in orange, LIOP in blue, DAISY in green, RI in magenta and GB in cyan). In <ref type="figure">Figure 4</ref>, there are three common objects. The overall result by DAISY is the best among the five descriptors, but it seems that if we use SIFT, we can have even better results for matching some parts of the image, i.e. the Mickey doll. The performance of SIFT on matching the cup of instant noodles is poor while DAISY in this case finds the most correspondences on it. Without making tradeoff of picking a descriptor, our method can adaptively select a good descriptor for matching each point, just as shown in <ref type="figure">Figure 4</ref>(f) where our approach unsupervisedly picks SIFT for matching the Mickey doll and DAISY for matching the cup noodles. We can have similar observation in <ref type="figure">Figure 5</ref> where our approach selects SIFT for matching the dome and mostly GB for the other regions. The results in <ref type="figure">Figure 4</ref> and <ref type="figure">Figure 5</ref> show the advantage of applying our approach to multiple, complementary descriptors.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.6.">Comparisons of running time performance</head><p>We compare our approach with the baselines in terms of running time. All the experiments are conducted on a PC equipped with Intel i7-4770 CPU and 16GB memory. Our approach is implemented in Matlab and with the graph cut   <ref type="bibr" target="#b4">[5]</ref> in C++. Because convergence is reached within 2 iterations in most cases, we run our algorithm for 2 iterations on all the experiments. When our approach collaborates with M = 5 descriptors on SNU dataset <ref type="bibr" target="#b11">[12]</ref>, in which each image in average has 1,100 detected feature points, its running time per iteration is around 1.33 seconds (0.20 seconds for optimizing t, 0.39 seconds for optimizing s and 0.73 seconds for enrichment). If we directly solve t and s in Eq. (2), the running time per iteration is around 2.85 seconds (2.08 seconds for optimizing t and s, and 0.74 seconds for enrichment). Solving Eq. (2) alternately is about 4 times faster than solving it directly when optimizing t and s, but both ways get similar performance. In addition, we compare our running time with other baselines and report the results in <ref type="table" target="#tab_3">Table 4</ref> on SNU dataset and SYM dataset. We implement SM and HV, and use the released implementations by <ref type="bibr" target="#b8">[9]</ref> and <ref type="bibr" target="#b10">[11]</ref> for ACC and PGM, respectively. As shown in <ref type="table" target="#tab_3">Table 4</ref>, our method is much faster than ACC and PGM while comparable to SM and HV. The results demonstrate that our approach is superior to the four state-of-the-art approaches in both accuracy and efficiency. More results and the code will be available at https://sites.google.com/site/yuantinghu/publications/featmat.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusions</head><p>We have introduced an image matching approach with the capability of point-specific descriptor selection, cross descriptor geometric checking, and progressive correspondence enrichment. It is formulated as an optimization problem on a graph, and can be effectively solved by using the graph-cut algorithm. Through the iterative optimization process, the plausible match candidates are gradually revealed by taking their consistence with the nearby correspondences into account, while more and more correct correspondences are detected with the aid of enriched candidates. The proposed approach has been comprehensively evaluated on two benchmark datasets. Experimental results show that it outperforms the state-of-the-art methods in both the aspects of accuracy and efficiency. In the future, we would like to apply the proposed approach to vision applications, such as scene parsing and co-segmentation, where high-quality and dense matching is crucial. It would also be interesting to investigate how our approach to sparse matching collaborates with approaches to dense matching, such as image alignment and optical flow.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Feature matching on two image pairs, (a) ∼ (d) jigsaws and (e) ∼ (h) painted ladies, by three different descriptors, SIFT</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Algorithm 1 :</head><label>1</label><figDesc>The proposed approach Input: Two sets of detected features U P and U Q , Max iteration T ; Output: The labeling ℓ = (s, t); Initialize ℓ; (Section 4.4); Construct the graph G = (V, E); (Section 4.1) ; Iteration ←− 1 ; while Iteration &lt; T &amp;&amp; not converge do if Iteration ! = 1 then ∀v i ∈ V, enrich C i . (Section 4.3.3); Optimize t by solving Eq. (11). (Section 4.3.1); Optimize s by solving Eq. (12). (Section 4.3.2); Iteration ←− Iteration + 1;</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>ℓi, Ci) + λ1D i d (ℓi) + {n|e in ∈E} λ2V in g (ℓi, ℓn) + λ3V in s (ℓi, ℓn) .</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 2 .Figure 3 .</head><label>23</label><figDesc>Performance in mAccu with different values of R of our approach on (a) SNU dataset and (b) SYM dataset. Performance in mAccu along the iterative optimization procedure on (a) SNU dataset and (b) SYM dataset.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 4 .Figure 5 .</head><label>45</label><figDesc>Matching results of our approach by using the five descriptors individually (a)-(e) and jointly (f) on image pair, mickeys of SNU dataset. Correct matchings are drawn with the colors specifying the adopted or selected descriptors. The last row shows ( nTP / nP ). Matching results of our approach by using the five descriptors individually (a)-(e) and jointly (f) on image pair, bdom of SYM dataset. Correct matchings are drawn with the colors specifying the adopted or selected descriptors. The last row shows ( nTP / nP ).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 2 .</head><label>2</label><figDesc></figDesc><table>Performance in mAP (%) on SYM dataset [18]. 
+Descriptor 
+SIFT LIOP DAISY RI 
+GB ALL 
+SM [25] 
+18.92 16.79 22.72 7.99 32.57 40.22 
+ACC [9] 
+26.74 19.49 29.97 10.70 29.28 42.36 
+HV [7] 
+22.21 18.69 26.92 11.88 38.28 43.79 
+PGM [11] 
+29.46 22.36 35.01 15.49 47.53 48.01 
+CONCAT. 
+13.36 
+Ours (w/o enrich.) 26.53 20.93 30.30 11.67 41.70 46.67 
+Ours (w/ enrich.) 30.04 27.27 32.63 15.84 41.00 49.35 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="true"><head>Table 3 .</head><label>3</label><figDesc>Performance of our approach with and without descriptor selection and enrichment, respectively, in mAP (%).</figDesc><table>SNU 
+SYM 
+w/o selec. w/ selec. w/o selec. w/ selec. 
+w/o enrich. 73.16 
+76.75 
+42.99 
+46.67 
+w/ enrich. 
+74.22 
+81.81 
+44.52 
+49.35 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="true"><head>Table 4 .</head><label>4</label><figDesc>Running time on SNU dataset<ref type="bibr" target="#b11">[12]</ref> and SYM dataset<ref type="bibr" target="#b17">[18]</ref>.</figDesc><table>Dataset # of points SM 
+ACC 
+HV PGM Ours 
+SNU 
+1100±200 3.26 s 452.44 s 3.02 s 82.21 s 1.93 s 
+SYM 
+1200±600 4.67 s 1034.9 s 4.36 s 85.22 s 3.95 s 
+
+solver </table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0" />
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Building Rome in a day</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Furukawa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Simon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Commun. ACM</title>
+		<imprint>
+			<biblScope unit="issue">1</biblScope>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Hough pyramid matching: Speeded-up geometry re-ranking for large scale image retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Avrithis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Tolias</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Geometric blur for template matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Representing shape with a spatial pyramid kernel</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bosch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Muñoz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ACM Conf. Image and Video Retrieval</title>
+		<meeting>ACM Conf. Image and Video Retrieval</meeting>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Fast approximate energy minimization via graph cuts. PAMI</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Boykov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Veksler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zabih</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Recognising panoramas</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Brown</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lowe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Robust feature matching with alternate Hough and inverted Hough transforms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-Y</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-Y.</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B.-Y.</forename><surname>Chen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Accelerated hypothesis generation for multistructure data via preference analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-J</forename><surname>Chin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Suter</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Feature correspondence and deformable object matching via agglomerative correspondence clustering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K.-M</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Reweighted random walks for graph matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K.-M</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Progressive graph matching: Making a move of graphs via probabilistic voting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K.-M</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Co-recognition of image pairs by data-driven monte carlo image exploration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-M</forename><surname>Shin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K.-M</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Robust feature point matching by preserving local geometric consistency</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Choi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kweon</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+		<respStmt>
+			<orgName>CVIU</orgName>
+		</respStmt>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Balanced graph matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Cour</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Srinivasan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Simultaneous object recognition and segmentation by image exploration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ferrari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tuytelaars</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Simultaneous object recognition and segmentation from single or multiple model views. IJCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ferrari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tuytelaars</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Random sample consensus: A paradigm for model fitting with applications to image analysis and automated cartography</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Fischler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">C</forename><surname>Bolles</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Commun. ACM</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="1981" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Image matching using local symmetry features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hauagge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Robust image alignment with multiple feature descriptors and matching-guided neighborhoods</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K.-J</forename><surname>Hsu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-Y.</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-Y</forename><surname>Chuang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Matching images with multiple descriptors: An unsupervised approach for locally adaptive descriptor selection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-T</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-Y</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K.-J</forename><surname>Hsu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B.-Y.</forename><surname>Chen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TIP</title>
+		<imprint>
+			<biblScope unit="issue">3</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">Boundary preserving dense local regions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Grauman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Optical flow via locally adaptive fusion of complementary data costs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-H</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-S</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K.-M</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">FusionFlow: Discretecontinuous optimization for optical flow estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lempitsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lempitsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Blake</surname></persName>
+		</author>
+		<title level="m">Fusion moves for markov random field optimization. PAMI</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">A spectral technique for correspondence problems using pairwise constraints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Leordeanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Unsupervised learning for graph matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Leordeanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sukthankar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Common visual pattern discovery via spatially coherent correspondences</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title level="m" type="main">Distinctive image features from scale-invariant keypoints. IJCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lowe</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">Scale and affine invariant interest point detectors. IJCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Mikolajczyk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">A SIFT descriptor with global context</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Mortensen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Shapiro</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Local grayvalue invariants for image retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Mohr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="issue">1</biblScope>
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Photo tourism: Exploring photo collections in 3d</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. on Graphics</title>
+		<imprint>
+			<biblScope unit="issue">1</biblScope>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">DAISY: An efficient dense descriptor applied to wide-baseline stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Tola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="issue">6</biblScope>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Feature correspondence via graph matching: Models and global optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Torresani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Kolmogorov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Learning the discriminative powerinvariance trade-off</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Varma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ray</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Progressive mode-seeking on graphs for sparse feature matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Local intensity order pattern for feature description</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Fan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Wu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Motion detail preserving optical flow estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Matsushita</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="issue">3</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">Local features and kernels for classification of texture and object categories: A comprehensive study. IJCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Marszalek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Graph degree linkage: Agglomerative clustering on a directed graph</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Deformable graph matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Torre</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

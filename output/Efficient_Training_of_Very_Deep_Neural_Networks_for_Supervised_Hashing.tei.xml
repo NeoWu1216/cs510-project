@@ -1,0 +1,1392 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Efficient Training of Very Deep Neural Networks for Supervised Hashing</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ziming</forename><surname>Zhang</surname></persName>
+							<email>zzhang14@bu.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">Center for Information &amp; Systems Engineering</orgName>
+								<orgName type="institution">Boston University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuting</forename><surname>Chen</surname></persName>
+							<email>yutingch@bu.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">Center for Information &amp; Systems Engineering</orgName>
+								<orgName type="institution">Boston University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Venkatesh</forename><surname>Saligrama</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Center for Information &amp; Systems Engineering</orgName>
+								<orgName type="institution">Boston University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Efficient Training of Very Deep Neural Networks for Supervised Hashing</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:40+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>In this paper, we propose training very deep neural networks (DNNs) for supervised learning of hash codes. Existing methods in this context train relatively "shallow" networks limited by the issues arising in back propagation (e.g. vanishing gradients) as well as computational efficiency. We propose a novel and efficient training algorithm inspired by alternating direction method of multipliers (ADMM) that overcomes some of these limitations. Our method decomposes the training process into independent layer-wise local updates through auxiliary variables. Empirically we observe that our training algorithm always converges and its computational complexity is linearly proportional to the number of edges in the networks. Empirically we manage to train DNNs with 64 hidden layers and 1024 nodes per layer for supervised hashing in about 3 hours using a single GPU. Our proposed very deep supervised hashing (VDSH) method significantly outperforms the state-of-theart on several benchmark datasets.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Supervised hashing techniques aim to learn compact and similarity-preserving binary representations from labeled data, such that similar inputs are mapped to nearby binary hash codes in the Hamming space, and information retrieval can be efficiently and effectively done in large-scale databases. A large category of these methods seek to learn a set of hyperplanes as linear hash functions, such as Iterative Quantization (ITQ) <ref type="bibr" target="#b11">[12]</ref>, supervised Minimal Loss Hashing (MLH) <ref type="bibr" target="#b31">[32]</ref>, Semi-Supervised Hashing (SSH) <ref type="bibr" target="#b45">[46]</ref>, and FastHash <ref type="bibr" target="#b27">[28]</ref>. Several kernel-based hashing methods like Binary Reconstructive Embedding (BRE) <ref type="bibr" target="#b23">[24]</ref> and Kernel-Based Supervised Hashing (KSH) <ref type="bibr" target="#b29">[30]</ref> have also been proposed.</p><p>It is well recognized that deep models are able to learn powerful image representations in a latent space where samples with different properties can be well separated. In this context convolutional Neural Networks (CNN) based hashing schemes have been developed <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b43">44,</ref><ref type="bibr" target="#b46">47,</ref><ref type="bibr" target="#b47">48,</ref><ref type="bibr" target="#b53">54]</ref>. Hash codes learned from these latent spaces have been shown to significantly improve the retrieval performance on many benchmark datasets.</p><p>Nevertheless, the efficacy of deep learning in applications such as hashing hinges on the ability to efficiently train deep models <ref type="bibr" target="#b10">[11]</ref>. Back propagation (or "backprop") <ref type="bibr" target="#b35">[36]</ref> is currently the most widely-used training method in deep learning due to its simplicity. Backprop is known to suffer from the so called vanishing gradient issue <ref type="bibr" target="#b15">[16]</ref>, where gradients in the front layers of an n-layer network decrease exponentially with n. This directly impacts computational efficiency, which in turn limits the size of the networks that can be trained. For instance, the training of VGG's very deep features <ref type="bibr" target="#b38">[39]</ref> for ILSVRC2014 with 16 convolutional layers takes approximately one month using 4 GPUs. Contributions: We propose a very deep supervised hashing (VDSH) algorithm by training very deep neural networks for hashing. Our method can take in any form of vector input, such as raw image intensities, traditional features like GIST <ref type="bibr" target="#b32">[33]</ref>, or even CNN features <ref type="bibr" target="#b25">[26]</ref>. Given training data with class labels, our network learns a data representation tailored for hashing, and outputs binary hash codes with varying lengths. VDSH can easily train large very deep networks within hours on a single GPU.</p><p>Our learning objective is to generate optimal hash codes for linear classification. To this end we minimize the least square between the weighted encoding features (i.e. the output of our last hidden layer) and their label vectors with regularization on model parameters to prevent overfitting.</p><p>Rather than using backprop, we propose a novel computationally efficient training algorithm for VDSH inspired by alternating direction method of multipliers (ADMM) <ref type="bibr" target="#b1">[2]</ref>. We represent DNN features in a recursive way by introducing an auxiliary variable to model the output of each hidden layer for each data sample. Then we apply the augmented Lagrangian to incorporate our learning objective with equality constraints, where another set of auxiliary variables are introduced to store the network weights between every pair of adjacent layers locally for efficient update.</p><p>Empirically we demonstrate smooth convergence and computational efficiency for VDSH. Our training complexity is linearly proportional to the number of connections between nodes in the network. We <ref type="table">train DNNs with up to 64  hidden layers and 1024 nodes per layer for supervised learning of hash codes within about 3 hours on a single GTX TI-TAN GPU, while</ref>   <ref type="bibr" target="#b25">[26]</ref>, AlexNet <ref type="bibr" target="#b22">[23]</ref>, GoogLeNet <ref type="bibr" target="#b40">[41]</ref> and VGG-VD <ref type="bibr" target="#b38">[39]</ref>) and weighting structures (e.g. sparse network <ref type="bibr" target="#b6">[7]</ref>, circulant structure <ref type="bibr" target="#b28">[29]</ref>, low-rank approximation <ref type="bibr" target="#b36">[37]</ref>) have been proposed. Several techniques have been proposed to improve the generalization of networks such as dropout <ref type="bibr" target="#b39">[40]</ref> and dropconnet <ref type="bibr" target="#b42">[43]</ref>, which can be viewed as better regularization. Some techniques for speeding-up the training have been proposed as well such as distributed training <ref type="bibr" target="#b8">[9]</ref> and batch normalization <ref type="bibr" target="#b17">[18]</ref>. These architectures and methods, however, are trained using backprop, suffering from the same issues such as vanishing gradients.</p><p>Ongoing efforts to overcome issues in backprop include variational Bayesian autoencoder <ref type="bibr" target="#b19">[20]</ref>, auto-encoding target propagation <ref type="bibr" target="#b0">[1]</ref>, and difference target propagation <ref type="bibr" target="#b26">[27]</ref>.</p><p>Carreira-Perpinán and Wang <ref type="bibr" target="#b3">[4]</ref> recently proposed a method for training deeply nested systems. Their method of auxiliary coordinates (MAC) breaks down the dependency in nested systems into equality constraints, so that the quadratic penalty method can be utilized as an efficient solver. Shen et al. <ref type="bibr" target="#b37">[38]</ref> proposed a Supervised Discrete Hashing (SDH) method based on MAC which achieved the state-of-the-art on supervised hashing. Carreira-Perpinán and Raziperchikolaei <ref type="bibr" target="#b2">[3]</ref> proposed learning binary autoencoders for hashing as well using MAC.</p><p>In contrast our ADMM-based method is more suitable and efficient for solving regularized loss minimization as has been shown in the Block-Splitting algorithm <ref type="bibr" target="#b33">[34]</ref>. ADMM solves optimization (possibly nonconvex) problems with equality constraints by decomposing an objective into several disjoint sub-objectives using new auxiliary variables so that the original objective can be optimized iteratively using coordinate descent. With small additional computational cost we circumvent the need for relaxation of penalty related parameters as required in this context <ref type="bibr" target="#b30">[31]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Very Deep Supervised Hashing</head><p>Our problem setup closely mirrors <ref type="bibr" target="#b37">[38]</ref>. We are given a collection of N samples</p><formula xml:id="formula_0">X = {x i } N i=1 ∈ R d×N .</formula><p>Our goal is to learn a collection of K-bit binary codes B ∈ {−1, 1} K×N where the i-th column b i ∈ {−1, 1} K denotes the binary code for the i-th sample x i .</p><p>To learn these codes we consider a parameterized family of models, F (x, Θ), parameterized by Θ, that map an arbitrary element x ∈ X to R K . The hash code for a particular model described by Θ is then obtained by taking the sign of F , namely,</p><formula xml:id="formula_1">b i = sgn(F (x i , Θ)),<label>(1)</label></formula><p>where sgn denotes the entry-wise sign function, i.e. sgn(x) = 1 if x &gt; 0, otherwise sgn(x) = −1.</p><p>In supervised hashing we are also provided with class labels for the N samples and the goal in this context is to ensure that the binary codes for the samples corresponding to each class are similar. We adopt the perspective of <ref type="bibr" target="#b37">[38]</ref> in that binary codes that are learned in the context of linear classification are good hashing codes, namely, they preserve semantic similarity of the data samples. To this end, we encode the ground truth for each of the C classes into C-dim binary vectors, y i , i = 1, . . . , N where the jth entry y ji = 1 if x i belongs to class j. Our hypothesis suggests that there is a collection of C linear classifier functions, w 1 , w 2 , . . . , w C such that the predicted out-</p><formula xml:id="formula_2">putŷ i = [w T 1 b i , w T 2 b i , . . . , w T C b i ] T = W T b i</formula><p>closely matches the ground-truth label vector y i for data x i , where (·) T denotes the matrix transpose operator. In other words, we seek hash codes and linear classifiers W such that y i ≈ y i , where the approximation error is measured in terms of some loss function L. This leads to the following optimization problem as in <ref type="bibr" target="#b37">[38]</ref>:</p><formula xml:id="formula_3">min Θ,W,B i L(W T b i , y i ) + Ω(Θ, W),<label>(2)</label></formula><formula xml:id="formula_4">s.t. b i = sgn(F (x i , Θ)), ∀i.</formula><p>Note that this formulation is identical to an unconstrained objective function, namely,</p><formula xml:id="formula_5">min Θ,W i L(W T sgn(F (x i , Θ)), y i ) + Ω(Θ, W). (3)</formula><p>Much of the difficulty arises from the need to deal with the sign function. A number of researchers (see <ref type="bibr" target="#b37">[38]</ref>) have proposed various techniques to deal with this problem. These include (a) approximating the sign function using sigmoids (e.g. <ref type="bibr" target="#b29">[30]</ref>); (b) penalizing deviations between F (·, Θ) and B (e.g. <ref type="bibr" target="#b37">[38]</ref>); (c) relaxing the binary constraint to be continuous (e.g. <ref type="bibr" target="#b45">[46]</ref></p><formula xml:id="formula_6">), i.e. b i = F (x i , Θ)</formula><p>. We adopt approach (c), where we first learn the continuous embeddings b i and then threshold them later to be binary codes. This leads to our objective in training VDSH as follows:</p><formula xml:id="formula_7">min Θ,W i L(W T F (x i , Θ), y i ) + Ω(Θ, W).<label>(4)</label></formula><p>While <ref type="bibr" target="#b37">[38]</ref> suggests that this method can be fast, it may lead to sub-optimal performance. As we will see in our experiments this potential suboptimality is offset by training very deep models resulting in significantly better performance relative to <ref type="bibr" target="#b37">[38]</ref>. For simplicity, we choose squared loss functions and penalties (although many other choices such as hinge loss, ℓ 1 norm penalty etc. are all possible). Specifically, we let</p><formula xml:id="formula_8">L(W T F (x i , Θ), y i ) = 1 2 W T F (x i , Θ) − y i 2 2 be a square loss function. Ω(Θ, W) = α θ 2 m θ (m) 2 2 + α W 2 W 2</formula><p>F denotes a joint regularizer over Θ and W, where · 2 and · F denote ℓ 2 norm and Frobenius norm, respectively, and α θ ≥ 0 and α W ≥ 0 are regularization parameters.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Very Deep Hashing Model</head><p>We formally describe our parameterized model for F (x, Θ) in this section. Our very deep hashing model (VDSH) is a network with M hidden layers given by:</p><formula xml:id="formula_9">F 0 (x i ) = x i , F m (x i ) = f m (F m−1 (x i ); θ (m) ), 1 ≤ m ≤ M<label>(5)</label></formula><p>where Θ = {θ (m) } M m=1 denotes the set of weights for the entire network, each θ (m) ∈ R Dm×Dm−1 (D 0 = d, D M = K) denotes the weights between the (m − 1)-th and m-th hidden layers, each f m : R Dm−1 → R Dm denotes a nonlinear function which maps the outputs from lower layers F m−1 (x i ) to the outputs of upper layers F m (x i ). We let the final layer be F (x i , Θ) = F M (x i ). In VDSH we utilize the ReLU <ref type="bibr" target="#b14">[15]</ref> activation function as f . In particular, where max is an entry-wise maximum operator. Note that it is possible for our method to incorporate more complex functions to define f so that more complex operations on the hidden nodes can be involved as well, e.g. maxout <ref type="bibr" target="#b12">[13]</ref>, dropout <ref type="bibr" target="#b39">[40]</ref>, dropconnet <ref type="bibr" target="#b42">[43]</ref>, batch normalization <ref type="bibr" target="#b17">[18]</ref>, and network pruning <ref type="bibr" target="#b13">[14]</ref>. But this discussion is out of the scope of our paper, and we consider it as our future work.</p><formula xml:id="formula_10">f m (x i ; θ (m) ) = max 0, θ (m) x i ,<label>(6)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Optimization</head><p>While backprop is an option for training VDSH and has been used before for learning hash codes <ref type="bibr" target="#b9">[10]</ref>, it suffers from the well-known "vanishing gradient problem" <ref type="bibr" target="#b15">[16]</ref> where gradients in the front layers of an n-layer network decrease exponentially with n. This directly impacts computational efficiency, which in turn limits the size of the networks that can be trained. To overcome this problem, we explicitly introduce a set of auxiliary variables {z i,m } for every x i at every layer m to represent our network in Eq. 5 to circumvent long-term dependencies during training:</p><formula xml:id="formula_11">z i,m = F m (x i ), ∀i, ∀0 ≤ m ≤ M.<label>(7)</label></formula><p>In this way, as observed by <ref type="bibr" target="#b3">[4]</ref>, the auxiliary variables break down the network into a collection of two-adjacent-layer substructures (see <ref type="figure" target="#fig_0">Fig. 1</ref>).</p><p>The issue is that we are still left with dependency between the loss function L and the regularizer Ω (see <ref type="figure" target="#fig_0">Fig. 1</ref>).</p><p>To circumvent this issue we we introduce new auxiliary variablesθ (m) i = θ (m) , ∀i, ∀m, motivated by the block splitting algorithm <ref type="bibr" target="#b33">[34]</ref>. We are now in a position to update network weights Θ locally and independently across the different layers, which leads to improved computational efficiency. We rewrite our objective in terms of these auxiliary variables as follows:</p><formula xml:id="formula_12">min Θ,W,Z,Θ 1 2 i W T z i,M − y i 2 2 + Ω(Θ, W),<label>(8)</label></formula><formula xml:id="formula_13">s.t.θ (m) i = θ (m) , z i,m = f (z i,m−1 ;θ (m) i ), ∀i, ∀m ∈ [1, M ], where Z = {z i,m } andΘ = {θ (m) i }.</formula><p>Note that unlike conventional ADMM methods the second equality constraint is nonlinear. Our next step is to introduce the augmented Lagrangian as follows:</p><formula xml:id="formula_14">min Θ,W,Z,Θ,U ,V 1 2 i W T z i,M − y i 2 2 + Ω(Θ, W) (9) + β 2 i,m z i,m − f (z i,m−1 ;θ (m) i ) + u i,m 2 2 + γ 2 i,m θ (m) −θ (m) i + v i,m 2 2 ,</formula><p>where U = {u i,m } and V = {v i,m } denote the Lagrangian related parameters, β ≥ 0 and γ ≥ 0 are predefined dual update steps. Note that the Lagrangian dual variables for z's and θ's are computed using βu i,m and γv i,m , ∀i, ∀m,.</p><p>To solve Eq. 9, we propose a novel algorithm listed in Alg. 1, where N denotes the total number of training samples and I denotes the identity matrix.</p><p>For better exposition in Alg. 1, we denote</p><formula xml:id="formula_15">∀i, ∀m, G i,m (·) = z i,m − f (z i,m−1 ;θ (m) i ) + u i,m 2 2 , Q i,m (·) = θ (m) −θ (m) i + v i,m<label>2 2</label></formula><p>. We alternatively optimize one variable of G or Q at a time.In each iteration, using the auxiliary variables z's the classification error is first propagated to the last (or top) hidden layer and then sequentially propagated to the rest of the hidden layers. Next given these updated z's, the local copies of network weights θ (m) i are updated independently. This later leads to updates of the entire network weights Θ. Finally the classifier W is updated to minimize the total regularized loss while fixing the rest of the parameters. We repeat the updating until the algorithm satisfies convergence condition. Note that since</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Algorithm 1 VDSH training algorithm</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Input</head><p>: training data {(x i , y i )} and parameters α θ , α W , β, γ Output : network weights Θ</p><formula xml:id="formula_16">Randomly initialize Θ, W; ∀i, ∀m ∈ [1, M ],θ (m) i ← θ (m) , v i,m ← 0, z i,0 ← x i , z i,m ← f (z i,m−1 ;θ (m) i ), u i,m ← 0; repeat foreach i do z i,M ← arg min z i,M 1 2 W T z i,M − y i 2 2 + β 2 G i,M (z i,M ) ; u i,M ← u i,M + z i,M − f (z i,M −1 ;θ (M ) i ); end for m = M − 1 : −1 : 1 do ∀i, z i,m ← arg min z i,m {G i,m (z i,m ) + G i,m+1 (z i,m )}; ∀i, u i,m ← u i,m + z i,m − f (z i,m−1 ;θ (m) i ); end foreach m do ∀i,θ (m) i ← arg minθ(m) i βG i,m (θ (m) i ) + γQ i,m (θ (m) i ) ; θ (m) ← γ γN +α θ i θ (m) i − v i,m ; ∀i, v i,m ← v i,m + θ (m) −θ (m) i ; end W ← arg min W α W 2 W 2 F + 1 2 i W T z i,M − y i 2 2 ; until converge; return Θ;</formula><p>foreach loop in Alg. 1 can be updated independently it is amenable to distributed or parallel computation <ref type="bibr" target="#b44">[45]</ref>. Nevertheless, we do not pursue it here.</p><p>During testing, we utilize the learned network weights Θ and apply Eq. 1 and 5 to compute the hash codes.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.">Discussion</head><p>We analyze the behavior of VDSH training algorithm in Alg. 1 with a small DNN of 8 hidden layers and 64 nodes (or neurons) per layer on the MNIST <ref type="bibr" target="#b24">[25]</ref> dataset. For simplicity, all training parameters are set beforehand. Each subproblem in Alg. 1 is optimized with subgradient descent. (i) Empirical convergence: Theoretically our VDSH is not guaranteed to converge to local minima. Nevertheless, empirically ADMM works well even if the objectives are nonconvex as observed in <ref type="bibr" target="#b16">[17]</ref>. Note that the Lagrangian dual variables for z's (i.e. E i (β u i,m 2 ), ∀m) and  </p><formula xml:id="formula_17">θ's (i.e. E i (γ v i,m 2 ), ∀m) will converge when z i,m = f (z i,m−1 ; θ (m) ) andθ (m) i = θ (m)</formula><p>, ∀i, ∀m, holds respectively. This motivates us to plot the mean of the ℓ 2 norm of the Lagrangian dual variables to demonstrate the empirical convergence behavior of our VDSH. <ref type="figure" target="#fig_1">Fig. 2</ref> depicts the empirical convergence behavior for each hidden layer. Intuition suggests that small dual update steps (e.g. β = 10 −5 , 10 −3 ) lead to slow convergence, which we see empirically in slow change in terms of mean value. On the other hand large steps (e.g. β = 10) can lead to zigzag behavior around a local optimum. For an appropriate step size (e.g. β = 10 −1 ), we do see smooth convergence at all the layers.</p><p>Interestingly, for all the four different dual steps, all eight layers tend to show similar convergence rates. For instance, in <ref type="figure" target="#fig_1">Fig. 2</ref>(c) where β = 10 −1 , all curves tend to be relatively flat by iteration 100. This implies larger changes at front layers and small changes at final layers in our network, leading to faster convergence. This in turn implies that our training algorithm for VDSH has the potential to overcome the vanishing gradient issue in backprop 1 . Similar behavior has been observed for θ.</p><p>We visualize the output features from different layers with β = 10 −1 at 100 iterations using t-SNE <ref type="bibr" target="#b41">[42]</ref> in <ref type="figure">Fig. 3</ref>. As the number of layers increases, the data evidently forms clearer clusters, indicating that our VDSH not only encodes data effectively but also converges at each layer. We depict the speed of training using un-optimized MATLAB implementation 2 in <ref type="figure">Fig. 4</ref>. All training parameters are set as default. The CPU and GPU used for comparison are i7-4930MX@3GHz and Quadro K2100M, respectively. The timing behavior using either CPU or GPU in both plots supports our computational complexity analysis above: in (a) the timing is roughly quadratic in the number of nodes, and in (b) the timing is roughly linear in the number of hidden layers.</p><p>We also compare our method with backprop in terms of computational time. To train a shallow model with 4 hidden layers and 64 nodes per layer, our training speed is about 20 times faster than backprop while achieving similar performance. However, to train a deeper model with 48 hidden layers and 256 nodes per layer, our training algorithm converges within 1 hour, while backprop has not converged within weeks.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Experiments</head><p>In this section, we compare our VDSH with state-ofthe-art supervised hashing methods, including SDH <ref type="bibr" target="#b37">[38]</ref>, BRE <ref type="bibr" target="#b23">[24]</ref>, MLH <ref type="bibr" target="#b31">[32]</ref>, CCA-ITQ <ref type="bibr" target="#b11">[12]</ref>, KSH <ref type="bibr" target="#b29">[30]</ref>, FastHash <ref type="bibr" target="#b27">[28]</ref>, DSRH <ref type="bibr" target="#b53">[54]</ref>, DSCH <ref type="bibr" target="#b47">[48]</ref> and DRSCH <ref type="bibr" target="#b47">[48]</ref> on image retrieval tasks. Following the evaluation protocols used in previous supervised hashing methods (e.g. <ref type="bibr" target="#b37">[38,</ref><ref type="bibr" target="#b47">48]</ref>), each dataset is split into a large retrieval database and a small query set. The entire retrieval database is used to train the hashing models unless otherwise specified. The lengths of output hash codes vary from 16 to 128 bits. The retrieval performance on the query set is evaluated using mean aver- age precision (MAP) and precision (or recall) within Hamming radius 2. All the data samples are normalized to have unit length. For simplicity, our networks all have the same number of nodes in each hidden layer. We tune our network architectures as well as training parameters using cross validation on training data, and report our performance on the query data using the best networks. Our experiments are all run on an Xeon E5-2696 v2 and a single GTX TITAN with un-optimized MATLAB implementation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Datasets and Setup</head><p>We test VDSH mainly on three benchmark datasets for image retrieval tasks with learned hash functions: MNIST, CIFAR-10 <ref type="bibr" target="#b20">[21]</ref>, and NUS-WIDE <ref type="bibr" target="#b7">[8]</ref>. Our method learns the mapping function from image features to hash codes, equivalent to learning from image pixels implicitly by composition of functions.</p><p>MNIST contains 70K gray-scale handwritten digit images with 28 × 28 pixels from "0" to "9". Following <ref type="bibr" target="#b37">[38]</ref>, we randomly sample 100 images per class to form a 1K image query set, and use the rest 69K images as the training and retrieval database. By default each image is represented by a 784-dim vector consisting of its pixel intensities.</p><p>CIFAR-10 contains 60K color images of resolution of 32 × 32 pixels from 10 object classes, with 6K images per class. Following <ref type="bibr" target="#b37">[38]</ref>, we randomly sample 100 images per class as the query set and use the rest 59K images as the training and retrieval set. As default features, each image is presented by a 512-dim GIST <ref type="bibr" target="#b32">[33]</ref> feature vector.</p><p>NUS-WIDE contains about 270K images collected from the web. It is a multi-label dataset where each image is associated with one or more of the 81 semantic concepts. Each image is represented by a 500-dim bag-of-words feature vector that is provided in the dataset. Following <ref type="bibr" target="#b37">[38]</ref>, we only consider the 21 most frequent concept labels and randomly sample 100 images per label to form the query set. The remaining images are used as the training and retrieval set. Two images are considered as a true match if they share at least one common label.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Network Evaluation</head><p>To explore the effect of different network architectures on the retrieval performance, we train a series of networks with varying depth from 4 to 64 hidden layers and dimension from 32 to 1024 nodes per layer, and report the Area-Under-Curve (%) of the precision and MAP for varying code lengths in <ref type="figure" target="#fig_5">Fig. 5</ref> for MNIST and CIFAR-10. Note that for both metrics the plots on both datasets behave similarly, but the best networks for each dataset is different.</p><p>In general larger networks with more hidden layers and nodes per layer lead to better hash codes and better performance. The performance appears to saturate beyond a certain network size which in turn demonstrates the utility of regularization in preventing overly complicated models. In addition we also see that as the number of nodes/layers increases we obtain better retrieval performance. Intuitively, this makes sense because these numbers control the amount of information passing from one layer to the other.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Performance Comparisons</head><p>We compare VDSH with other supervised hashing methods in detail on MNIST and CIFAR-10, respectively. As our final models, we train a network with 48 hidden layers and 256 nodes per layer on MNIST, and a network with 16 hidden layers and 1024 nodes per layer on CIFAR-10. The training time for MNIST is about 15 minutes, and 6.6 milliseconds per sample for testing including hash code generation to retrieve a 69K-sample database. CIFAR-10 takes around 1 hour for training, and 4 milliseconds per sample to retrieve a 59K-sample database.</p><p>The comparison with default features is shown in <ref type="figure" target="#fig_6">Fig. 6  (a-d)</ref>. Note that we are unable to use the full training set for BRE and KSH due to their huge memory requirements, and hence a 5K image subset is randomly sampled for these methods. We can see clearly that our VDSH significantly outputs the competitors by large margins. Also VDSH is more robust than others by maintaining very stable performance across increasing code lengths.</p><p>In order to compare VDSH fairly with other deep hashing methods which learn the CNN features jointly with the hash codes, we utilize the pre-trained "vgg-f" model <ref type="bibr" target="#b5">[6]</ref> to extract CNN features on MNIST and CIFAR-10 directly without any fine-tuning. We then apply VDSH, SDH, CCA-ITQ and FastHash on these CNN features to generate hash codes. Compared to fully optimized deep hashing methods such as DRSCH <ref type="bibr" target="#b47">[48]</ref>, this two-stage scheme has not been optimized for retrieval. The pre-learned CNN is agnostic to the hash codes that are intended to be generated. We report the precision and MAP comparison in <ref type="figure" target="#fig_6">Fig. 6</ref>(eh) with the same experimental settings as in <ref type="bibr" target="#b47">[48]</ref> and <ref type="bibr" target="#b53">[54]</ref> for the CNN features. Note that they only reported results with up to 64 bits, so their curves are incomplete here. Surprisingly, both VDSH and SDH work significantly better than the competitors. VDSH is consistently the best, delivering robust performance across all code lengths. FastHash tends to have good MAP performance, however, its precision within Hamming radius 2 drops drastically with longer hash codes, which is indicative of its inability to form compact clusters in the hash code space.</p><p>Evidently, the robust behavior suggests that the hash codes generated by VDSH in testing are sufficiently well clustered that data samples from the same class are mapped to nearby hash codes. We verify our conjecture by comparing VDSH, SDH and FastHash on CIFAR-10: (1) we visualize the hash codes with 64 bits of all the test images using t-SNE in <ref type="figure">Fig. 7</ref>, and (2) we directly report the precision and recall w.r.t. different code lengths with Hamming radius equal to 0, 1, and 2, respectively, in <ref type="figure">Fig. 8</ref>.</p><p>As we see in <ref type="figure">Fig. 7</ref>, with different features VDSH forms cleaner clusters relative to SDH, suggesting good retrieval performance <ref type="bibr" target="#b2">3</ref> . This visual observation implies that, for VDSH, during testing a query image typically falls into or near the cluster belonging to its ground-truth class. This leads to Hamming distance being relatively small for the archival data within the same class than for other methods.</p><p>We next plot performance for decreasing Hamming radius in <ref type="figure">Fig. 8</ref>. VDSH appears to be robust and does not suffer performance degradation with decreasing radius. In contrast the performance of SDH and FastHash varies significantly and they both achieve the best result within Hamming radius 2. This finding further strengthens our view that VDSH is capable of learning compactly clustered hash codes across different code lengths (see also <ref type="figure">Fig. 7)</ref>.</p><p>Finally we test VDSH on NUS-WIDE using a network with 32 hidden layers and 128 nodes per layer. It takes less than 5 minutes for training, and 31.4 milliseconds per sample for hash code generation to retrieve a 190Ksample database. Performance comparisons are depicted in <ref type="figure">Fig. 9</ref>. For CCA-ITQ, SDH and VDSH, the entire retrieval database is used for training. For the other methods, their huge memory requirements limit us to randomly sample 5K images for training. Here VDSH consistently achieves the best. But the performance gap between VDSH and SDH is not as significant as those in <ref type="figure" target="#fig_6">Fig. 6</ref>. We hypothesize that this could be due to the fact that this is a multi-label dataset. Since we define two images to be neighbors when they share one common label, about 36 percent of the image pairs in this dataset are defined to be neighbors, compared with around 5 percent for a single label dataset of the same scale. The feature spaces of different classes (i.e. concepts) thus tend to have large overlap. Our VDSH network could get confused by the same training samples that belong to different classes and thus unable to generate very effective hash codes. Another possibility is that the performance using the provided bag-of-words features may be already saturated.</p><p>In addition, we compare our method with others on ILSVRC2012 <ref type="bibr" target="#b34">[35]</ref>. Same as SDH <ref type="bibr" target="#b37">[38]</ref>, we randomly select 10 images for each of 1K classes in the training dataset from ILSVRC2012 to create a 10K-image training set to train different hashing methods, and utilize the entire 50K-image validation dataset in ILSVRC2012 as the query set. We first extract 4096-dim features using the vgg-f model. Then we compare our VDSH with SDH and FastHash based on 64bit hash codes within Hamming radius 2, and here are the results (method, precision, recall): (VDSH, 7.73%, 4.82%), (SDH, 2.67%, 0.96%), (FastHash, 0.29%, 0.61%). Clearly, our method is still remarkably better than the state-of-theart for supervised hashing.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Conclusion</head><p>In this paper, we propose a very deep supervised hashing (VDSH) algorithm to learn hash codes by training very deep neural networks. Our VDSH utilizes the outputs of DNNs to generate hash codes by rounding. For computational efficiency we formulate the training of VDSH as an ℓ 2 norm regularized least square problem and propose a novel ADMM based training algorithm which can overcome the issues such as vanishing gradients in the traditional backprop algorithm by decomposing network-wide training into multiple independent layer-wise local updates. We discuss the empirical convergence and computational complexity of our training algorithm, and illustrate the weights learned by the networks. We conduct comprehensive experiments to compare VDSH with other (deep) supervised hashing methods on three benchmark datasets (i.e. MNIST, CIFAR-10, and NUS-WIDE), and VDSH outperforms the state-ofthe-art significantly. As future work, we plan to introduce VDSH into person re-identification <ref type="bibr" target="#b48">[49,</ref><ref type="bibr" target="#b49">50,</ref><ref type="bibr" target="#b50">51]</ref> and zeroshot activity retrieval <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b51">52,</ref><ref type="bibr" target="#b52">53]</ref> as applications.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Schematics of VDSH training algorithm. Blue color represents the network structures, the red and green dashed rectangles represent two two-layer substructures. (Left) Fm(x i ) (resp. F m−1 (x i ) and F m+1 (x i )) denotes the output from the m-th (resp. (m − 1)-th and (m + 1)-th) hidden layers for a data sample x i . (Right) For each data sample we introduce two types of auxiliary variables z andθ to represent the outputs of each hidden layer for the data samples and the local copies of network weights for the substructures. Learning the network weights decomposes into independent local learning of weights, leading to efficiency and feasibility of very deep learning</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .</head><label>2</label><figDesc>Illustration of empirical convergence of VDSH using the Lagrangian dual variables for auxiliary variables z's with different dual update steps β.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>raw pixel features (b) Layer-1 output features (c) Layer-2 output features (d) Layer-4 output features (e) Layer-8 output features</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 3 .Figure 4 .</head><label>34</label><figDesc>t-SNE visualization of different features on MNIST training samples, where different colors denote different classes. Clearly, for this network the output features with more hidden layers are better separated, i.e. layer-8 output features (before rounding) are the best. Actual training time comparison using CPU and GPU by (a) training 8 hidden layer DNNs with different number of nodes per layer, and (b) training DNNs with various hidden layers but 64 nodes per layer.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head></head><label></label><figDesc>(ii) Computational complexity: The computational complexity of VDSH is O( M m=0 D m D m+1 N ) where D 0 = d 1 For graphical comparison on convergence rate, please refer to http: //neuralnetworksanddeeplearning.com/chap5.html denotes the input dimension, D M +1 = N c denotes output dimension (i.e. the number of classes), and N the number of training samples. This follows from the fact that the computational complexity of training VDSH is proportional to training each individual two-layer substructure (seeFig. 1) on account of our ADMM-style decomposition. Now since information goes through the substructure back and forth with subgradient descent updates, the computational complexity of a substructure per data sample corresponding to layers m, m + 1 grows as O(D m D m+1 ).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 5 .</head><label>5</label><figDesc>Network evaluation using default features (i.e. pixel intensities and GIST) on MNIST and CIFAR-10. (a, c) AUC of the precision vs. code-length curve w.r.t. varying number of layers and dimensions. (b, d) AUC of the MAP vs. code-length curve w.r.t. varying number of layers and dimensions.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 6 .</head><label>6</label><figDesc>Retrieval performance comparison on MNIST and CIFAR-10 within Hamming radius 2.(a) VDSH: GIST feature (b) SDH: GIST feature (c) VDSH: CNN feature (d) SDH: CNN feature Figure 7. t-SNE visualization of the 64-bit binary hash codes of all test images in CIFAR-10. (a-b) or (c-d) are plotted using the same images and scales.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 8 .Figure 9 .</head><label>89</label><figDesc>Precision-recall comparison on CIFAR-10 by varying Hamming radius (denoted by "R") using (a-b) GIST features and (c-d) CNN features. Precision and MAP comparison on NUS-WIDE with Hamming radius equal to 2. The features used here are the bag-of-words feature vectors provided by the dataset.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Erin Liong et al.<ref type="bibr" target="#b9">[10]</ref> proposed a deep hashing method to explore the nonlinear relationships among data. Zhang et al.<ref type="bibr" target="#b47">[48]</ref> proposed a Deep Regularized Similarity Comparison Hashing (DRSCH) method to allow the length of output bits to be scalable. Most of the works learn hash functions on top of a deep CNN architecture. In contrast, VDSH can be built from arbitrary vector representations. When CNN features are used, our method can be viewed as fine-tuning these networks for supervised hashing. Besides, the scale and depth of our DNNs are much larger than previous methods, which pose harder challenges for training. (ii) DNNs: In the literature, many different DNN architectures (e.g. LeNet</figDesc><table>achieving state-of-the-art results on sev-
+eral benchmark datasets. 
+
+1.1. Related Work 
+
+(i) Supervised hashing with deep models: Learning high-
+level feature representations by building deep hierarchical 
+models have shown great potential in various applications. 
+Researchers have been adopting deep models to jointly 
+learn image representations and hash codes from data. Kang 
+et al. [19] proposed a deep multi-view hashing (DMVH) 
+algorithm to learn hash codes with multiple data represen-
+tations. Xia et al. [47] proposed learning image represen-
+tations for supervised hashing by approximating the data 
+affinity matrix with CNN features. Zhao et al. [54] pro-
+posed a Deep Semantic Ranking Hashing (DSRH) method 
+to preserve multilevel semantic similarity between multi-
+label images. </table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">Our code can be downloaded at https://zimingzhang. wordpress.com/.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">Note that (a) appears to have fewer points than (b), but in fact there are the same number of points in both plots and many of the bit codes for the same classes collapse to the same 2D points in (a). Similarly we see this in (c) and (d) as well.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgement</head><p>We thank the anonymous reviewers for their very useful comments. This material is based upon work supported in part by the U.S. Department of Homeland Security, Science and Technology Directorate, Office of University Programs, under Grant Award 2013-ST-061-ED0001, by ONR Grant 50202168 and US AF contract FA8650-14-C-1728. The views and conclusions contained in this document are those of the authors and should not be interpreted as necessarily representing the social policies, either expressed or implied, of the U.S. DHS, ONR or AF.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D.-H</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bornschein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lin</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.04156</idno>
+		<title level="m">Towards biologically plausible deep learning</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Distributed optimization and statistical learning via the alternating direction method of multipliers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Boyd</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Parikh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Chu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Peleato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Eckstein</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Machine Learning</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page" from="1" to="122" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Hashing with binary autoencoders</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">A</forename><surname>Carreira-Perpinán</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Raziperchikolaei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Distributed optimization of deeply nested systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">A</forename><surname>Carreira-Perpinán</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Efficient activity retrieval through semantic graph queries</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">D</forename><surname>Castanon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Saligrama</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACM Multimedia</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Return of the devil in the details: Delving deep into convolutional nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chatfield</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">An exploration of parameter redundancy in deep networks with circulant projections</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Cheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">X</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Feris</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Choudhary</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-F</forename><surname>Chang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Nuswide: A real-world web image database from national university of singapore</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-S</forename><surname>Chua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Hong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-T</forename><surname>Zheng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CIVR</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Large scale distributed deep networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Monga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Devin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Senior</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Tucker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><forename type="middle">V</forename><surname>Le</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1223" to="1231" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Deep hashing for compact binary codes learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">Erin</forename><surname>Liong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Moulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2001" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Understanding the difficulty of training deep feedforward neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Glorot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AISTATS</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Iterative quantization: A procrustean approach to learning binary codes for large-scale image retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Gong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gordo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Perronnin</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Warde-Farley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mirza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1319" to="1327" />
+		</imprint>
+	</monogr>
+	<note>Maxout networks</note>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Learning both weights and connections for efficient neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">J</forename><surname>Dally</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Delving deep into rectifiers: Surpassing human-level performance on imagenet classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.01852</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Gradient flow in recurrent nets: the difficulty of learning long-term dependencies</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hochreiter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Frasconi</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2001" />
+			<publisher>IEEE Press</publisher>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Convergence analysis of alternating direction method of multipliers for a family of nonconvex problems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z.-Q</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Razaviyayn</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1410.1390</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Batch normalization: Accelerating deep network training by reducing internal covariate shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.03167</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Deep learning to hash with multiple representations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Kang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Choi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICDM</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="930" to="935" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1312.6114</idno>
+		<title level="m">Auto-encoding variational bayes</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">Learning multiple layers of features from tiny images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Using very deep autoencoders for content-based image retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ESANN</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1097" to="1105" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Learning to hash with binary reconstructive embeddings</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Kulis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Cortes</surname></persName>
+		</author>
+		<ptr target="http://yann.lecun.com/exdb/mnist/" />
+		<title level="m">MNIST handwritten digit database</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Lenet-5, convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<imprint>
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Difference target propagation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D.-H</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fischer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Machine Learning and Knowledge Discovery in Databases</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="498" to="515" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Fast supervised hashing with decision trees for high-dimensional data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Van Den Hengel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Suter</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Foroosh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Tappen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pensky</surname></persName>
+		</author>
+		<title level="m">Sparse convolutional neural networks. In CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="806" to="814" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Supervised hashing with kernels</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-G</forename><surname>Jiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-F</forename><surname>Chang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+		<title level="m" type="main">Numerical optimization. Springer series in operations research and financial engineering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Nocedal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Wright</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+			<publisher>Springer</publisher>
+		</imprint>
+	</monogr>
+	<note>2nd ed. edition</note>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Minimal loss hashing for compact binary codes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Norouzi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">M</forename><surname>Blei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="353" to="360" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Modeling the shape of the scene: A holistic representation of the spatial envelope</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">42</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page">6</biblScope>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Block splitting for distributed optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Parikh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Boyd</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Mathematical Programming Computation</title>
+		<imprint>
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Russakovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Satheesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bernstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<title level="m">ImageNet Large Scale Visual Recognition Challenge. IJCV</title>
+		<imprint>
+			<date type="published" when="2015-04" />
+			<biblScope unit="page" from="1" to="42" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">J</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Norvig</surname></persName>
+		</author>
+		<title level="m">Artificial Intelligence: A Modern Approach. Pearson Education</title>
+		<imprint>
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+	<note>2 edition</note>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Low-rank matrix factorization for deep neural network training with high-dimensional output targets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">N</forename><surname>Sainath</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Kingsbury</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Sindhwani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Arisoy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Ramabhadran</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICASSP</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="6655" to="6659" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Supervised discrete hashing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">T</forename><surname>Shen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.1556</idno>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Dropout: A simple way to prevent neural networks from overfitting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">15</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.4842</idno>
+		<title level="m">Going deeper with convolutions</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Visualizing data using t-SNE</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Der Maaten</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page">85</biblScope>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Regularization of neural networks using dropconnect</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zeiler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">L</forename><surname>Cun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Deep multimodal hashing with orthogonal regularization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Cui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zhu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IJCAI</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="2291" to="2297" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Parallel direction method of multipliers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Banerjee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z.-Q</forename><surname>Luo</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="181" to="189" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<monogr>
+		<title level="m" type="main">Semi-supervised hashing for large-scale search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-F</forename><surname>Chang</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Supervised hashing for image retrieval via image representation learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Xia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Pan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<monogr>
+		<title level="m" type="main">Bit-scalable deep hashing with regularized similarity learning for image retrieval and person re-identification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zuo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhang</surname></persName>
+		</author>
+		<idno>abs/1508.04535</idno>
+		<imprint>
+			<date type="published" when="2005" />
+			<publisher>CoRR</publisher>
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">A novel visual word cooccurrence model for person re-identification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Saligrama</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV Workshop on Visual Surveillance and Re-Identification</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">Group membership prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Saligrama</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<monogr>
+		<title level="m" type="main">PRISM: Person re-identification via structured matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Saligrama</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1406.4444</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<analytic>
+		<title level="a" type="main">Zero-shot learning via semantic similarity embedding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Saligrama</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b52">
+	<analytic>
+		<title level="a" type="main">Zero-shot learning via joint latent similarity embedding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Saligrama</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b53">
+	<analytic>
+		<title level="a" type="main">Deep semantic ranking based hashing for multi-label image retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

@@ -1,0 +1,1050 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Learning with Side Information through Modality Hallucination</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Judy</forename><surname>Hoffman</surname></persName>
+							<email>jhoffman@eecs.berkeley.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">EECS Department</orgName>
+								<address>
+									<settlement>Berkeley</settlement>
+									<country>UC</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Saurabh</forename><surname>Gupta</surname></persName>
+							<email>sgupta@eecs.berkeley.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">EECS Department</orgName>
+								<address>
+									<settlement>Berkeley</settlement>
+									<country>UC</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Trevor</forename><surname>Darrell</surname></persName>
+							<email>trevor@eecs.berkeley.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">EECS Department</orgName>
+								<address>
+									<settlement>Berkeley</settlement>
+									<country>UC</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Learning with Side Information through Modality Hallucination</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:42+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We present a modality hallucination architecture for training an RGB object detection model which incorporates depth side information at training time. Our convolutional hallucination network learns a new and complementary RGB image representation which is taught to mimic convolutional mid-level features from a depth network. At test time images are processed jointly through the RGB and hallucination networks to produce improved detection performance. Thus, our method transfers information commonly extracted from depth training data to a network which can extract that information from the RGB counterpart. We present results on the standard NYUDv2 dataset and report improvement on the RGB detection task.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>RGB and depth images offer different and often complementary information. In fact, recent work has shown that the two image modalities can be used simultaneously to produce better recognition models than either modality alone <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b35">36,</ref><ref type="bibr" target="#b34">35]</ref>. While RGB image capturing devices are pervasive, depth capturing devices are much less prevalent. This means that many recognition models will need to perform well on RGB images alone as input. We present an algorithm which uses available paired RGB-d training data to learn to hallucinate mid-level convolutional features from an RGB image. We demonstrate that through our approach we produce a novel convolutional network model which operates over only the single RGB modality input, but outperforms the standard network which only trains on RGB images. Thus, our method transfers information commonly extracted from depth training data to a network which can extract that information from the RGB counterpart.</p><p>Convolutional networks (ConvNets) have produced tremendous success on visual recognition tasks, from classification <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b30">31]</ref>, to detection <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b24">25]</ref>, to semantic segmentation <ref type="bibr" target="#b23">[24,</ref><ref type="bibr" target="#b38">39]</ref>. The standard approach for training these networks is to initialize the network parameters us- <ref type="figure">Figure 1</ref>: Training our modality hallucination architecture. We learn a multimodal Fast R-CNN <ref type="bibr" target="#b9">[10]</ref> convolutional network for object detection. Our hallucination branch is trained to take an RGB input image and mimic the depth mid-level activations. The whole architecture is jointly trained with the bounding box labels and the standard softmax cross-entropy loss.</p><p>ing a large labeled image corpra (ex: ImageNet <ref type="bibr" target="#b5">[6]</ref>) and then fine-tune using the smaller target labeled data sources. While this strategy has been proven to be very effective, it offers only one technique for learning representations for recognition and due to the large parameter space of the network, runs the risk of overfitting to the nuances of the small RGB dataset.</p><p>We propose an additional representation learning algorithm which incorporates side information in the form of an additional image modality at training time to produce a more informed test time single modality model. We accomplish this by directly learning a modality hallucination network which optimizes over the standard class and bounding box localization losses while being guided by an additional hallucination loss which regresses the hallucination features to the auxiliary modality features.</p><p>Due to its practicality, we consider the case of producing an RGB detector using some paired RGB-D data at training time. In doing so, we produce a final model which at test time only sees an RGB image, but is able to extract both the image features learned through finetuning with standard supervised losses as well as the hallucinated features which have been trained to mirror those features you would extract if a depth image were present. We demonstrate that our RGB with hallucination detector model outperforms the state-of-the-art RGB model on the NYUD2 dataset.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>We use depth side information at training time to transfer information through a new representation to our test time RGB model. RGB-D Detection. Depth and RGB modalities often offer complementary information. Prior work has made use of this fact by producing detectors which take as input paired RGB and depth modalities to improve detection performance over the RGB only model. Many of these methods do so by introducing new depth representations <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b31">32,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b35">36]</ref>, most recently by adding an additional depth network representation into a convolutional network architecture <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b34">35]</ref>. Our work is inspired by these approaches, which successfully learn complementary depth feature representations. We learn such representations at training time and learn to transfer information from the depth representation to an RGB only model through modality hallucination.</p><p>Transfer Learning. Our work is related to transfer learning and domain adaptation which learns to share information from one task to another. Classifical approaches consider learning to adapt across distributions, through some combination of parameter updates <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b17">18]</ref> and transformation learning <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b11">12]</ref>. Christoudias et al. <ref type="bibr" target="#b4">[5]</ref> learned a mapping to hallucinate a missing modality at training time, but was only shown with weak recognition models. Along these lines a transformation learning approach was recently introduced to use depth information at training time to inform RGB test time detection by learning transformations into a common feature representation across modalities <ref type="bibr" target="#b3">[4]</ref>. In contrast to our approach, this paper learned a single representation for the joint modality space, while our work focuses on learning an additional RGB representation which is informed during training by the depth data. Such modality hallucination was explored in <ref type="bibr" target="#b29">[30]</ref>, which introduced a fusion approach which was able to fill in a missing modality.</p><p>Learning using side information. Our problem can also be viewed from the learning with side or priviledged information perspective. This is when a learning algorithm has additional knowledge at training time, whether meta data or in our case an additional modality. One then uses this extra information to inform training of a stronger model than could be produced otherwise. The theoretical framework was explored in <ref type="bibr" target="#b33">[34]</ref> and a max-margin framework for learning with side-information in the form of bounding boxes, image tags, and attributes was examined in <ref type="bibr" target="#b25">[26]</ref>, while Shrivastava and Gupta <ref type="bibr" target="#b26">[27]</ref> showed how surface normals at training time could produce detection improvement within the DPM framework.</p><p>Network transfer through distillation. Most related to our work is the concept of network distillation and its extensions. Hinton et al. <ref type="bibr" target="#b16">[17]</ref> and concurrently Ba et al. <ref type="bibr" target="#b2">[3]</ref> introduced the idea of model compression and fast transfer of information from one convolutional network to another. Essentially, the output from one network is used as the target probability distribution for a new network. This was shown to reduce training time of a new network and in some cases reduce the number of parameters needed in order to achieve equivalent performance. This approach was further applied for transfering task correlation across domains <ref type="bibr" target="#b32">[33]</ref>. Wang et al. <ref type="bibr" target="#b36">[37]</ref> transfered information across networks without labels by used a ranking loss across video frames to learn a deep representation which mapped patches from the same track closer together than patches from distinct tracks.</p><p>Our approach can also be seen as using distillation to learn representations on RGB images by transferring supervision from paired depth images, but we employ joint training instead of staged training as was used in <ref type="bibr" target="#b15">[16]</ref> for supervision transfer. In contrast to <ref type="bibr" target="#b15">[16]</ref>, our focus is different, we are studying the problem of enriching RGB representations using depth as side information. We show the result that learning representations using depth as side information in this manner can lead to representation which when used in conjunction with representations learned on ImageNet lead to boosts in performance for recognition tasks like object detection.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Modality Hallucination Model</head><p>We present a modality hallucination architecture for training an RGB object detection model which incorporates depth side information at training time. Our hallucination network learns a new and complementary RGB image representation which is trained to mimic depth mid-level features. This new representation is combined with the RGB image representation learned through standard fine-tuning. <ref type="figure">Figure 1</ref> illustrates the training architecture for our hallucination model. We use multi-layer convolutional networks (ConvNets) as our base recognition architecture which have been shown to be very effective for many different recognition tasks. Prior work on RGB-D detection <ref type="bibr" target="#b14">[15]</ref> has found success using a two channel model where RGB and depth images are processed independently with a final detection score being the softmax of the average of both predictions.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Architecture Definition</head><p>For our architecture we build off of this same general model. However, we seek to share information between the two modalities and in particular to use the training time privileged depth modality to inform our final RGB only detector. To accomplish this, we introduce a third channel which we call the hallucination network (blue network in <ref type="figure">Figure 1</ref>). The hallucination network takes as input an RGB image and a set of regions of interest and produces detection scores for each category and for each region.</p><p>To cause the depth modality to share information with the RGB modality through this hallucination network, we add a regression loss between paired hallucination and depth layers. This choice is inspired by prior work which uses similar techniques for model distillation <ref type="bibr" target="#b16">[17]</ref>, task correlation transfer across domains <ref type="bibr" target="#b32">[33]</ref>, and supervision transfer from a well labeled modality to one with limited labels <ref type="bibr" target="#b15">[16]</ref>. Essentially, this loss guides the hallucination network to extract features from an RGB image which mimic the responses extracted from the corresponding depth image. We will discuss the details of this loss and its optimization in the next section. It is important that the hallucination network has parameters independent of both the RGB and depth networks as we want the hallucination network activations to match the corresponding depth mid-level activations, however we do not want the feature extraction to be identical to the depth network as the inputs are RGB images for the hallucination network and depth images for the depth network.</p><p>At test time, given only an RGB image and regions of interest, we pass our image through both the RGB network and the hallucination network to produce two scores per category, per region, which we average and take the softmax to produce our final predictions (see <ref type="figure" target="#fig_0">Figure 2</ref>).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Architecture Optimization</head><p>In this section we describe the implementation and optimization details for our architecture. At training time we assume access to paired RGB and depth images and regions of interest within the image. We train our model one set of paired images at a time using the Fast R-CNN <ref type="bibr" target="#b9">[10]</ref> framework. The RGB and depth network are independently trained using the Fast R-CNN algorithm with the corresponding image input. Next, the hallucination network parameters are intialized with the learned depth network weights before joint training of the three channel network. The choice of initialization for the hallucination parameters is explored in Section 4.1.1. Note, that finetuning of the hallucination network with only a softmax loss on the label space would be equivalent to the training procedure of the RGB network. To faciliate transfer we must use an additional objective by introducing a hallucination loss.</p><p>Hallucination Loss. We add the objective that activations after some layer, ℓ, should be similar between the hallucination and depth networks. In particular, we add a euclidean loss between the depth activations A dNet ℓ and the hallucination activations A hNet ℓ so that the hallucination loss for the given layer is defined as:</p><formula xml:id="formula_0">L hallucinate (ℓ) = σ(A dNet ℓ ) − σ(A hNet ℓ ) 2 2 (1) where σ(x) = 1/(1 + e −x )</formula><p>is the sigmoid function. This loss can be applied after any layer in the network and can be optimized directly. However, we are trying to learn an asymmetric transfer of information, namely we seek to inform our RGB hallucination model using the prelearned depth feature extraction network. Therefore, we set the learning rates of all layers lower than the hallucination loss in the depth network to zero. This effectively freezes the depth extractor up to and including layer ℓ so that the target depth activations are not modified through backpropagation of the hallucination loss.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Multi-task Optmization</head><p>The full training of our model requires balancing multiple losses. More precisely we have 11 total losses, 5 softmax cross-entropy losses using bounding box labels as targets, 5 Smooth L1 losses <ref type="bibr" target="#b9">[10]</ref> using the bounding box coordinates as the targets, and one additional hallucination loss which matches midlevel activations from the hallucination branch to those from the depth branch. The 5 standard supervision and 5 bounding box regression losses operate over each of the three subnetworks, RGB, depth, hallucination, indepdently so that each learns weights that are useful for then final task. We then have 2 joint losses over the average of the final layer activations from both the RGB-depth branches and from the RGB-hallucination branches. These losses encourage the paired networks to learn complementary scoring functions.</p><p>For a given network, N, let us denote the softmax crossentropy loss over category labels as L N cls and the Smooth L1 loss over bounding box coordinate regression as L N loc . Then, the total joint loss of our optimization can be described as follows:</p><formula xml:id="formula_1">L = γL hallucinate (2) +α L dNet loc + L rNet loc + L hNet loc + L rdNet loc + L rhNet loc +β L dNet cls + L rNet cls + L hNet cls + L rdNet cls + L rhNet cls</formula><p>Balancing these objective is an important part of our joint optimization. For simplicity, we choose to weight all localization losses equivalently and all category losses equivalently. This leaves us with three parameters to set, denoted above as α, β, and γ.</p><p>We set the category loss weights, β = 1.0, and then let the localization weights be a factor of 2 smaller, α = 0.5. Finally, to set the hallucination loss weight will depend on the approximate scale of the loss function. This will vary based on the layer at which the hallucination loss is added. For lower layers in the network, the loss tends to be larger. Thus, a smaller value for γ would make sense to avoid the hallucination loss dominating the other objectives. We therefore use a heuristic that the contribution of the hallucination loss should be around 10 times the size of the contribution from any of the other losses. For example, if the contribution from a category loss is about 0.5, then the contribution from the hallucination loss should be around 5. In practice, one can determine this by running a few iterations of training and examining the losses.</p><p>Gradient Clipping In developing our model, we found that the optimization could be suceptible to outliers causing large varitions in gradient magnitudes for the hallucination loss. One potential way to address this issue would be to set the loss weight very low on the hallucintation loss so that even when a large gradient appears the network optimization does not diverge. However, this will limit the effectiveness of the hallucination loss.</p><p>Instead, we have found that a more robust way to train with this euclidean loss is to use gradient clipping. This simply means that when the total gradient (in terms of ℓ2 norm) in the network exceeds some threshold, T , all gradients are scaled by T / (total norm). Thus, the effective contribution of an outlier example is reduced since the large gradients will be scaled down to the standard range. This approach is simple and already implemented in many standard deep learning packages (ex: it involves a single line change in the Caffe <ref type="bibr" target="#b19">[20]</ref> solver file).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>We evaluate our model using a standard RGB-D detection dataset, NYUD2 <ref type="bibr" target="#b37">[38]</ref>. The NYUD2 dataset consists of 1449 labeled RGB-D images. The dataset is split into train (381 images), val (414 images), and test (654 images) sets. For our ablation experiments we train our model using the train set only and evaluate our model on the validation set. For our overall detection experiment which compares to prior work, we present results on the test set for our algorithm trained using the combined trainval set.</p><p>Base Network. For the following experiments our base network architecture (used for each of the RGB, depth and hallucination networks), is the single scale Fast R-CNN modification to the AlexNet <ref type="bibr" target="#b20">[21]</ref> architecture or the VGG-1024 architecture introduced in [10] as a lower memory modification of VGG <ref type="bibr" target="#b27">[28]</ref>. The RGB AlexNet network is initialized with the CaffeNet <ref type="bibr" target="#b19">[20]</ref> released weights, which were learned using ILSVRC12 <ref type="bibr" target="#b5">[6]</ref> and the RGB VGG-1024 network was intialized with the weights released with Fast R-CNN <ref type="bibr" target="#b9">[10]</ref>. We then finetune our RGB network on the NYUD2 dataset. We represent the depth images using the HHA encoding introduced by Gupta et al. <ref type="bibr" target="#b14">[15]</ref> and independently finetune the depth network after initializing with the RGB weights.</p><p>Region Proposals. A Fast R-CNN architecture takes as input an image and its corresponding regions of interest. To compute these regions of interest we use two different region proposal algorithms. For the NYUD2 dataset we use multiscale combinatorial grouping (MCG) <ref type="bibr" target="#b0">[1]</ref>, which has been used in the past for this dataset as it is capable of incorporating depth information into the proposal mechanism. We use the RGB-D version of MCG for training all networks and then use the RGB version at test time. We found this to work better than using RGB MCG for both training and testing by about 1-2%.</p><p>SGD Hyper-parameters. We optimize our network using the Caffe <ref type="bibr" target="#b19">[20]</ref> learning framework. We use a base learning rate of 0.001 and allow all layers of the three channel network to update with the same learning rate, with the exception of the depth network layers below the hallucination loss, which are frozen. We use a momentum of 0.9 and a weight decay of 0.0005. We optimize our ablation experiments for 40K iterations and our full NYUD2 experiment for 60K iterations 1 using a step learning rate policy where the base learning rate is lowered by a factor of 10 (γ = 0.1) every 30K iterations. Finally, we clip gradients when the L2 norm of the network gradients exceeds 10. <ref type="bibr" target="#b0">1</ref> Note that for one of the initial RGB AlexNet models we use the weights released with <ref type="bibr" target="#b15">[16]</ref> which was only trained for 40K iterations. We also note that in our experience training the RGB only AlexNet baseline model for more than 40K iterations did not provide any benefit as it does for the joint hallucination model and for the VGG-1024 architecture.  <ref type="bibr" target="#b20">[21]</ref> architecture is denoted as 'A' and VGG-1024 <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b27">28]</ref> architecture is denoted as 'V'. Our method outperforms both the RGB-only baselines and the RGB ensemble baselines. <ref type="table">Table 1</ref> reports performance of our full system with two different architecture on the NYUD2 dataset. The two base architectures are either AlexNet (indicated as 'A') <ref type="bibr" target="#b20">[21]</ref> or VGG-1024 (indicated as 'V') <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b27">28]</ref>. We train our initial RGB and depth networks using the strategy proposed in <ref type="bibr" target="#b14">[15]</ref>, but use Fast R-CNN instead of RCNN as used in <ref type="bibr" target="#b14">[15]</ref>. We then initialize our hallucination network using the depth parameter values. Finally, we jointly optimize the three channel network structure with a hallucination loss on the pool5 activations. When our hallucination network is labeled with a particular architecture this refers to the choice of the depth network and the hallucination network architecture and the RGB architecture is chosen and indicated separately. In the next two sections we explore our choice of initialization and at which layer to add a hallucination loss.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">NYUD2 Detection Evalutation</head><p>For each architecture choice we first compare against the corresponding RGB only Fast R-CNN model and find that our hallucination network outperforms this baseline, with 30.5 mAP vs 26.6 mAP for the AlexNet architecture and 34.0 mAP vs 29.9 mAP for the VGG-1024 architecture. Note that for our joint AlexNet method, A-RGB + A-H, we average the APs of the joint model using each of the AlexNet RGB baseline models. As an additional reference, the state-of-the-art performance of RGB-D detection algorithms on NYUD2 is 41.2 mAP <ref type="bibr" target="#b13">[14]</ref>, 44.4 mAP <ref type="bibr" target="#b14">[15]</ref> when run with Fast R-CNN <ref type="bibr" target="#b9">[10]</ref> and 47.1 mAP <ref type="bibr" target="#b15">[16]</ref>. However, these algorithms operate in the privileged regime with access to depth at test time, thus they are able to achieve the highest overall performance.</p><p>It is well known that ensemble methods tend to outperform the single model approach. For example, an ensemble of two ConvNets each initialized randomly and then trained using the same data source, outperforms either model independently <ref type="bibr" target="#b12">[13]</ref>. Since our method is the combination of an RGB model trained using a standard supervised approach and an RGB model trained using our depth halluciation technique, we additionally compare our approach to an ensemble of standard trained RGB models. <ref type="table">Table 1</ref> reports the performance both for an ensemble of two different AlexNet RGB models, the weights for which were randomly initialized with different seeds before being pre-trained with Im-ageNet <ref type="bibr" target="#b5">[6]</ref>, and for an ensemble of an AlexNet RGB model with a VGG-1024 RGB model. We find in both cases that the RGB ensemble improves performance over the single RGB model, while our hallucination model offers the highest performance overall, with 14/19 categories improving for the AlexNet comparisons to ensemble and 13/19 categories improving for the VGG-1024 hallucination net comparisons to ensemble. This suggests that our hallucination model offers more benefit than a simple RGB ensemble.</p><p>While our method hallucinates mid-level depth features, other work has proposed hallucinating the pixel level depth from an RGB image. As an additional baseline, we have taken a state-of-the-art depth estimation approach <ref type="bibr" target="#b22">[23]</ref> and used the model to produce hallucinated depth images at test time which can be used as input to the depth channel of our pre-trained RGB-D detector. However, doing this performed worse than using our RGB model alone (22% mAP vs 27% mAP) so we have ommitted the results from <ref type="table">Table 1</ref>. Note that we do not fine-tune our detection model using the depth pixel hallucinations and thus a drop in performance is likely due, at least in part, to the mismatch between the true depth used at training time and the hallucinated depth images used at test time. We refer the interested reader to a related and more comprehensive investigation of pixel depth hallucination by Eigen and Fergus <ref type="bibr" target="#b7">[8]</ref> who replaced the true depth input into their network with their hallucinated depths and normals and did fine-tune, yet still did not observe performance improvements for the final semantic segmentation task.</p><p>In the next subsections we explore ablation studies and analysis on our hallucination model. For all the following experiments we use the AlexNet RGB and hallucination architecture.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.1">How to initialize the hallucination net?</head><p>One important parameter of training our model is how to initialize the hallucination network. We explore three natural choices in <ref type="table" target="#tab_2">Table 2, random initialization, initialization  with the RGB network parameter values, and initialization  Initial Weights   bathtub  bed  bshelf box  chair  counter desk door dresser  gbin  lamp  monitor nstand  pillow  sink  sofa  table  tv</ref>   Another important parameter of our method is to choose which mid-level activations the hallucination loss should regress to. In <ref type="table" target="#tab_4">Table 3</ref> we systematically explore placing the hallucination loss after each layer from pool1 to fc8. We found that overall adding the hallucination loss at a mid to lower layer improved performance the most over the RGB only baseline network. The highest overall performance was achieved with the hallucination loss on the pool5 activations. However, the result was not uniformly distributed across all categories. For example, bathtub received a noticeably greater performance increase with a hallucination loss at pool1.</p><p>We also experimented with adding the hallucination loss at multiple layers in the network, but did not find this to be more effective than pool5 alone.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.3">Does hallucination help on other datasets?</head><p>We next study the application of our hallucination network on the Pascal <ref type="bibr" target="#b8">[9]</ref> dataset (VOC 2007) which lacks depth data. First, we directly evaluate both the NYUD2 RGB-only network and our NYUD2 RGB plus hallucination network on the four overlapping categories in Pascal. Results for this experiment are reported in the first two rows of <ref type="table" target="#tab_6">Table 4</ref>.</p><p>We find that our hallucination network provides 3.9% mAP improvements across these four Pascal categories when compared to the RGB-only baseline (from 16.9 to 20.8 mAP). Additionally, we note that there is a dataset shift between Pascal and NYUD2 which causes the overall performance of both methods to be lower than that of a network which was explicitly trained on Pascal. Therefore, we also explore further fine-tuning on the available Pascal This means that the dataset shift is mitigated in the RGB network but not in the hallucination network. Nevertheless, we find that the combination of our Pascal fine-tuned RGB network with our NYUD2 trained hallucination network continues to outperform the RGB-only baseline, achieving 53.2 mAP instead of 52.1 mAP and higher performance on 3/4 categories.</p><p>This indicates that the hallucination technique provides benefit beyond the NYUD2 dataset and we expect that the gains from the hallucination network would only become larger if we were able to adapt the parameters to the new dataset directly.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">What did the hallucination net learn?</head><p>Regression losses can often be difficult to train together with the supervised cross-entropy loss. We first verify that <ref type="table">hallucination   layer  bathtub  bed  bshelf  box chair  counter  desk  door  dresser gbin  lamp  monitor  nstand  pillow  sink  sofa  table  tv</ref>   our hallucination loss is effectively learning by examining the training loss vs iteration and confirming that the hallucination loss does indeed decrease.</p><p>We next verify that this training loss decrease translates to a decreased loss on the test data and hence a better depth activation alignment. To this end, we examine the network outputs on the NYUD2 test set. We first compute the hallucination loss value across the entire test set before and after learning and find that the value decreases from 216.8 to 94.6.</p><p>We additionally compare the euclidean distance between the hallucination activations and the RGB activations and find that after learning, the hallucination and depth activa-tions are closer than the hallucination and RGB activations. Specifically, for the case where the hallucination network was intialized with RGB weights, the hallucination network activations start out being same as the RGB network activations but over time become closer to the depth network as can be seen from the post-training euclidean losses of H-RGB =113.0 while H-HHA=97.5.m</p><p>As an example, <ref type="figure" target="#fig_1">Figure 3</ref> shows roi-pool5 activations from corresponding regions in the test image which have highest final detection scores. The visualization shows all 256 × 6 × 6 roi-pool5 activations and corresponding region label. This figure illustrates the difference between the RGB activations learned through our approach and through the   We compare running our hallucination network on a new dataset. We compare the RGB only vs hallucination network of NYUD2 by first directly applying the networks on pascal. Then we finetune the RGB model on pascal data (leaving the hallucination portion fixed) and continue to find that the nyud trained hallucination model provides performance improvements. standard learning procedure. Finally, we know from the detection experiments in the previous section that training with the hallucination loss offers performance improvements over a single RGB model or an ensemble of RGB models trained without the depth hallucination loss. However, it's important to know how the network is improving. Therefore, in <ref type="figure">Figure 4</ref>, we show randomly sampled images from the NYUD2 test set where the top scored region from our hallucination model corresponds to a true positive and the top scoring region from the single RGB baseline corresponds to a false positive. Our method output is illustrated with a green box and the baseline is illustrated with a red box.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>We have introduced a novel technique for incorporating additional information, in the form of depth images, at training time to improve our test time RGB only detection models. We accomplish this through our modality hallucination architecture which combines a traditional RGB ConvNet representation with an additional and complementary RGB representation which has been trained to hallucinate depth mid-level features. Our approach outperforms the corresponding Fast R-CNN RGB detection models on the NYUD2 dataset.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 2 :</head><label>2</label><figDesc>Test time modality hallucination architecture.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 3 :</head><label>3</label><figDesc>Roi-pool5 activations on three top scoring regions from an NYUD2 test set image. This figure illustrates the difference between the activations from the three networks.VOC 2007 trainval set. This set only contains RGB images so we may only further fine-tune the RGB network.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 5 :</head><label>5</label><figDesc>Example Detections on the NYUD2 test set where our RGB hallucination network's (green box) top scoring detection for the image is a false positive while the baseline RGB detector's (red box) top scoring detection is a true positive.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="true"><head>Table 2 :</head><label>2</label><figDesc>RGB Detection (AP%) on NYUD2 val set: We compare intializing the hallucination network by randomly initializing or by</figDesc><table>using the pre-trained RGB or depth parameter values. 
+
+with the depth network parameter values. Here we use RGB 
+and depth networks trained using NYUD2 train set only 
+and then we use the NYUD2 validation set for evaluation 
+of the different choices. We find that both the RGB and 
+depth initialization schemes outperform the baseline RGB 
+only model (20.6% mAP for this setting) and the random 
+initialization model. The depth initialization model has the 
+highest mAP performance and higher AP than the RGB ini-
+tialization model on 12/19 categories (plus 1 tied category). 
+We thus choose to intialize our hallucination network in all 
+future experiments with the depth parameter values. 
+
+4.1.2 Which layer to hallucinate? 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head>Table 3 :</head><label>3</label><figDesc>RGB Detection (AP%) on NYUD2 val set: We compare hallucinating different mid-level features with our method.Figure 4: Example Detections on the NYUD2 test set where our RGB hallucination network's (green box) top scoring detection for the image is correct while the baseline RGB detector's (red box) top scoring detection is incorrect.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_6" validated="false"><head>Table 4 :</head><label>4</label><figDesc>RGB Detection (AP%) on PASCAL voc 2007 test set:</figDesc><table></table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements This work was supported in part by DARPA; AFRL; DoD MURI award N000141110688; NSF awards IIS-1212798, IIS-1427425, and IIS-1536003, and the Berkeley Vision and Learning Center.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Multiscale combinatorial grouping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pont-Tuset</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Barron</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Marques</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Tabula rasa: Model transfer for object category detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Aytar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Do deep nets really need to be deep?</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Caruana</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<editor>Z. Ghahramani, M. Welling, C. Cortes, N. Lawrence, and K. Weinberger</editor>
+		<imprint>
+			<publisher>Curran Associates, Inc</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">27</biblScope>
+			<biblScope unit="page" from="2654" to="2662" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Recognizing rgb images by learning from rgb-d data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Xu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Learning to recognize objects from unseen modalities</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">M</forename><surname>Chrisoudias</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Salzmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">ImageNet: A large-scale hierarchical image database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Dong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L.-J</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Learning with augmented features for heterogeneous domain adaptation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Duan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><forename type="middle">W</forename><surname>Tsang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Predicting depth, surface normals and semantic labels with a common multi-scale convolutional architecture</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Eigen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">The pascal visual object classes (voc) challenge</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K I</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">88</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="303" to="338" />
+			<date type="published" when="2010-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<title level="m">Fast R-CNN. International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Rich feature hierarchies for accurate object detection and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Geodesic flow kernel for unsupervised domain adaptation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Gong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Sha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Grauman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Deep CNN ensemble with data augmentation for object detection. CoRR, abs/1506.07224</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gould</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Aligning 3D models to RGB-D images of cluttered scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">A</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Learning rich features from rgb-d images for object detection and segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision-ECCV 2014</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="345" to="360" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Cross modal distillation for supervision transfer</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hoffman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Distilling the knowledge in a neural network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS Deep Learning and Representation Learning Workshop</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Efficient learning of domain-invariant image representations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hoffman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Rodner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Saenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">A category-level 3D object dataset: Putting the kinect to work</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Janoch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Karayev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Barron</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Fritz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Saenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Consumer Depth Cameras for Computer Vision</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Karayev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Guadarrama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1408.5093</idno>
+		<title level="m">Caffe: Convolutional architecture for fast feature embedding</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">ImageNet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. NIPS</title>
+		<meeting>NIPS</meeting>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">What you saw is not what you get: Domain adaptation using asymmetric kernel transforms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Kulis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Saenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Deep convolutional neural fields for depth estimation from a single image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Fully convolutional networks for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">Overfeat: Integrated recognition, localization and detection using convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Eigen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mathieu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<idno>abs/1312.6229</idno>
+		<imprint>
+			<date type="published" when="2013" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Learning to rank using privileged information</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Sharmanska</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Quadrianto</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Lampert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision (ICCV), 2013 IEEE International Conference on</title>
+		<imprint>
+			<date type="published" when="2013-12" />
+			<biblScope unit="page" from="825" to="832" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Building part-based object detectors via 3d geometry</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Shrivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title level="m" type="main">Very deep convolutional networks for large-scale image recognition. CoRR, abs/1409.1556</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Accurate localization of 3D objects from RGB-D data using segmentation hypotheses</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Leveraging rgb-d data: Adaptive fusion and domain adaptation for object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Spinello</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">O</forename><surname>Arras</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.4842</idno>
+		<title level="m">Going deeper with convolutions</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Histogram of oriented normal vectors for object recognition with a depth sensor</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Lv</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">X</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Keller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Skubic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Simultaneous deep transfer across domains and tasks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Tzeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hoffman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Saenko</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference in Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">A new learning paradigm: Learning using privileged information</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vapnik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vashist</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Networks Research: {IJCNN20092009} International Joint Conference on Neural Networks</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="page" from="544" to="557" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Large-margin multi-modal deep learning for rgb-d object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Cai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Cham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Transactions on Multimedia</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Weakly supervised object localization with latent category learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Unsupervised learning of visual representations using videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title level="m" type="main">Object detection in rgb-d indoor scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">S</forename><surname>Ye</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013-01" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+		<respStmt>
+			<orgName>EECS Department, University of California, Berkeley</orgName>
+		</respStmt>
+	</monogr>
+	<note>Master&apos;s thesis</note>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Jayasumana</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Romera-Paredes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vineet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Du</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Torr</surname></persName>
+		</author>
+		<title level="m">Conditional random fields as recurrent neural networks. In ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

@@ -1,0 +1,862 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Structured Feature Similarity with Explicit Feature Map</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Takumi</forename><surname>Kobayashi</surname></persName>
+							<email>takumi.kobayashi@aist.go.jp</email>
+							<affiliation key="aff0">
+								<orgName type="institution">National Institute of Advanced Industrial Science and Technology Umezono</orgName>
+								<address>
+									<addrLine>1-1-1</addrLine>
+									<settlement>Tsukuba</settlement>
+									<country key="JP">Japan</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Structured Feature Similarity with Explicit Feature Map</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:46+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Feature matching is a fundamental process in a variety of computer vision tasks. Beyond the standard L 2 metric, various methods to measure similarity between features have been proposed mainly on the assumption that the features are defined in a histogram form. On the other hand, in a field of image quality assessment, SSIM [27] produces effective similarity between images, taking the place of L 2 metric. In this paper, we propose a feature similarity measurement method based on the SSIM. Unlike the previous methods, the proposed method is built on not a histogram form but a tensor structure of a feature array extracted such as on spatial grids, in order to construct effective SSIMbased similarity measure of high robustness which is a key requirement in feature matching. In addition, we provide the explicit feature map such that the proposed similarity metric is embedded as a dot product. It contributes to significant speedup in similarity measurement as well as to feature transformation toward an effective vector form to which linear classifiers are directly applicable. In the experiments on various tasks, the proposed method exhibits favorable performance in both feature matching and classification.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>It is a fundamental and primary process in computer vision tasks to match/compare features extracted from images and videos. Its application covers keypoint matching <ref type="bibr" target="#b7">[8]</ref>, retrieval <ref type="bibr" target="#b6">[7]</ref> and classification based on exemplars such as by k-NN, while in recent years, feature matching is also found in scene parsing or flow estimation by SIFT flow <ref type="bibr" target="#b13">[14]</ref>. The features are matched based on similarities between them, and along with the development of feature extraction methods, the similarity measurement methods are attracting keen attention.</p><p>The most standard (dis)similarity measure is L 2 metric. It is regarded as a natural choice on the basis that feature vectors are embedded in the Euclidean space. Depending on feature extraction methods, however, the feature vectors are not distributed throughout the Euclidean space but restricted in a subspace with a constraint inherently imposed by the extraction method. For example, in the computer vision community, image features are enthusiastically developed in a form of histogram comprising non-negative values. By exploiting the intrinsic characteristics of features, the (dis)similarity measurement methods are proposed beyond the L 2 metric. χ 2 distance <ref type="bibr" target="#b1">[2]</ref> is a commonly used distance measure for histogram-based features derived from statistical χ 2 test, being also applied to a kernel function <ref type="bibr" target="#b30">[31]</ref>. In the other approach, the Earth Mover's distance (EMD) <ref type="bibr" target="#b20">[21]</ref> is proposed by applying an optimization problem of transportation to effectively measure dissimilarity between histogram features. The EMD, however, requires huge computational cost, which motivates to propose faster variants of EMD such as in <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b15">16]</ref>, and it is specialized to SIFT features as SiftDist <ref type="bibr" target="#b15">[16]</ref>. The EMD takes into account the relationships between the histogram bins while L 2 and χ 2 metrics are composed solely of differences in corresponding bins. Such cross-bin distance is also employed in diffusion distance <ref type="bibr" target="#b12">[13]</ref> based on the structure of histogram features other than a simple vector. Such feature structure is introduced into the proposed method as described in the later.</p><p>In the other literature than the feature matching, an image quality assessment requires such similarity metric between images that are close to human perception. In that field, it is widely known that L 2 metric is not compatible with the human perception and thus unsuitable for image similarity measure. According to the human visual system, structural similarity (SSIM) index <ref type="bibr" target="#b25">[26,</ref><ref type="bibr" target="#b26">27]</ref> was proposed. The method measures a similarity between a reference image and its distorted one by exploiting the structural characteristics in the image (patch) as in the human visual process. The structural information extracted by the SSIM is similar to the cross-bin distance mentioned above; we show the detailed form in Sec. 2. The SSIM has taken the place of L 2 metric in image quality assessment since it thoroughly defeats L 2 in a variety of experiments, and some variants of SSIM have also been proposed <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b2">3]</ref>.</p><p>In this paper, based on the SSIM measure, we propose a novel similarity metric of the features that have structure beyond one-way array (vector), not limited to a nonnegative histogram form unlike the previous methods. Recent features are frequently defined in a structured array form <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b12">13]</ref>, though most methods unfold them into a vector; for example, local primitive features are extracted on the two-dimensional spatial positions (grids) to form a three-way tensor as particularly found in local descriptors such as SIFT <ref type="bibr" target="#b14">[15]</ref> and SURF <ref type="bibr" target="#b0">[1]</ref>. We effectively incorporate such feature structure into similarity measurement for enhancing robustness, which is demanded in feature matching, with retaining discriminative power of SSIM. In addition, we provide the explicit feature map in which the proposed similarity is embedded as a dot product. An ordinary similarity measurement operates respective pairs of features, requiring significant computation time. The explicit mapping enables us to efficiently compute the proposed similarity measure by dot products which result in matrix multiplication performed in a computationally efficient way such as by the BLAS library. Furthermore, the explicit feature map is regarded as feature transformation into an effective vector form to which linear classifiers are directly applied. Thus, the proposed method works for measuring feature similarity as well as transforming features.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">SSIM for image quality assessment</head><p>We review the formulation of SSIM <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b25">26]</ref> in image quality assessment and mention its applicability to (generic) feature matching. Given a reference image I x , the target (distorted) image I y is assessed in terms of quality by measuring its fidelity to I x . The SSIM operates on an image patch pair of x and y ∈ R D drawn from I x and I y to assign the following similarity measure S:</p><formula xml:id="formula_0">S(x, y) = M(x, y) V(x, y) C(x, y), (1) M(x, y) = k(u(x), u(y)), V(x, y) = k(q(x), q(y)),<label>(2)</label></formula><formula xml:id="formula_1">C(x, y) = (x−u(x)) ⊤ (y−u(y)) x−u(x) 2 y−u(y) 2 , k(a, b) = 2ab a 2 + b 2 ,<label>(3)</label></formula><p>where u(x) and q(x) are functions to compute mean and standard deviation of pixel values in patches x and y, respectively, and k(a, b) is a function to measure similarity between two scalars a and b. A similarity between two images I x and I y is then computed by averaging the above patch-based SSIM scores S over a whole image.</p><p>Three functions M, V and C in (2, 3) measure similarities regarding luminances, contrasts and structures in the patches, respectively. The structural similarity C(x, y) extracts pixel relationship, correlation coefficient, as in crossbin distance. It, however, is too robust in pixel value changes to give favorable similarity measure since it always produces maximum similarity score (i.e., 1) for affine relationship between pixel values, y i = αx i + β, (α &gt; 0). To compensate it, the other two types of similarities M and V are complementarily introduced to capture changes of luminance (bias β) and contrast (scaling α). These measurements are related to a human perceptual system <ref type="bibr" target="#b25">[26]</ref>.</p><p>On the other hand, the dot product, a simple similarity measure in the Euclidean space, is decomposed into</p><formula xml:id="formula_2">x ⊤ y = D {q(x)q(y)C(x, y) + u(x)u(y)} ,<label>(4)</label></formula><p>which is different from, but related to <ref type="bibr" target="#b0">(1)</ref>. Namely, the luminance and contrast similarities degenerate into the simple products, u(x)u(y) and q(x)q(y), respectively. Though the luminance one is separated into an additive form, such formulation is also found in SSIM variant <ref type="bibr" target="#b2">[3]</ref>. Thus, based on the comparison of (1) and <ref type="formula" target="#formula_2">(4)</ref>, it turns out that the success of SSIM is largely due to the function k(a, b) = 2ab a 2 +b 2 . k(a, b) can be rewritten by using θ = arctan( b a ) as k(a, b) = 2ab a 2 +b 2 = cos{2(θ − π 4 )} which measures a difference between a and b based on the ratio b a . Thereby, the difference |a − b| contributes to the similarity k(a, b) differently according to r= √ a 2 + b 2 ; k(a, b) is vulnerable to |a−b| on smaller r while it is insensitive on larger r. Even though such functionality is inspired from the human perceptual process <ref type="bibr" target="#b25">[26]</ref>, it is also compatible with generic feature similarity. It is recently shown that feature transform by squared root <ref type="bibr" target="#b21">[22]</ref> and log <ref type="bibr" target="#b9">[10]</ref> successfully improves performance via the similar functionality as above, increasing resolution in smaller feature values while suppressing it in larger ones; in particular, the log transform is closely related to the ratio b a . Thus, the function k is considered to be useful for establishing effective feature similarity measure.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Structured feature similarity</head><p>Based on the above analysis of the SSIM formulation, we propose a method to measure similarity for matching features, such as SIFT <ref type="bibr" target="#b14">[15]</ref>, by leveraging the SSIM measure. The straightforward way to incorporate SSIM is to directly feed feature vectors x and y into (1). Such naive method, however, does not work well, being inferior even to L 2 metric as will be shown in <ref type="figure" target="#fig_3">Fig. 3</ref>. This is because the feature matching is different from image quality assessment in terms of robustness, though both of them are built on similarity measurement. The SSIM has been successfully applied to measure degree of distortion in the target image by effectively characterizing subtle image changes. In contrast, the feature matching requires to discriminate the target itself while being highly robust to those distortions. Thus, we propose a similarity measure of features so as to enhance robustness which SSIM lacks, with retaining the discriminative power of the SSIM.</p><p>While the previous methods <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b15">16</ref>] assume a histogram form in the features, our assumption is that the features are formulated in a structured form, for example, three-way tensor. As mentioned in <ref type="bibr" target="#b10">[11]</ref>, most image features extracted on spatial domain are essentially formulated in a tensor (or matrix) rather than in a simple vector. The proposed method exploits the intrinsic feature structure and reconsiders similarity measurement functions for enhancing robustness.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Feature structure</head><p>For enhancing robustness to feature perturbations, the whole feature x is represented by an ensemble of n subfeaturesx l on which the similarity measure is computed and then summed up as follows:</p><formula xml:id="formula_3">S(x, y) = n l=1 w l S(x l ,ŷ l ),<label>(5)</label></formula><p>wherex l andŷ l are the l-th sub-features assigned with the weight w l ( n l=1 w l = 1), and S is a similarity function defined in Sec. 3.2. Most of features extracted from the spatial domain (image) are intrinsically formulated in a three-way</p><formula xml:id="formula_4">tensor of I × J × K, x = {x ijk } I,J,K i=1,j=1,k=1</formula><p>, where I indicates the dimensionality of local primitive feature and J, K are the number of spatial bins along x, y-axes; for example, SIFT <ref type="bibr" target="#b14">[15]</ref> consists of 8(I)-dimensional gradient orientation histogram extracted on 4(J)×4(K) spatial grids. Based on the tensor structure, there are four conceivable ways to define the form of sub-features as follows ( <ref type="figure" target="#fig_0">Fig. 1</ref>): 1. VECTOR: This is the same as the above-mentioned naive approach that simply computes SSIM by regarding the whole feature as only one sub-feature:S = S(x, y). 2. MATRIX: From the viewpoint that the features are extracted from the spatial domain, the whole feature can be reshaped into a two-dimensional matrix of I×JK <ref type="bibr" target="#b10">[11]</ref>. In this structure, we define the sub-features along the respective dimensions;</p><formula xml:id="formula_5">x i = {x ijk } J,K j=1,k=1 ∈ R JK ,x jk = {x ijk } I i=1 ∈ R I .</formula><p>The similarity measure is accordingly formulated as</p><formula xml:id="formula_6">S(x, y) = I i=1 S(x i ,ŷ i ) 2I + J,K j,k=1 S(x jk ,ŷ jk ) 2JK .<label>(6)</label></formula><p>Note that each feature element x ijk is counted twice in this similarity measurement. 3. TENSOR: We treat the essential feature structure of three-way tensor as it is. The sub-features are consequently formulated along the respective three dimensions;</p><formula xml:id="formula_7">x ij = {x ijk } K k=1 ∈ R K ,x jk = {x ijk } I i=1 ∈ R I ,x ik = {x ijk } J j=1 ∈ R J .</formula><p>The feature elements in each sub-feature are consistent along one dimension. The similarity measure is given bȳ  where each feature element x ijk is counted three times. 4. ELEMENT: At the minimum case, we set each feature element x ijk as the sub-feature, resulting in the simple similarity measure of</p><formula xml:id="formula_8">S(x, y) = (7) I,J i,j=1 S(x ij ,ŷ ij ) 3IJ + J,K j,k=1 S(x jk ,ŷ jk ) 3JK + I,K i,k=1 S(x ik ,ŷ ik ) 3IK ,</formula><formula xml:id="formula_9">S(x, y) = I,J,K i,j,k=1 S(x ijk , y ijk ) IJK = I,J,K i,j,k=1 M(u(x ijk ), u(y ijk )) IJK = I,J,K i,j,k=1 1 IJK 2x ijk y ijk x 2 ijk + y 2 ijk .<label>(8)</label></formula><p>where V and C are removed since the sub-feature is a scalar. This similarity measurement <ref type="formula" target="#formula_9">(8)</ref> is closely related to χ 2 distance i,j,k</p><formula xml:id="formula_10">1 2 (x ijk −y ijk ) 2</formula><p>x ijk +y ijk , ignoring cross-bin relationships. And, as in the VECTOR structure, the ELEMENT approach does not take into account the structure of the feature at all. It is also possible to extend ELEMENT to CUBE by replacing point-wise element with a cube of V ×V ×V volume;</p><formula xml:id="formula_11">x ijk = {x i ′ j ′ k ′ } i≤i ′ &lt;i+V, j≤j ′ &lt;j+V, k≤k ′ &lt;k+V ∈ R V 3 .</formula><p>The similarity measure is formulated in a manner similar to sliding window approach bȳ</p><formula xml:id="formula_12">S(x, y) = I−V+1, J−V+1, K−V+1 i,j,k=1 S(x ijk ,ŷ ijk ) (I −V +1)(J −V +1)(K −V +1)</formula><p>. <ref type="formula">(9)</ref> Discussion. We can characterize these approaches from the viewpoint of robustness. Suppose one feature element is changed such as due to noise. The proposed similarity measure (5) is based on an ensemble of sub-features. Thus, degree of the effect by the one-element perturbation can be estimated as the number (ratio) of the sub-feature stained by it. This is summarized in <ref type="table" target="#tab_0">Table 1</ref>. On the assumption that the local feature dimensionality I is generally larger than the numbers of spatial bins J and K, the above four approaches are ranked in terms of the robustness (ratio) as VECTOR&lt;MATRIX&lt;TENSOR&lt;ELEMENT. By considering that the ELEMENT approach (8) lacks structural information, the TENSOR one <ref type="formula">(7)</ref> is expected to work better.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Similarity measure</head><p>The original SSIM <ref type="formula">(1)</ref> is defined as the product of the three types of similarity function regarding mean M, standard deviation V and correlation C. The joint product is sensitive to any distortion of these statistics, which is favorable for image assessment but lacks robustness in feature matching. From the perspective of robustness, we have the following variants of SSIM measurement for S in <ref type="formula" target="#formula_3">(5)</ref>: <ref type="formula" target="#formula_2">(14)</ref> where we introduce weights to balance the terms of additive forms. Note that <ref type="formula">(11)</ref> is the same configuration as the Euclidean one (4) by pushing out the similarity M of mean into the additive term.</p><formula xml:id="formula_13">S org = M × V × C (original) (10) S +µ = w M M + w C (V × C) (separating M) (11) S +σ = w V V + w C (M × C) (separating V) (12) S +c = w C C + w M (M × V) (separating C) (13) S add = w M M + w V V + w C C (fully additive),</formula><p>Though the weights might be optimized by MKL <ref type="bibr" target="#b19">[20]</ref>, in this study, they are determined based on the value range of the similarity functions;</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>M ∈</head><p>[ 0, +1] : non-neg. feat.</p><p>[-1,+1] : real feat.</p><formula xml:id="formula_14">, V ∈ [0, +1], C ∈ [−1, +1],<label>(15)</label></formula><p>where M takes a different range according to whether u(x) ∈ [0, +∞] or [−∞, +∞]. The weights can be set so as to make the similarity measures consistent in terms of value range. That is, in the case of non-negative features, (w M , w V , w C ) = (2, 2, 1), while for real-valued features, (w M , w V , w C ) = (1, 2, 1) 1 . Note that those weights are finally normalized to ensure S(x l ,x l ) = 1, resulting in S(x, x) = 1 in (5); they are divided by w M + w V + w C . Discussion. As to the robustness, if the perturbation appears independently in the three terms M, V and C, the fully additive form S add (14) maximally suppresses the influence on the final similarity measure based on the similar discussion in <ref type="table" target="#tab_0">Table 1</ref>. As a result, we recommend the fully additive similarity measurement S add <ref type="bibr" target="#b13">(14)</ref> in the TENSOR structure (7) which increases robustness by exploiting the additive formulation. Besides, the additive form has a merit of reducing dimensionality in explicit feature map (Sec. 3.3).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Explicit feature map</head><p>As in the previous methods <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b16">17]</ref>, the proposed similarity measurement basically operates on pair-wise fea-tures {x, y} and, empirically speaking, such pair-wise operation requires significant computation time for plenty of samples. In contrast, L 2 metric can be efficiently computed by taking advantage of matrix multiplication such as via BLAS library. Especially for matching features, the fast computation of similarity measure is highly demanded. To reduce the computation time, we provide the explicit feature map g(x) ∈ R Dg such thatS(x, y) ≈ g(x) ⊤ g(y) where the similarity computation results in simple matrix multiplication which is efficiently performed as in L 2 metric.</p><p>We first consider to decompose the similarity measurement functionS in a functional form. </p><formula xml:id="formula_15">(x) = x−u(x)</formula><p>x−u(x) 2 and g C (y) = y−u(y) y−u(y) 2 . Therefore, the only issue for proving Theorem 1 is to prove that k(a, b) = 2ab a 2 +b 2 used in M and V has the explicit functional map. Proof. We show the concrete form of g k by following the approach <ref type="bibr" target="#b24">[25]</ref> of the explicit map for χ 2 kernel. In the case of ab = 0,</p><formula xml:id="formula_16">k(a, b) = 2sgn(ab) a b + b a = 2sgn(ab) e −ω + e ω = sgn(ab)sech(ω),<label>(16)</label></formula><p>where ω = log b a and sgn(·) is the sign function. Based on the Fourier expansion of sech, k is further rewritten as</p><formula xml:id="formula_17">k(a, b) = sgn(ab)sech(ω) = sgn(ab) ∞ −∞ e −iωλ κ(λ)dλ = ∞ −∞ [sgn(a)e −iλ log |a| κ(λ)] * [sgn(b)e −iλ log |b| κ(λ)]dλ,<label>(17)</label></formula><p>where κ(λ) is the inverse Fourier transform of sech(ω), κ(λ) = 1 2 sech( πλ 2 ). In the case of ab = 0, 2ab</p><formula xml:id="formula_18">a 2 +b 2 = [[a = 0]][[b = 0]] where [[·]</formula><p>] is the Iverson bracket that equals to 1 if the condition in the brackets is satisfied and 0 otherwise. Therefore, we can obtaiñ</p><formula xml:id="formula_19">g k (λ; a) = sgn(a)e −iλ log |a| 1 2 sech πλ 2 ,<label>(18)</label></formula><formula xml:id="formula_20">b(a) = [[a = 0]].</formula><p>By using Lemma 2, we can give the explicit functional maps of M and V to finally prove Theorem 1. And, the fixed dimensional explicit feature map g(x) ∈ R Dg is obtained through approximating the function g k (λ; a) in a vector form. According to <ref type="bibr" target="#b24">[25]</ref>,g k (λ; a) is approximated by means ofD k basis points in λ, resulting inD kdimensional vector, of which direct sum with b(a) forms D k =D k +1-dimensional vector g k (a). The explicit maps of M and V are thus simply obtained by g k (u(x l )) and g k (q(x l )), respectively, and as presented above, C has the explicit map g C (x l ) =x l −u(x l )</p><p>x l −u(x l ) 2 of which dimensionality is the same as that of the sub-featurex l . For example, the dimensionality of the explicit map g(x) of the proposed similarity, S add in TENSOR structure, is 3IJK + 2(D k + 1)(IJ +JK +KI) whereD k is the only parameter <ref type="bibr" target="#b24">[25]</ref>.</p><p>The explicit feature map is not only useful for speeding up similarity measurement but also regarded as a novel feature transform. Thereby, the proposed method works for feature matching as well as feature classification using the feature map g(x); a linear classifier such as by SVM <ref type="bibr" target="#b23">[24]</ref> is applicable to the feature vectors g(x) in which the proposed similarity measure is embedded.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Metric property</head><p>A metric property inheres in the proposed similarityS. Proof. The proposed method of any configuration is ensured to haveS(x, x) = 1, ∀x. And, we apply Theorem 1 to obtain</p><formula xml:id="formula_21">1 −S(x, y) = 1 2 (S(x, x) +S(y, y) − 2S(x, y)) = 1 2 ∞ −∞ g(λ;x) * g(λ;</formula><p>x)+g(λ;y) * g(λ;y)−2g(λ;x) * g(λ;y)dλ</p><formula xml:id="formula_22">= 1 2 g(λ; x) − g(λ; y), g(λ; x) − g(λ; y) .<label>(19)</label></formula><p>The square root of this measure is a metric.</p><p>The property of SSIM regarding a metric is partially mentioned in <ref type="bibr" target="#b2">[3]</ref>. The metric property would be useful for more efficient data structures and search algorithms.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiment</head><p>The proposed similarity measurement is basically useful for matching structured features (Sec. 4.1, Sec. 4.2). In addition, via the explicit feature map in Sec. 3.3, the method is also applicable to feature classification tasks (Sec. 4.3).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Keypoint matching</head><p>We first test the proposed method on the task of keypoint matching by means of local descriptors. The local descriptors are generally formulated in a structured tensor form exploiting local spatial layout, such as 8(I) × 4(J) × 4(K) for SIFT <ref type="bibr" target="#b14">[15]</ref> and SURF <ref type="bibr" target="#b0">[1]</ref>. Performance for the matching is evaluated on the dataset by Mikolajczyk and Schmid <ref type="bibr" target="#b7">[8]</ref> in a similar protocol. The dataset contains eight image sets each of which consists of one reference (undistorted) image and five distorted ones captured at different angle, scale and so on; in total, there are 40 image pairs for evaluating local descriptor matching. In this evaluation, we extract SIFT <ref type="bibr" target="#b14">[15]</ref> local descriptors x ∈ R 8×4×4 on the keypoints detected by a Hessian-based detector. Since we focus only on evaluating (dis)similarity measure, the performance is measured based on averaged precision (AP), the ratio of the correctly matched descriptor pairs (of &gt; 60% overlap). Feature structure. We evaluate various types of subfeature structure (Sec. 3.1 and <ref type="figure" target="#fig_0">Fig. 1</ref>) with fixing the similarity measure S = S org (10). The performance is compared on the basis of TENSOR structure which is of our main interest. As shown in <ref type="figure" target="#fig_2">Fig. 2</ref>, the TENSOR structure is superior to the other types of structure; in particular, it significantly outperforms the VECTOR structure. Actually, the VECTOR structure which simply applies SSIM to feature vectors is inferior even to the standard L 2 metric <ref type="figure" target="#fig_3">(Fig. 3)</ref>. The MA-TRIX structure performs relatively well, though being still inferior to the TENSOR one, and both the structures surpass the VECTOR and ELEMENT ones which do not take into account the structure of SIFT feature at all. This result demonstrates effectiveness of incorporating the feature structure into similarity measurement. Although the CUBE structure slightly exploits such structure characteristics, it is necessary to form consistent sub-features for similarity measurement; in the TENSOR structure, the sub-features are consistent along respective dimensions, while CUBE one mixes up all the three dimensions in the sub-features.</p><p>To further demonstrate the effectiveness to incorporate intrinsic SIFT structure, we additionally tested the method that randomly permutes feature elements in the identical TENSOR structure. The random permutation of feature elements largely degrades inherent physical meaning of the SIFT structure, harming consistency in the sub-feature, and accordingly pollutes the performance as shown in <ref type="figure" target="#fig_2">Fig. 2</ref>. This experimental result shows that it is important to deal with the intrinsic feature structure as it is. Similarity measure. Next, we go into the similarity measurement S used in the TENSOR structure. Various types of similarity measurement functions <ref type="bibr" target="#b9">(10)</ref><ref type="bibr" target="#b10">(11)</ref><ref type="bibr" target="#b11">(12)</ref><ref type="bibr" target="#b12">(13)</ref><ref type="bibr" target="#b13">(14)</ref> are compared with S add of our main interest. <ref type="figure">Fig. 4</ref> shows that S add is superior to S org while producing comparable performance with the other methods based on additive forms (S +µ , S +σ , S +c ). Unfolding the original SSIM formulation  S org into additive forms improves the performance with increasing the robustness. Among the additive forms <ref type="bibr" target="#b10">(11)</ref><ref type="bibr" target="#b11">(12)</ref><ref type="bibr" target="#b12">(13)</ref><ref type="bibr" target="#b13">(14)</ref>, S add is preferable from the viewpoint of computation efficiency since it produces the smallest dimensionality of the explicit feature map (Sec. 3.3).</p><p>In S add , we further investigate the roles of the three ingredient functions M, V and C through controlling the weights {w M , w V , w C }, which were set to {2, 2, 1} in the above experiment as described in Sec. 3.2. As shown in <ref type="figure">Fig. 5</ref>, any single function poorly works while the performance is significantly improved by combining two of them, being comparable to the full combination with {w M , w V , w C } = {2, 2, 1}. For the computation efficiency, it is preferable to construct the similarity measurement S add by using less number of ingredients for reducing the dimensionality of the explicit feature map <ref type="figure" target="#fig_3">(Sec. 3.3)</ref>. Thus, we employ simpler configuration of S add with w M = 0 or w V = 0; the dimensionality of those explicit feature maps is 3IJK +(D k +1)(IJ +JK +KI), and in this case of SIFT descriptor, it results in 1024-dimensional feature vector byD k = 7. More practically speaking, the method composed only of V and C is favorable since we can use fixed weights of {w M , w V , w C } = {0, 2, 1} regardless of feature domain (non-negative or real-valued).</p><p>As a conclusion, from perspectives of performance and practical use, it is advantageous to employ the proposed method of S add with {w M , w V , w C } = {0, 2, 1} in the TENSOR structure, which is thus applied in what follows.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.1">Comparison with the other methods</head><p>Then, the proposed method is compared to the other methods of distance (similarity) measurement including the standard L 2 metric, χ 2 distance <ref type="bibr" target="#b1">[2]</ref>, diffusion distance (Dif-fuseDist) <ref type="bibr" target="#b12">[13]</ref>, SIFT distance (SiftDist) <ref type="bibr" target="#b15">[16]</ref> and fast Earth Mover's Distance (fEMD) <ref type="bibr" target="#b16">[17]</ref>. The performance results are shown in <ref type="figure">Fig. 6</ref> on the basis of the proposed method which favorably outperforms the others. This result demonstrates that (1) the feature structure (tensor) in the proposed method is a favorable standpoint than a histogram form imposed on the previous methods except for L 2 metric, and (2) </p><formula xml:id="formula_23">L 2 χ 2 DiffuseDist [13]</formula><p>SiftDist <ref type="bibr" target="#b15">[16]</ref> fEMD <ref type="bibr" target="#b16">[17]</ref>  . Comparison in SURF descriptor <ref type="bibr" target="#b0">[1]</ref>. The χ 2 distance is applied by force just for a reference, though it is unsuitable to this type of feature. 569.0 DiffuseDist <ref type="bibr" target="#b12">[13]</ref> 17898.6 SiftDist <ref type="bibr" target="#b15">[16]</ref> 1260.3 fEMD <ref type="bibr" target="#b16">[17]</ref> 2105396.   the SSIM-based measure is suitable for extracting cross-bin similarity compared to diffusion distance <ref type="bibr" target="#b12">[13]</ref>.</p><p>In addition to SIFT descriptors, we apply the proposed similarity metric to the SURF detector&amp;descriptor (SURF-128) <ref type="bibr" target="#b0">[1]</ref>. The SURF descriptor characterizes a local image region by means of 8-dimensional gradient filter responses on 4 × 4 spatial grids, allowing negative feature values. Thereby, it produces the structured feature x ∈ R 8×4×4 which is the same three-way tensor structure as in SIFT but defined in a real-valued feature, not a (non-negative) histogram. It is unsuitable to apply the previous methods <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b16">17]</ref> based on a histogram form to this type of descriptor; for example, the χ 2 distance obviously degrades performance as shown in <ref type="figure">Fig. 7</ref>. The proposed method significantly outperforms the L 2 metric.</p><p>We also show the computation time in measuring the similarity between sets of M and N samples (M N pairs to be compared). The proposed method is composed of two steps of (1) computing the explicit feature map of the input features in O((M +N )D) and then (2) performing matrix multiplication in O(M N D g ) where D = IJK is the input feature dimensionality. Therein, the first step of feature mapping is negligible and the second one of matrix multiplication dominates the computation time, which can be efficiently performed such as by BLAS library. <ref type="table" target="#tab_1">Table 2</ref> shows the computation time 3 per sample pair and we can see that the proposed method is significantly speeded up by the explicit feature map (Sec. 3.3) and is much faster than the other methods except for L 2 metric; this is, of course, due to the dimensionality of the features which corresponds to D in L 2 and {3 + D k ( 1 I + 1 J + 1 K )}D in the proposed method. In addition, the method can be easily parallelized such as by applying multi-thread BLAS as shown in <ref type="figure" target="#fig_9">Fig. 8</ref>. As a result, we can say that the proposed method achieves high performance in fast computation time for feature matching.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.2">Feature matching vs. image assessment</head><p>As an aside, we mention the (in)applicability of the method to image quality assessment which is the main target of the original SSIM, though such task is out of our focus. The proposed method can produce similarity between images in a manner similar to SSIM (Sec. 2). On the TID2008 dataset <ref type="bibr" target="#b18">[19]</ref>, the method produces the evaluation score 4 of 0.5489 which is slightly inferior to that of the original SSIM, 0.5768. This result contrasts with the above experimental results of feature matching, due to the different objectives of those tasks. As described in Sec. 3, it is necessary for image assessment to extract detailed difference (distortion) affecting human perception, while feature matching demands high robustness to inessential difference with extracting discriminativity of the targets. The proposed method (Sec. 3) is carefully constructed for enhancing robustness according to the objective of feature matching.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Image retrieval</head><p>The proposed method is then tested on an image retrieval task which picks up similar images based on the descrip- <ref type="table">Table 3</ref>. Image retrieval performance on Oxford building dataset <ref type="bibr" target="#b17">[18]</ref> in the framework of <ref type="bibr" target="#b6">[7]</ref>. Our method consists of S add with {wM, wV , wC} = {0, 2, 1} in TENSOR structure. tor matching in the framework of <ref type="bibr" target="#b6">[7]</ref>. This task is different from keypoint matching (Sec. 4.1) in that the similarity is measured between different images of different targets while in Sec. 4.1 the reference and distorted images of the identical target are compared requiring high robustness to the distortion. Therefore, in this task, we can evaluate the similarity measure in terms of discriminating objects. The SIFT descriptors are extracted on the keypoints detected by DoG detector for retrieval and we compare the methods on similarity (distance) measurement used in k-NN search; for detailed pipeline of the image search, refer to <ref type="bibr" target="#b6">[7]</ref>. The retrieval performance on the Oxford building dataset <ref type="bibr" target="#b17">[18]</ref> is shown in <ref type="table">Table 3</ref>. We can see that the TENSOR structure is superior to the MATRIX one and the measure S add (additive) is preferable compared to S org (multiplicative) as is the case with the keypoint matching (Sec. 4.1). The proposed method outperforms L 2 metric with a large margin and χ 2 . This result demonstrates that the proposed similarity measure is effective for discriminating object (parts).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Image classification</head><p>Lastly, the proposed method is evaluated in a framework of classification which is slightly different from feature matching. It is possible to employ the pair-wise similarity for classification via exemplar-based classifiers such as k-NN, but it requires substantial computation cost. The proposed method is capable of transforming the input features via the explicit feature map to a vector form in which the similarity metric is embedded, and an efficient linear classifier by SVM <ref type="bibr" target="#b23">[24]</ref> can be directly applied.</p><p>The method is first applied to transform HOG features on a person classification task using INRIA person dataset <ref type="bibr" target="#b3">[4]</ref>. The HOG feature extracted from an image patch of 64×128 pixels by the method <ref type="bibr" target="#b5">[6]</ref> is formulated in a three-way TEN-SOR structure of R 31×8×16 , where cells of 8 × 8 pixels are employed to produce 8 × 16 grids. The performance results are shown in <ref type="figure">Fig. 9</ref> demonstrating that the proposed method effectively improves the performance of the original HOG feature. And, it also outperforms the χ 2 -based method <ref type="bibr" target="#b24">[25]</ref> that gives an explicit feature map of χ 2 kernel; note that the proposed method produces smaller dimensional feature vector (R 18880 ) than the method <ref type="bibr" target="#b24">[25]</ref> (R 27776 ) withD k = 7.</p><p>Then, the method is also applied to CNN features <ref type="bibr" target="#b4">[5]</ref> on scene classification tasks using Scene-15 <ref type="bibr" target="#b11">[12]</ref> and SUN-397 <ref type="bibr" target="#b29">[30]</ref> datasets. CNN image features have been applied to various classification tasks with great success and in this ex- Original HOG kernel map Ours <ref type="figure">Figure 9</ref>. Comparison in transforming HOG feature <ref type="bibr" target="#b5">[6]</ref> on INRIA dataset <ref type="bibr" target="#b3">[4]</ref>. <ref type="table">Table 4</ref>. Scene classification performance (%). (a) Scene-15 dataset <ref type="bibr" target="#b11">[12]</ref> Method Acc. Kobayashi <ref type="bibr" target="#b8">[9]</ref> 85.6±0.7 Places-CNN <ref type="bibr" target="#b31">[32]</ref>  periment we employ the very deep CNN model <ref type="bibr" target="#b22">[23]</ref> trained on ImageNet dataset and extract the features as in <ref type="bibr" target="#b4">[5]</ref> by using pool5 layer to produce 512×8×8 TENSOR feature from an image of 256×256 pixels in scene-15 and 512×12×12 feature from an image of 384×384 pixels in SUN-397 5 . Scene images contain layout of scene parts <ref type="bibr" target="#b11">[12]</ref> which is parsed by the spatial grid features. As shown in <ref type="table">Table 4</ref>, the proposed method favorably improves the performance of the original CNN feature and is competitive with the state-ofthe-art method <ref type="bibr" target="#b31">[32]</ref> which employs CNN features trained on a large scene dataset. These experimental results show that the proposed method works as measuring feature similarity for matching as well as transforming features to improve classification performance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>We have proposed a novel method to measure a similarity metric between pairs of structured features. The proposed method leverages SSIM <ref type="bibr" target="#b26">[27]</ref>, which has been successfully applied in image quality assessment, to construct similarity measure of high robustness by effectively exploiting an intrinsic structure of the features, such as three-way tensor. In addition, we provide the explicit feature map such that the proposed similarity metric is embedded as a dot product, in order to significantly speed up the similarity measurement as well as to transform the feature into an effective vector form which is directly fed into linear classifiers. The experimental results on various tasks demonstrate the effectiveness of the proposed method from both aspects of feature matching and classification.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Structural representation of the sub-features in the proposed method. Each block indicates the sub-feature.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Theorem 1 .</head><label>1</label><figDesc>For the proposed method of any similarity measure<ref type="bibr" target="#b9">(10)</ref><ref type="bibr" target="#b10">(11)</ref><ref type="bibr" target="#b11">(12)</ref><ref type="bibr" target="#b12">(13)</ref><ref type="bibr" target="#b13">(14)</ref> under any structure<ref type="bibr" target="#b5">(6)</ref><ref type="bibr" target="#b6">(7)</ref><ref type="bibr" target="#b7">(8)</ref><ref type="bibr" target="#b8">(9)</ref>, there exists the explicit functional map g(λ; x) such thatS(x, y) = ∞ −∞ g(λ; x) * g(λ; y)dλ.The proposed similarityS (5) of any configuration (Sec. 3.1, 3.2) is composed of addition and/or multiplication of M, V and C 2 . And, C(x, y) (3) is the dot product of the vectors g C</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Lemma 2 .</head><label>2</label><figDesc>There exists the explicit functional map g k (λ; a) =g k (λ; a) ⊕ b(a), where b(a) ∈ R, such that k(a, b) = ∞ −∞g k (λ; a) * g k (λ; b)dλ + b(a)b(b).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Theorem 3 .</head><label>3</label><figDesc>1 −S(x, y) is a metric.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 2 .Figure 3 .</head><label>23</label><figDesc>Comparison of the sub-feature structures (Sec. 3.1) in S = Sorg (10). Each point 'o' indicates the two APs in horizontal and vertical axes, produced by compared two methods for each image pair. All the vertical axes indicate TENSOR structure. Sorg in VECTOR (naive SSIM) vs. L2.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 4 .Figure 5 .</head><label>45</label><figDesc>Comparison of the similarity measures (Sec. 3.2) in the TENSOR structure. All the vertical axes indicate S add (14). Comparison of the ingredient functions (M, V, C) in S add (14) controlled by the weights {wM, wV , wC}. All the vertical axes indicate {wM, wV , wC} = {2, 2, 1}.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 6 .Figure 7</head><label>67</label><figDesc>Comparison with the other methods on the basis of the proposed method which is shown in the vertical axes.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_9"><head>Figure 8 .</head><label>8</label><figDesc>Computation time in multi-threading.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 .</head><label>1</label><figDesc></figDesc><table>Comparison of the sub-feature structures in terms of ro-
+bustness, showing the ratio of the sub-features affected by one-
+element perturbation. The smaller ratio means higher robustness. 
+Structure 
+Ratio 
+Robustness rank 
+VECTOR 
+
+1 
+1 
+
+4th 
+MATRIX 
+
+2 
+I+JK 
+
+3rd 
+TENSOR 
+
+3 
+IJ+JK+KI 
+
+2nd 
+ELEMENT 
+
+1 
+IJK 
+
+1st 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 2 .</head><label>2</label><figDesc></figDesc><table>Computation time per 
+sample pair in M = N = 4096 
+samples. 
+Method 
+Time (nsec) 
+L2 
+15.2 
+χ 2 
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head></head><label></label><figDesc>Method L2 χ 2 Sorg in MATRIX Sorg in TENSOR Ours</figDesc><table>mAP 67.6 71.2 
+70.3 
+72.0 
+73.2 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head></head><label></label><figDesc>90.2±0.3 original CNN-feat. 90.3±0.Sánchez et al. [22] 47.2±0.2 Places-CNN [32] 54.3±0.1 original CNN-feat. 52.1±0.3 Ours 54.3±0.3</figDesc><table>2 
+Ours 
+91.2±0.5 
+
+(b) SUN-397 dataset [30] 
+Method 
+Acc. 
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">In real-valued features, M, 2V −1 and C have the identical value rage of [−1, +1], and the constant bias in 2V − 1 is inessential and removed.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">In the explicit mapping, + and × in<ref type="bibr" target="#b4">(5,</ref><ref type="bibr" target="#b9">(10)</ref><ref type="bibr" target="#b10">(11)</ref><ref type="bibr" target="#b11">(12)</ref><ref type="bibr" target="#b12">(13)</ref><ref type="bibr" target="#b13">(14)</ref> are replaced with ⊕ (direct sum) and ⊗ (direct product), respectively. And note that in the mapping the square root is applied to the weights w l , w M , w V , w C .</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">The methods are implemented in MATLAB mex-C, and the computation time is measured on Xeon 3.4GHz PC for x ∈ R 8×4×4 .</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="4">The performance is measure based on Kendall's rank correlation coefficient between the estimated similarity and manually annotated one.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="5">The pool5 layer<ref type="bibr" target="#b22">[23]</ref> produces 512-dimensional feature on the receptive field of 32×32 pixels, and images in scene-15 dataset are resized to 256×256 pixels according to the average image size, while in SUN-397 images are resized to 384×384 due to the larger average size of images.</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Surf: Speeded up robust features. Computer Vision and Image Understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tuytelaars</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">V</forename><surname>Gool</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="volume">110</biblScope>
+			<biblScope unit="page" from="346" to="359" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Shape matching and object recognition using shape contexts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Puzicha</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transaction on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">24</biblScope>
+			<biblScope unit="issue">24</biblScope>
+			<biblScope unit="page" from="509" to="522" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">On the mathematical properties of the structural similarity index</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Brunet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">R</forename><surname>Vrscay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Image Processing</title>
+		<imprint>
+			<biblScope unit="volume">21</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="1488" to="1499" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Histograms of oriented gradients for human detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Dalal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Triggs</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="886" to="893" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Decaf: A deep convolutional activation feature for generic visual recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hoffman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Tzeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Object detection with discriminatively trained part based models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">F</forename><surname>Felzenszwalb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transaction on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1627" to="1645" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Exploiting descriptor distances for precise image search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Douze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011-06" />
+		</imprint>
+	</monogr>
+	<note>Rapport de recherche RR-7656, INRIA</note>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">A performance evaluation of local descriptors</title>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transaction on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">27</biblScope>
+			<biblScope unit="issue">10</biblScope>
+			<biblScope unit="page" from="1615" to="1630" />
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Bof meets hog: Feature extraction based on histograms of oriented p.d.f gradients for image classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kobayashi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="747" to="754" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Dirichlet-based histogram feature transform for image classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kobayashi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="3278" to="3285" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Low-rank bilinear classification: Efficient convex optimization and extensions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kobayashi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">110</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="308" to="327" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Beyond bags of features: Spatial pyramid matching for recognizing natural scene categories</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ponce</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="page" from="2169" to="2178" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Diffusion distance for histogram comparison</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Ling</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Okada</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Sift flow: Dense correspondence across different scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yuen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">T</forename><surname>Freeman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="28" to="42" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Distinctive image features from scale invariant features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lowe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">60</biblScope>
+			<biblScope unit="page" from="91" to="110" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">A linear time histogram metric for improved sift matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Pele</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Werman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="495" to="508" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Fast and robust earth mover&apos;s distances</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Pele</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Werman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Object retrieval with large vocabularies and fast spatial matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Philbin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Isard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">TID2008 -a database for evaluation of full-reference visual quality assessment metrics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Ponomarenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lukin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zelensky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Egiazarian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Carli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Battisti</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Advances of Modern Radioelectronics</title>
+		<imprint>
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="page" from="30" to="45" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rakotomamonjy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">R</forename><surname>Bach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Canu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Grandvalet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Simplemkl</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="page" from="2491" to="2521" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">The earth mover&apos;s distance as a metric for image retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Rubner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Tomasi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">J</forename><surname>Guibas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">40</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="99" to="121" />
+			<date type="published" when="2000" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Image classification with the fisher vector: Theory and practice</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sánchez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Perronnin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mensink</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Verbeek</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">105</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="222" to="245" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<idno>abs/1409.1556</idno>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vapnik</surname></persName>
+		</author>
+		<title level="m">Statistical Learning Theory</title>
+		<imprint>
+			<publisher>Wiley</publisher>
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Efficient additive kernels via explicit feature maps</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Mean squared error: love it or leave it? -a new look at signal fidelity measures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Bovik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Signal Processing Magazine</title>
+		<imprint>
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="98" to="117" />
+			<date type="published" when="2009-01" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Image quality assessment: From error visibility to structural similarity</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Bovik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">R</forename><surname>Sheikh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">P</forename><surname>Simoncelli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactios on Image Processing</title>
+		<imprint>
+			<biblScope unit="volume">13</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="600" to="612" />
+			<date type="published" when="2004-04" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Translation insensitive image similarity in complex wavelet domain</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">P</forename><surname>Simoncelli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICASSP</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="573" to="576" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Multi-scale structural similarity for image quality assessment</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">P</forename><surname>Simoncelli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Bovik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Asilomar Conference on Signals, Systems and Computers</title>
+		<imprint>
+			<date type="published" when="2003" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page" from="1398" to="1402" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Sun database: Large-scale scene recognition from abbey to zoo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">A</forename><surname>Ehinger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Local features and kernels for classification of texture and object categories: A comprehensive study</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Marszalek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">73</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="213" to="238" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Learning deep features for scene recognition using places database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lapedriza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="487" to="495" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

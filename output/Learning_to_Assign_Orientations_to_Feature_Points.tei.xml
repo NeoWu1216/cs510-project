@@ -1,0 +1,1349 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Learning to Assign Orientations to Feature Points</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kwang</forename><surname>Moo</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="laboratory">Computer Vision Laboratory</orgName>
+								<orgName type="institution">École Polytechnique Fédérale de Lausanne (EPFL)</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yi</forename></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yannick</forename><surname>Verdie</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="laboratory">Computer Vision Laboratory</orgName>
+								<orgName type="institution">École Polytechnique Fédérale de Lausanne (EPFL)</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pascal</forename><surname>Fua</surname></persName>
+							<email>pascal.fua@epfl.ch</email>
+							<affiliation key="aff0">
+								<orgName type="laboratory">Computer Vision Laboratory</orgName>
+								<orgName type="institution">École Polytechnique Fédérale de Lausanne (EPFL)</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vincent</forename><surname>Lepetit</surname></persName>
+							<email>lepetit@icg.tugraz.at</email>
+							<affiliation key="aff1">
+								<orgName type="laboratory">Institute for Computer Graphics and Vision</orgName>
+								<orgName type="institution">Graz University of Technology</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Learning to Assign Orientations to Feature Points</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:42+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We show how to train a Convolutional Neural Network to assign a canonical orientation to feature points given an image patch centered on the feature point. Our method improves feature point matching upon the state-of-the art and can be used in conjunction with any existing rotation sensitive descriptors. To avoid the tedious and almost impossible task of finding a target orientation to learn, we propose to use Siamese networks which implicitly find the optimal orientations during training. We also propose a new type of activation function for Neural Networks that generalizes the popular ReLU, maxout, and PReLU activation functions. This novel activation performs better for our task. We validate the effectiveness of our method extensively with four existing datasets, including two non-planar datasets, as well as our own dataset. We show that we outperform the state-of-the-art without the need of retraining for each dataset.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Feature points are an essential and ubiquitous tool in computer vision, and extensive research has been conducted on both detectors <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b5">6,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b31">32,</ref><ref type="bibr" target="#b47">48]</ref> and descriptors <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b5">6,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b31">32,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b42">43,</ref><ref type="bibr" target="#b46">47]</ref>, including using statistical approaches <ref type="bibr" target="#b32">[33,</ref><ref type="bibr" target="#b45">46]</ref>. However, the assignment of a canonical orientation, which is an important common step, has received almost no individual attention, probably since the dominant orientation of SIFT <ref type="bibr" target="#b24">[25]</ref> is considered to give good results.</p><p>However, this is not necessarily true. In complex scenes, feature points lie on non-planar surfaces and their appearance can be drastically altered by viewpoint and illumination changes. This can easily produce errors in orientation estimates as shown in <ref type="figure" target="#fig_0">Fig. 1</ref>. In addition, rotation invariant descriptors <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b41">42]</ref> are not a definitive solution ei- * First two authors contributed equally. <ref type="bibr" target="#b0">1</ref>   MVS results with SIFT orientations, and Bottom right: MVS results with our orientations. As shown, due to viewpoints changes on non-planar surfaces, SIFT orientations are not stable. On the contrary, orientations provided by our method are stable, which leads to better reconstructions. 46272 vertices were obtained using SIFT orientations, and 84087 vertices with our orientations. Edge Foci feature points <ref type="bibr" target="#b47">[48]</ref> were used in conjunction with Daisy <ref type="bibr" target="#b37">[38]</ref> descriptors for both methods. <ref type="bibr" target="#b0">1</ref> ther as these descriptors discard rotation sensitive information which can be useful when ideal orientations are given. Thus, as we will show in our experiments, higher match-ing performances can be achieved with rotation sensitive descriptors and better orientation assignments.</p><p>In this paper, we show how to remedy this problem by training a regressor to estimate better orientations for matching, and to boost the performance of existing rotation sensitive descriptors. We train a Convolutional Neural Network to predict an orientation, given a patch around a feature point. To avoid the difficult task of finding the canonical orientation to learn, we treat the orientation to learn as an implicit variable, by training a Siamese network <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b11">12]</ref> similar to descriptor learning methods <ref type="bibr" target="#b32">[33,</ref><ref type="bibr" target="#b45">46]</ref>. Also, to allow our method to work in conjunction with any existing rotation sensitive descriptors such as SIFT <ref type="bibr" target="#b24">[25]</ref>, SURF <ref type="bibr" target="#b5">[6]</ref>, and the learning-based VGG <ref type="bibr" target="#b33">[34]</ref>, we consider the descriptor component as a black box when learning.</p><p>We also propose a new activation function for the neurons based on Generalized Hinging Hyperplanes (GHH) <ref type="bibr" target="#b40">[41]</ref>, which plays a key role in our method. We will show that it generalizes the popular ReLU and maxout <ref type="bibr" target="#b15">[16]</ref> activation functions, as well as the recent PReLU <ref type="bibr" target="#b16">[17]</ref> activation function, with better performance for our task.</p><p>To evaluate the performance of descriptors with orientations from the proposed method, we use datasets with both planar or far away objects <ref type="bibr" target="#b25">[26,</ref><ref type="bibr" target="#b39">40,</ref><ref type="bibr" target="#b47">48]</ref> and 3D objects <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b35">36]</ref>. In addition, we created our own dataset as well, to further enrich the dataset with complex camera movements, such as in-plane rotations and viewpoint changes. We demonstrate that the proposed method gives significant improvement over the state-of-the-art for all the datasets, without the need of re-training for each dataset.</p><p>In the remainder of this paper, we first discuss related work, introduce our learning framework, detail our method as well as the proposed activation function. We then present our experimental results demonstrating the effectiveness of our orientation assignment compared to the state-of-the-art. We also investigate the influence of the proposed activation and of the datasets, and we conclude with several application results.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>As shown in the survey of <ref type="bibr" target="#b14">[15]</ref>, the importance of having a good orientation estimation has been overlooked, and thought to be a not very important step which either feature point detector or descriptor has to perform. The widelyused solution for assigning an orientation to a feature point is to use the dominant orientation of SIFT <ref type="bibr" target="#b24">[25]</ref>. However, as pointed out by <ref type="bibr" target="#b23">[24]</ref>, dominant orientation-based methods do not work well for arbitrary positions, although it has critical impact on the descriptor performances <ref type="bibr" target="#b22">[23]</ref>. Nevertheless, here we provide a brief review of existing methods related to orientation assignment and our method.</p><p>Orientation assignment of feature point detectors. In SIFT <ref type="bibr" target="#b24">[25]</ref>, histograms of gradient orientations are used to determine the dominant orientation. It remains the most popular method and has also been extended to 3D <ref type="bibr" target="#b3">[4]</ref>. SURF <ref type="bibr" target="#b5">[6]</ref> uses Haar-wavelet responses of sample points to extract the dominant orientation. MOPs <ref type="bibr" target="#b10">[11]</ref> simply uses the gradient at the center of a patch after some smoothing for robustness to noise. ORB <ref type="bibr" target="#b31">[32]</ref> uses image moments to compute the center of mass as well as the main orientation. HIP <ref type="bibr" target="#b36">[37]</ref> considers intensity differences over a circle centered around the feature point to estimate the orientation. Although this is rather fast, it is also very sensitive to noise.</p><p>In summary, despite the variation, the main idea of these methods remain the same: finding a reliable dominant orientation in their respective ways. Thus, when computation time constraints are not too drastic, using the SIFT orientation remains to be the first solution to try <ref type="bibr" target="#b14">[15]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Rotation invariant descriptors.</head><p>As existing orientation assignment methods are not always robust enough to guarantee good matching performances, interest has been drawn to descriptors which are inherently rotation invariant <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b41">42]</ref>. MROGH <ref type="bibr" target="#b13">[14]</ref> uses local intensity order pooling with rotation invariant gradients, and LIOP <ref type="bibr" target="#b41">[42]</ref> constructs the descriptor in a similar way but with a different strategy for aggregating the gradient information. BRISK <ref type="bibr" target="#b21">[22]</ref> and FREAK <ref type="bibr" target="#b1">[2]</ref> claims rotation invariance as well, but they still depend on the orientation estimation which is included in the descriptor extraction process.</p><p>Besides descriptors that are rotation invariant by construction, <ref type="bibr" target="#b20">[21]</ref> uses concentric rings for generating orientation histogram bins with spin images, and a specific distance function for rotation invariant matching. sGLOH <ref type="bibr" target="#b6">[7]</ref> also proposes to use a rotation invariant distance function which computes distances for all possible rotation combinations and takes the minimum. The authors further extend their method by proposing a general method for histogram-based feature descriptors taking into account the main orientation of the scene <ref type="bibr" target="#b7">[8]</ref>.</p><p>Although these methods may be better than the original SIFT descriptor <ref type="bibr" target="#b24">[25]</ref>, SIFT descriptor combined with our learning-based orientation estimation outperforms them, as we will show in the experiments. This is probably due to the fact that rotation sensitive information is discarded when computing these descriptors. Furthermore, <ref type="bibr" target="#b7">[8]</ref> is only applicable when the entire scene is the object of interest, and is impractical as the main orientation is obtained by computing all the possible matching pairs of features to keep the configuration with best matches.</p><p>Learning-based methods. Learning-based methods have been already used in the context of feature point matching, but only for problems other than orientation assignment of general feature points. For example, <ref type="bibr" target="#b17">[18]</ref> learns to predict (a) Matches with SIFT orientations (b) Matches with our orientations <ref type="figure">Figure 2</ref>. Image matching example from the duckhunt sequence in the Viewpoints dataset with SIFT descriptors using the orientation assigned by (a) SIFT and (b) our method. The yellow lines denote the inlier matches after RANSAC. The homography is correctly estimated only when using our orientations. the pose of patches, but uses one regressor per patch, which is not a viable solution for general feature points. <ref type="bibr" target="#b32">[33,</ref><ref type="bibr" target="#b45">46]</ref> use Siamese networks-as we do-to directly compare image patches <ref type="bibr" target="#b45">[46]</ref>, or to learn to compute descriptors <ref type="bibr" target="#b32">[33]</ref>. VGG <ref type="bibr" target="#b33">[34]</ref> as well as <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b38">39]</ref> also learn descriptors, through convex optimization, boosting, and greedy optimization, respectively.</p><p>One caveat in these learning-based descriptors is that they still rely on the orientation estimation of local feature detectors which are traditionally handcrafted. Moreover, they typically use the Brown dataset <ref type="bibr" target="#b9">[10]</ref> for learning, with patches extracted using ground truth orientations from Structure from Motion (SfM) techniques. This ground truth orientation assignment is not something one can expect to have in practical use, and may lead to performance degradation when tested on other data with inaccurate orientation assignments <ref type="bibr" target="#b33">[34]</ref>. These methods will also benefit from better orientation assignments on test time, as we will show in our experiments with VGG.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Method</head><p>In this section we first introduce our learning strategy, then formalize it. We also describe our activation function based on GHH.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Canonical Orientation as an Implicit Variable</head><p>As illustrated in <ref type="figure">Fig. 2</ref>, orientation assignment plays a critical role in the descriptor matching performances. However, a major problem we face in our approach is that it is not clear which orientation should be learned. For example, one can try to learn to predict the dominant orientation of SIFT <ref type="bibr" target="#b24">[25]</ref>, or maybe the median of the dominant orientations for the same feature point extracted from multiple images. However, there is no guarantee that the orientations retrieved from such approach is the ideal canonical orientation we want to learn. Our early experiments, based on such heuristics to decide which orientation should be learned, remained unfruitful.</p><p>Since it is hard to define a canonical orientation to learn, we instead take into account that it is actually the descriptor distances of the feature points that are important, not the orientation values themselves. We formulate the problem by learning to assign orientations which minimize the descriptor distances of pairs of local features corresponding to the same physical point. In this way, we do not have to decide which orientations should be learned. We let the learning optimization find which orientations are both reliably predictable and improve the matching performance. We formalize this approach in the next subsection.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Formalization</head><p>Our approach is related to Siamese networks used for descriptor learning <ref type="bibr" target="#b32">[33,</ref><ref type="bibr" target="#b45">46]</ref>, but the loss function and its computation are different since we learn to estimate the orientation and not the descriptor itself. In fact, we treat the descriptor as a black box so that various rotation variant descriptors can be used. However, this is not necessarily a restriction, and can be easily adapted to include learning of the descriptors as well.</p><p>Our training data is made of pairs of image patches centered on feature points in two images but corresponding to the same physical 3D points. We minimize a loss function</p><formula xml:id="formula_0">i L i over the parameters W of a CNN, with L (p i ) = g(p 1 i , f W (p 1 i )) − g(p 2 i , f W (p 2 i )) 2 2 , (1) where L i = L (p i ), the pairs p i = {p 1 i , p 2</formula><p>i } are pairs of image patches from the training set, f W (p * i ) denotes the orientation computed for image patch p * i using a CNN with parameters W, and g(p * i , θ * i ) is the descriptor for patch p * i and orientation θ * i . As discussed in the previous subsection, there is no target orientation in the loss function of Eq. (1): the predicted orientations will be optimized implicitly during training.</p><p>Predicting an angle. Learning angles requires a special care. Directly predicting an angle with a CNN did not work well in our early experiments, probably because the period-</p><formula xml:id="formula_1">icity of f W (p * i ) in Eq.</formula><p>(1) generates many local minima. An alternative way would be to learn to provide histogramlike outputs, which then can be used with arg max to give angular outputs, in a way reminiscent of SIFT. However, this approach also did not work well, as the estimated orientations have to be discretized and the network becomes too large when we want fine resolutions.</p><p>To alleviate the problem of periodicity, similarly to how manifolds are embed in <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b30">31]</ref>, we train a CNNf W (.) to predict two values, which can be seen as a scaled cosine and sine, and compute an angle by taking:</p><formula xml:id="formula_2">f W (p * i ) = arctan2(f (1) W (p * i ),f<label>(2)</label></formula><formula xml:id="formula_3">W (p * i )) ,<label>(2)</label></formula><p>wheref (1)</p><formula xml:id="formula_4">W (p * i ) andf (2)</formula><p>W (p * i ) are the two values returned by the CNN for patch p * i , and arctan2(y, x) is the fourquadrant inverse tangent function 2 .</p><p>This function is not defined at the origin, which turned out to be a problem only happening in rare occasions at the first iteration, after random initialization of the CNN parameters W. To prevent this, we use the following approximation for its gradient:</p><formula xml:id="formula_5">∇arctan2(y, x) = −y x 2 + y 2 + ǫ , x x 2 + y 2 + ǫ ,<label>(3)</label></formula><p>where ǫ is a very small value.</p><p>Computing the derivatives. The derivatives of the loss function for a given training pair p i can be computed using the chain rule:</p><formula xml:id="formula_6">∂L i ∂W (p i ) = ∂L i ∂g 1,i ∂g 1,i ∂θ 1,i ∂θ 1,i ∂W (p 1 i )+ ∂L i ∂g 2,i ∂g 2,i ∂θ 2,i ∂θ 2,i ∂W (p 2 i ) , (4) with θ * ,i = f W (p * i ) and g * ,i = g(p * i , θ * ,i ). Jacobians ∂Li ∂g * ,i and ∂θ1,i</formula><p>∂W are straightforward to compute.</p><p>∂g * ,i ∂θ * ,i is not as easy, since g * ,i is the descriptor for patch p * i after rotation by an amount given by θ * ,i . For example, in case of SIFT, the descriptor extraction process involves building histograms, which cannot be expressed as a differentiable function. Moreover, depending on the descriptor, pooling region for extracting the descriptor changes as a different orientation is provided.</p><p>We therefore use a numerical approximation of the gradients: when we form the training data we also compute the descriptors for many possible orientations, every 5 degrees in our current implementation. We can then efficiently compute the derivatives in ∂g * ,i ∂θ * ,i by numerical differentiation. Note that in case of descriptors that can be expressed in analytic form, for example learning based descriptors <ref type="bibr" target="#b32">[33]</ref>, we can also easily compute ∂g * ,i ∂θ * ,i , instead of using numerical approximations.</p><p>To implement the CNNf W (.), we use three convolution layers with the ReLU activation function, each followed by a max-pooling layer, followed by two fully connected layers with GHH activation. We detail the GHH activation below. We also use dropout regularization <ref type="bibr" target="#b34">[35]</ref> for better generalization. Implementation details are provided in Section 4.1.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Generalized Hinging Hyperplane Activation</head><p>To achieve state-of-the-art results with CNNs, we propose to use a new activation function in our network layers that works better for our problem than standard ones. This activation function is a generalization of the popular ReLU, <ref type="bibr" target="#b1">2</ref> We follow the standard implementation for the C language for this function. maxout <ref type="bibr" target="#b15">[16]</ref>, and the recent PReLU <ref type="bibr" target="#b16">[17]</ref> activation functions based on Generalized Hinging Hyperplanes (GHH), which is a general form for continuous piece-wise linear functions <ref type="bibr" target="#b40">[41]</ref>. As GHH activation function is more general, it has less restrictions in shape, and allows for more flexibility in what a single layer can learn. This activation function plays one of the key roles in our method for obtaining good orientations, as we will show in Section 4.3.</p><p>Mathematically, for a given layer output y = [y 1,1 , y 1,2 , . . . , y 2,1 , . . . , y S,M ] before activation, we consider the following activation function:</p><formula xml:id="formula_7">o(y) = s∈{1,2,...,S} δ s max m∈{1,2,...,M } y s,m ,<label>(5)</label></formula><p>where</p><formula xml:id="formula_8">δ s = 1, if s is odd −1, otherwise ,<label>(6)</label></formula><p>and S and M are meta-parameters controlling the number of planar segments and thus the complexity of the function. When S = 1, Eq. (5) reduces to maxout activation <ref type="bibr" target="#b15">[16]</ref>, and when additionally M = 2 with y s,1 = 0, the equation reduces to the ReLU activation function. Finally, when S = 2, M = 2, y s,1 = 0 and y 1,m = −α m y 2,m , where α m is a scalar variable, Eq. (5) is equivalent to the PReLU activation function proposed in <ref type="bibr" target="#b16">[17]</ref>. Therefore, instead of having to choose a non-linear activation function, we also learn it under the constraint that it is piece-wise linear.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Results</head><p>In this section, we first introduce the datasets used for evaluation and the setup for training our regressor. We then demonstrate the effectiveness of our method by comparing the descriptor performances using the original and our learned orientations. We show that the best matching performance can be achieved with our learned orientations, outperforming state-of-the-art. We also demonstrate the performance gain obtained by using the GHH activation compared to other activation functions, and investigate influence of datasets on the descriptor performances. We finally show a Multi-View Stereo (MVS) application. <ref type="bibr" target="#b2">3</ref> </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Dataset, Training, and Evaluation Setup</head><p>Dataset. <ref type="figure" target="#fig_1">Fig. 3</ref> shows example images from the datasets we use for evaluation and training. Note that our collection of data is not only composed of planar objects but also of 3D objects with self occlusions. We also have various imaging changes including changes in the camera pose. We use the Oxford dataset <ref type="bibr" target="#b25">[26]</ref> for training, and the Edge Foci (EF) dataset <ref type="bibr" target="#b47">[48]</ref>, the Webcam dataset <ref type="bibr" target="#b39">[40]</ref>, the Strecha dataset <ref type="bibr" target="#b35">[36]</ref>, the DTU dataset <ref type="bibr" target="#b0">[1]</ref>, and our own Viewpoints dataset for testing. Details on the datasets are as follows:</p><p>• Oxford dataset <ref type="bibr" target="#b25">[26]</ref>: 8 sequences with 48 images in total. The dataset contains various imaging changes including viewpoint, rotation, blur, illumination, scale, JPEG compression changes. We thus use this dataset for training.</p><p>• EF dataset <ref type="bibr" target="#b47">[48]</ref>: 5 sequences with 38 images in total. The dataset exhibits drastic lighting changes as well as daytime changes and viewpoint changes.</p><p>• Webcam dataset <ref type="bibr" target="#b39">[40]</ref>: 6 sequences with 120 images in total. The dataset exhibits seasonal changes as well as daytime changes of scenes taken from far away.</p><p>• Strecha dataset <ref type="bibr" target="#b35">[36]</ref>: composed of two sequences, fountain-P11 (11 images) and Herz-Jesu-P8 (8 images). The scene is non-planar and 3D. The dataset exhibits large viewpoint changes with self occlusions.</p><p>• DTU dataset <ref type="bibr" target="#b0">[1]</ref>: 60 sequences with 600 images in total. This dataset also has multiple lighting settings for selected viewpoints, but we consider here only one lighting setting as we are mostly interested in the changes that occur on non-planar scenes undergoing camera movements. We also sample the viewpoints from the original dataset in regular intervals to make the dataset a manageable size.</p><p>• Viewpoints dataset: 5 sequences with 30 images in total. We created our own dataset to further enrich the dataset. The dataset exhibits large viewpoint changes and in-plane rotations up to 45 degrees from the reference image, which is when commercial cameras compensate the image orientation as landscape or portrait.</p><p>Implementation details and training. We use a patch size of 28 × 28 as input to the CNN. For the convolution layers, the first convolution layer uses a filter size of 5 × 5 and 10 output channels, the second convolution layer a filter size of 5 × 5 and 20 output channels, and the third convolution layer a filter size of 3 × 3 and 50 output channels. All max-pooling layers perform 2 × 2 max pooling. The size of the output of the first fully connected layer is 100, with the second fully connected layer having two outputs with the arctan2 mapping into orientations as described on Section 3.2. For optimization, We use the ADAM <ref type="bibr" target="#b19">[20]</ref> method with default parameters and exponentially decaying learning rate. We run 100 epochs with batch size of 10. The learning rate decay is set to half the learning rate every ten epochs.</p><p>Our method is also computationally efficient as we are only estimating the orientations. On an Intel Xeon E5-2680 2.5GHz Processor, our current implementation in Python with Theano <ref type="bibr" target="#b4">[5]</ref> takes 0.47 milliseconds per feature point to compute orientations without any multi-threading. When used with SIFT descriptors, it overall takes 1.39 milliseconds per feature point to obtain the final descriptor. Note that the C++ implementation of the MROGH descriptor, which is the best performing rotation invariant descriptor in our experiments, takes 1.94 milliseconds per feature point.</p><p>Evaluation methodology. To demonstrate the effectiveness of our method, we compare the descriptor matching performances with our orientation estimation against other  <ref type="figure">Figure 4</ref>. Descriptor performances with and without our orientation assignment. Methods with the multiple orientation strategy are denoted with MO, our orientation assignments learned with respective descriptors are denoted with a + at the end, and those learned with SIFT are denoted with a ⋆. Note that on average, methods with our orientation assignments perform better for all descriptors, than using orientation assignments from respective detectors and using multiple orientations.</p><p>state-of-the-art descriptors <ref type="bibr" target="#b3">4</ref> . We use the standard precisionrecall measure of <ref type="bibr" target="#b25">[26]</ref> with nearest neighbor matching, and with a maximum of 1000 feature points per image. In case of the DTU and Strecha datasets, the scenes are non-planar and we rely on the 3D models and camera projection matrices to map a point from one viewpoint to another. Such mapping is used instead of the homography, followed by the overlap test in <ref type="bibr" target="#b25">[26]</ref>. Results are summarized with the mean Average Precision (mAP) as in <ref type="bibr" target="#b33">[34]</ref>, where mAP is effectively the Area Under Curve of the precision-recall graph. We compare against both descriptors that require orientation estimations (ORB <ref type="bibr" target="#b31">[32]</ref>, BRISK <ref type="bibr" target="#b21">[22]</ref>, FREAK <ref type="bibr" target="#b1">[2]</ref>, SURF <ref type="bibr" target="#b5">[6]</ref>, SIFT <ref type="bibr" target="#b24">[25]</ref>, KAZE <ref type="bibr" target="#b2">[3]</ref>, BiCE <ref type="bibr" target="#b46">[47]</ref>, Daisy <ref type="bibr" target="#b37">[38]</ref>, and the learning-based VGG <ref type="bibr" target="#b33">[34]</ref>), as well as rotation invariant descriptors (LIOP <ref type="bibr" target="#b41">[42]</ref>, MROGH <ref type="bibr" target="#b13">[14]</ref>, and sGLOH <ref type="bibr" target="#b6">[7]</ref>). Note that descriptors are generally designed for a specific detector (for example they typically have different range of scale of operation) and for fair comparisons, we do not interchange the detector and descriptors. We use the feature point detectors presented when the descriptors were introduced. In case of the VGG descriptor, we use the descriptor pre-learned with the liberty dataset <ref type="bibr" target="#b9">[10]</ref>, as other sequences are partially included in our test set. We employ the Edge Foci (EF) <ref type="bibr" target="#b47">[48]</ref> detector for VGG as it showed better performance than the Difference of Gaussians (DoG) detector, which was used in the original work of VGG. We will denote this method as EF-VGG.</p><p>We also use EF detector with the Daisy descriptor and the SIFT descriptor, as this particular detector was designed with these two descriptors in mind. We will refer them as EF-Daisy and EF-SIFT, respectively.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Descriptor Matching Performances</head><p>To demonstrate the effectiveness of our method, we evaluate the descriptor matching performances with and without our orientation assignment. We first show the performance gain we obtain for SIFT, SURF, Daisy, and VGG descriptors and then compare our performance against other stateof-the-art methods. Note that for each descriptor, we only train our method once using the Oxford dataset and test on all the other datasets.</p><p>Performance gain with our orientations. To demonstrate the performance gain we obtain by using our orientation assignments, we learned orientations for SIFT, SURF, Daisy, and VGG descriptors. We denote descriptors computed using our learned orientation assignments with a + and a ⋆ at the end; we use + when orientations are learned with respective descriptors, and ⋆ when learned with SIFT descriptors. We also compare against using multiple dominant orientations. Note that using multiple orientations effectively amounts to creating duplicate feature points, which resulted in 34% increase in descriptor extraction time and 79% increase in matching time within our evaluation framework.</p><p>As shown in <ref type="figure">Fig. 4</ref>, we gain a consistent boost in descriptor matching performance with our orientation estimation. This includes the learning-based VGG descriptor, showing that learning-based methods also can benefit from a better orientation assignment. We also obtain a larger gain on average compared to using multiple orientations. The best performance is achieved with EF-VGG⋆.</p><p>Interestingly, for EF-Daisy and EF-VGG, learning with the SIFT descriptor gave larger boost in performances than learning with the respective descriptors. We suspect that this is due to the characteristics of the two descriptors being less sensitive to orientations than SIFT descriptors, resulting in the Jacobians with respect to orientations to vanish.</p><p>Based on the comparison results in <ref type="figure">Fig. 4</ref>, in the remainder of the results section we will report the performance of the best performing handcrafted descriptor with our orientations, EF-Daisy⋆, and the best performing learning-based descriptor with our orientations, EF-VGG⋆. In Section 4.3, as the best performance was achieved by learning with the SIFT descriptor (EF-VGG⋆), we will use EF-SIFT+ to evaluate the influence of different activation functions.</p><p>Comparison with the state-of-the-art. As shown in <ref type="figure">Fig. 5</ref>, both EF-Daisy⋆ and EF-VGG⋆ outperform all compared methods, with EF-VGG⋆ outperforming all others by a large margin. Specifically, EF-VGG⋆ performs 27.4% better in terms of mAP compared to EF-VGG, which is the best performing competitor. Note that without our orientation estimation, although the best among the competitors, the gap is small. Also, as pointed out in descriptor performance surveys <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b28">29]</ref>, SIFT or EF-SIFT generally   <ref type="table">Table 1</ref>. Average rank of each method which summarizes the results in <ref type="figure">Fig. 5</ref>. Average rank for each dataset is given on the left, and the rank by averaging this value is provided on the right, as well as the mAP for all datasets. Bold denotes best performance. Our method EF-VGG⋆ ranks first, followed by EF-Daisy⋆.</p><p>give comparable results to the state-of-the-art.</p><p>As average results can be influenced by certain sequences being too easy or hard, we also investigate the average rank of each method on the entire dataset similarly to <ref type="bibr" target="#b28">[29]</ref>. In <ref type="table">Table 1</ref>, we show the rank of each method on the datasets according to the average ranks of their mAP on each sequence. We also show the average mAP with all datasets for each method. Again, best results are obtained with our methods, EF-Daisy⋆ and EF-VGG⋆.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Performance With Different Activations</head><p>To evaluate the influence of the proposed GHH activation function, we compared the matching performance of EF-SIFT+ with different activation functions. All parameters were set to be identical except for the activation type and the number of outputs in the fully connected layers. Specifically, we used 1600 hidden nodes for ReLU, Tanh, and PReLU <ref type="bibr" target="#b16">[17]</ref>, 400 for maxout <ref type="bibr" target="#b15">[16]</ref> with four outputs inside the max. Note that PReLU has slightly more parameters than other activations, as an additional parameter is introduced for each output of the layer.</p><p>As shown in <ref type="figure">Fig. 6</ref>, we have a consistent gain in performance when using the proposed GHH activation function instead of ReLU, Tanh, maxout, and PReLU. This shows that indeed using the GHH activation, which is a generalization of several common activation functions, is suitable for learning orientations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Results on Upright and Non-upright Datasets</head><p>We observed in the existing datasets a general tendency for the images to be carefully taken with an upright posture. As a result, it is possible to assign a ground truth orientation to them by using a constant orientation. We will denote this upright assignment of orientations with the suffix "Up", and compare their assignments with our orientation assignments. We group the datasets into "upright" and "non-upright" ones, depending on whether the systematic assignment to an upright orientation performs better than using the original orientation assignments, and compare the performance of EF-Daisy, EF-VGG, EF-Daisy⋆, EF-VGG⋆, EF-Daisy-Up, and EF-VGG-Up. <ref type="figure">Fig. 7</ref> shows the results of these experiments. As expected, in case of upright datasets, using a systematic upright orientation performs the best, which can be seen as a upper bound for the descriptor performances.</p><p>The performances however degrade when tested on nonupright datasets. However, our methods EF-Daisy⋆ and EF-VGG⋆ perform comparably to the upper bounds for upright datasets and are significantly better on non-upright datasets, achieving state-of-the-art. Note that EF-VGG performs similar to EF-VGG-Up, showing that inaccurate orientation assignments are not helpful.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.5.">Application to Multi-View Stereo</head><p>We also apply our orientation estimations for a MVS application <ref type="bibr" target="#b43">[44,</ref><ref type="bibr" target="#b44">45]</ref>. <ref type="figure">Fig. 8</ref> shows MVS results using EF-Daisy, EF-VGG and EF-VGG⋆. Due to better matching performances, our method EF-VGG⋆ gives best MVS results, followed by EF-VGG. Specifically, for the fountain sequence of the Strecha dataset, we obtain 260747 vertices with EF-Daisy, 323979 with EF-VGG, and 365261 with EF-VGG⋆. For Scene 55 of the DTU dataset, we obtain 72972, 86826, and 95014 vertices for EF-Daisy, EF-VGG, and EF-VGG⋆, respectively.  <ref type="figure" target="#fig_1">Fig. 3</ref>. As better matches are provided with EF-VGG⋆, more detailed MVS reconstructions are obtained. Same EF feature points were used, differing only in orientation assignments.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>We have introduced a learning scheme using a Convolutional Neural Network for the estimation of a canonical orientation for feature points, which improves the performance of existing descriptors. We proposed to train Siamese network to predict an orientation, which avoided the need of explicitly defining a "good" orientation to learn. We also proposed a new GHH activation function, which generalizes existing piece-wise linear activation functions and performs better for our task. We evaluated the effectiveness of our learned orientations by comparing the descriptor performances with and without our orientation assignment. Descriptors using our orientations gained consistent performance increase and outperformed state-of-the-art descriptors on all datasets. We finally investigated the influence of the GHH activation function showing its effectiveness.</p><p>Although we were able to enhance the performance of the learning-based VGG descriptor as well, an interesting future research direction is to fully integrate our method with learning-based descriptors, such as the recent descriptor presented in <ref type="bibr" target="#b32">[33]</ref>. In which case, we can have a fully differentiable Siamese network which learns both the orientation assignment and the descriptor at the same time.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Multi-View Stereo (MVS)<ref type="bibr" target="#b43">[44,</ref><ref type="bibr" target="#b44">45]</ref> reconstruction with the orientation assignment of SIFT [25] and our orientation assignment. Top: two of the original images from [1] used for MVS. Middle: enlarged feature point regions in groups of three; left reference region from the left image, center region rotated back with SIFT orientations, right region rotated back with our learned orientations. Estimation errors are denoted by a green arc. Bottom left:</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 3 .</head><label>3</label><figDesc>Selected images from all the datasets. First row: images from the Oxford dataset, Second row: images from the Strecha dataset, Third row: images from the DTU dataset, Fourth row: images from the EF dataset, Fifth row: images from the Webcam dataset, and Last row: images from our Viewpoints dataset. We use the Oxford dataset for training and the other datasets for testing.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 6 .Figure 7 .</head><label>67</label><figDesc>Relative descriptor performance obtained with the proposed GHH activation compared to ReLU, Tanh, PReLU and maxout activation functions. We use the mAP of ReLU activation as the reference (100%). Best performance is achieved with GHH activation.EF-Daisy-Up EF-VGG-Up EF-Daisy EF-VGG EF-Daisy★ EF-VGG★Performance of EF-Daisy-Up, EF-VGG-Up, EF-Daisy, EF-VGG, EF-Daisy⋆, and EF-VGG⋆ on upright datasets and nonupright datasets. The "Up" suffix in the method names denotes that the feature points are assigned zero orientations. EF-Daisy⋆ and EF-VGG⋆ perform well on both cases, and are close to EF-Daisy-Up, and EF-VGG-Up on the upright datasets.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>( a )Figure 8 .</head><label>a8</label><figDesc>EF-Daisy results (b) EF-VGG results (c) EF-VGG⋆ results (d) EF-Daisy results (e) EF-VGG results (f) EF-VGG⋆ results Multi-View Stereo (MVS) application [44, 45] example with EF-Daisy, EF-VGG and our method EF-VGG⋆. (a) -(c) results for the fountain sequence of the Strecha dataset, (d) -(f) results for the Scene 55 of the DTU dataset. Original images are shown as the first image for each dataset in</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Figures are best viewed in color.</figDesc><table>Reference 
+SIFT 
+Our method 
+Reference 
+SIFT 
+Our method 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head></head><label></label><figDesc>AverageFigure 5. Mean Average Precision (mAP) for all datasets. First row: results for the Strecha dataset and the DTU dataset, Second row: results for the EF dataset, Third row: results for the Webcam dataset and Last row: results for the Viewpoints dataset. Best results are achieved with our orientation assignments, EF-VGG⋆.</figDesc><table>Mario 
+ChatNoir 
+Duckhunt 
+Posters 
+Outside 
+
+mAP 
+
+ORB 
+BRISK 
+FREAK 
+SURF 
+LIOP 
+SIFT 
+MROGH 
+sGLOH 
+KAZE 
+BiCE 
+EF-Daisy 
+EF-VGG 
+EF-Daisy★ 
+EF-VGG★ 
+
+Viewpoints Webcam EF Strecha DTU Rank 
+ORB 
+13.20 
+10.33 11.40 12.50 12.33 12 
+BRISK 
+10.40 
+12.67 12.60 12.50 12.43 13 
+FREAK 
+11.20 
+13.33 12.60 14.00 13.45 14 
+SURF 
+11.40 
+12.17 10.80 11.00 10.57 11 
+LIOP 
+9.80 
+11.17 11.40 9.00 
+9.12 
+10 
+SIFT 
+7.00 
+6.33 
+4.80 
+4.50 
+5.33 
+5 
+MROGH 
+5.80 
+6.00 
+7.20 
+4.50 
+4.85 
+6 
+sGLOH 
+10.20 
+3.50 
+6.00 
+7.50 
+8.93 
+8 
+KAZE 
+9.20 
+4.83 
+6.00 10.00 9.43 
+9 
+BiCE 
+3.80 
+7.50 
+4.00 
+5.00 
+5.28 
+4 
+EF-Daisy 
+6.00 
+7.50 
+7.20 
+7.50 
+6.17 
+7 
+EF-VGG 
+3.20 
+5.50 
+5.40 
+4.00 
+3.87 
+3 
+EF-Daisy⋆ 
+2.80 
+2.83 
+3.80 
+2.00 
+2.12 
+2 
+EF-VGG⋆ 
+1.00 
+1.33 
+1.80 
+1.00 
+1.12 
+1 
+
+Avg. mAP 
+0.12 
+0.11 
+0.10 
+0.15 
+0.19 
+0.31 
+0.31 
+0.25 
+0.22 
+0.33 
+0.30 
+0.35 
+0.40 
+0.45 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">Datasets and source code available at http://cvlab.epfl.ch/.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="4">Details on the implementations of these methods are provided as appendix in the supplementary material.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgement</head><p>This work was supported in part by the EU FP7 project MAGELLAN under the grant number ICT-FP7-611526 and in part by the EU project EDUSAFE.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Aanaes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Dahl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">S</forename><surname>Pedersen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Interesting Interest Points. IJCV</title>
+		<imprint>
+			<biblScope unit="volume">97</biblScope>
+			<biblScope unit="page">6</biblScope>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">FREAK: Fast Retina Keypoint</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Alahi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ortiz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Vandergheynst</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Alcantarilla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fernández</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bartoli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Davidson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Features</surname></persName>
+		</author>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Full Orientation Invariance and Improved Feature Selectivity of 3D SIFT with Application to Medical Image Analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Allaire</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">L</forename><surname>Breen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">A</forename><surname>Jaffray</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Pekar</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Bastien</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Lamblin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Pascanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bergstra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bergeron</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Bouchard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<title level="m">Theano: New Features and Speed Improvements</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+	<note>NIPS</note>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">SURF: Speeded Up Robust Features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tuytelaars</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Improving Sift-Based Descriptors Stability to Rotations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Bellavia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tegolo</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICPR</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Keypoint Descriptor Matching with Context-Based Orientation Estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Bellavia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tegolo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Valenti</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IVC</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="559" to="567" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Signature Verification Using a Siamese Time Delay Neural Network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bromley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Guyon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Sackinger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Shah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="1993" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">Discriminative Learning of Local Image Descriptors. PAMI</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Brown</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Winder</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="volume">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Multi-Image Matching Using Multi-Scale Oriented Patches</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Brown</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Winder</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Learning a Similarity Metric Discriminatively, with Application to Face Verification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chopra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Hadsell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Receptive Fields Selection for Binary Feature Description</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Fan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Kong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Trzcinski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Pan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TIP</title>
+		<imprint>
+			<biblScope unit="volume">23</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="2583" to="2595" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Aggregating Gradient Distributions into Intensity Orders: A Novel Local Image Descriptor</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Fan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Hu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Improving Keypoint Orientation Assignment</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gauglitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Turk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Höllerer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Warde-Farley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mirza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<title level="m">Maxout Networks. In ICML</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Delving Deep into Rectifiers: Surpassing Human-Level Performance on Imagenet Classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Online Learning of Patch Perspective Rectification for Efficient Object Detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hinterstoisser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Benhimane</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Navab</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Better Than SIFT? MVA</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Khan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Mccane</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mills</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="page" from="819" to="836" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Adam: A Method for Stochastic Optimisation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Semi-Local Affine Parts for Object Recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ponce</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">BRISK: Binary Robust Invariant Scalable Keypoints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Leutenegger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Chli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Siegwart</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Aligning Images in the Wild</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W.-Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Matsushita</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K.-L</forename><surname>Low</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Rotation-Invariant HOG Descriptors Using Fourier Analysis in Polar and Spherical Coordinates</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Skibbe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Schmidt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Blein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Palme</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Ronneberger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">106</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="342" to="364" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Distinctive Image Features from Scale-Invariant Keypoints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lowe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">A Performance Evaluation of Local Descriptors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Mikolajczyk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2004" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">27</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Mikolajczyk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Scale and Affine Invariant Interest Point Detectors. IJCV</title>
+		<imprint>
+			<biblScope unit="volume">60</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="63" to="86" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Evaluation of Features Detectors and Descriptors Base on 3D Objects</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Moreels</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IJCV</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">A Comparative Experimental Study of Image Feature Detectors and Descriptors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mukherjee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><forename type="middle">M J</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">MVA</title>
+		<imprint>
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Synergistic Face Detection and Pose Estimation with Energy-Based Models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Osadchy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Miller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">8</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="1197" to="1215" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+		<title level="m" type="main">Improving Object Classification using Pose Information</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Penedones</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Collobert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Fleuret</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Grangier</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+			<pubPlace>Idiap Research Institute</pubPlace>
+		</imprint>
+	</monogr>
+	<note type="report_type">Technical report</note>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">ORB: An Efficient Alternative to SIFT or SURF</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Rublee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Rabaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Konolidge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Bradski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Discriminative Learning of Deep Convolutional Feature Point Descriptors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Simo-Serra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Trulls</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ferraz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kokkinos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Moreno-Noguer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Learning Local Feature Descriptors Using Convex Optimisation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Dropout: A Simple Way to Prevent Neural Networks from Overfitting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">15</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="1929" to="1958" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">On Benchmarking Camera Calibration and Multi-View Stereo for High Resolution Imagery</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Strecha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Hansen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Thoennessen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Binary Histogrammed Intensity Patches for Efficient and Robust Matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Taylor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Drummond</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">94</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="241" to="265" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title level="m" type="main">Daisy: An Efficient Dense Descriptor Applied to Wide Baseline Stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Tola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Learning Image Descriptors with Boosting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Trzcinski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Christoudias</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="issue">3</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">TILDE: A Temporally Invariant Learned DEtector</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Verdie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">M</forename><surname>Yi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Generalization of Hinging Hyperplanes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TIT</title>
+		<imprint>
+			<biblScope unit="volume">51</biblScope>
+			<biblScope unit="issue">12</biblScope>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Local Intensity Order Pattern for Feature Description</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Fan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Wu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Picking the Best Daisy</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Winder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Brown</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Towards Linear-Time Incremental Structure from Motion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">3DV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Multicore Bundle Adjustment</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Learning to Compare Image Patches via Convolutional Neural Networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zagoruyko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Komodakis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Binary Coherent Edge Descriptors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zitnick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Edge Foci Interest Points</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Ramnath</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

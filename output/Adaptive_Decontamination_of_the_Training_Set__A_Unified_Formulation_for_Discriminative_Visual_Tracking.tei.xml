@@ -1,0 +1,975 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Adaptive Decontamination of the Training Set: A Unified Formulation for Discriminative Visual Tracking</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Martin</forename><surname>Danelljan</surname></persName>
+							<email>martin.danelljan@liu.se</email>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Electrical Engineering</orgName>
+								<orgName type="laboratory">Computer Vision Laboratory</orgName>
+								<orgName type="institution">Linköping University</orgName>
+								<address>
+									<country key="SE">Sweden</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><roleName>Fahad</roleName><forename type="first">Gustav</forename><surname>Häger</surname></persName>
+							<email>gustav.hager@liu.se</email>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Electrical Engineering</orgName>
+								<orgName type="laboratory">Computer Vision Laboratory</orgName>
+								<orgName type="institution">Linköping University</orgName>
+								<address>
+									<country key="SE">Sweden</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Shahbaz</forename><surname>Khan</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Electrical Engineering</orgName>
+								<orgName type="laboratory">Computer Vision Laboratory</orgName>
+								<orgName type="institution">Linköping University</orgName>
+								<address>
+									<country key="SE">Sweden</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><surname>Felsberg</surname></persName>
+							<email>michael.felsberg@liu.se</email>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Electrical Engineering</orgName>
+								<orgName type="laboratory">Computer Vision Laboratory</orgName>
+								<orgName type="institution">Linköping University</orgName>
+								<address>
+									<country key="SE">Sweden</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Adaptive Decontamination of the Training Set: A Unified Formulation for Discriminative Visual Tracking</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:37+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Tracking-by-detection methods have demonstrated competitive performance in recent years. In these approaches, the tracking model heavily relies on the quality of the training set. Due to the limited amount of labeled training data, additional samples need to be extracted and labeled by the tracker itself. This often leads to the inclusion of corrupted training samples, due to occlusions, misalignments and other perturbations. Existing tracking-by-detection methods either ignore this problem, or employ a separate component for managing the training set.</p><p>We propose a novel generic approach for alleviating the problem of corrupted training samples in tracking-bydetection frameworks. Our approach dynamically manages the training set by estimating the quality of the samples. Contrary to existing approaches, we propose a unified formulation by minimizing a single loss over both the target appearance model and the sample quality weights. The joint formulation enables corrupted samples to be downweighted while increasing the impact of correct ones. Experiments are performed on three benchmarks: OTB-2015  with 100 videos, VOT-2015 with 60 videos, and Temple-Color with 128  videos. On the OTB-2015, our unified formulation significantly improves the baseline, with a gain of 3.8% in mean overlap precision. Finally, our method achieves state-of-the-art results on all three datasets.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Generic visual tracking is the problem of estimating the trajectory of a target in an image sequence, given only its initial location. Tracking methods serve as important components in a variety of vision systems. The problem is particularly challenging due to the limited prior knowledge about the target. Furthermore, the tracking model must be flexible to counter rapid target appearance changes, while being robust to, e.g., occlusions and background clutter.</p><p>The above mentioned problems have been addressed by methods based on the tracking-by-detection paradigm <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b28">29]</ref>, with promising results in recent years. In this paradigm, tracking methods employ machine learning techniques to train an appearance model based on samples of the target and its background. Typically, supervised learning methods such as Support Vector Machines (SVMs) or ridge regression are used to construct a discriminative classifier or regressor. The quality of the tracking model is directly dependent on the training set. Therefore, a robust approach for constructing and managing the training set is crucial for avoiding model drift and tracking failure. Standard tracking-by-detection approaches struggle when the training set is contaminated by corrupted samples. These corrupted samples are included in the training set in several different scenarios. Firstly, when encountered with target deformation and out-of-plane rotation, inaccurate tracking predictions lead to misaligned training sam-ples (no. 119 in <ref type="figure" target="#fig_0">figure 1)</ref>. Consequently, the model often drifts, eventually leading to tracking failure. Secondly, occlusions and clutter contaminate the positive training samples with background information, thereby deteriorating the discriminative power of the model (no. 162 in <ref type="figure" target="#fig_0">figure 1</ref>). In this work, we aim to enhance the robustness of standard tracking-by-detection approaches by tackling the problem of decontaminating the training set.</p><p>Existing discriminative trackers either ignore the problem of corrupted samples <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b25">26]</ref> or employ an explicit training sample management component <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b28">29]</ref>. A straightforward approach is to directly discard samples that do not meet a certain criterion <ref type="bibr" target="#b0">[1]</ref>. Other methods use a combination of experts <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b28">29]</ref>, a separate tracking model <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b21">22]</ref> or distance comparisons <ref type="bibr" target="#b8">[9]</ref> for managing the training set. In this paper, we argue that the standard two-component strategy is suboptimal due to the reliance on heuristics. Instead, we revisit the standard tracking-bydetection formulation with the aim of integrating the estimation of the sample quality weights in the learning.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.1.">Contributions</head><p>We propose a novel formulation for jointly learning the tracking model and the training sample weights. Our formulation is generic, and can be integrated into common supervised learning methods. In each frame, a joint loss is minimized to update both the model parameters and the importance weights. Our joint learning approach down-weights corrupted samples while increasing the importance of correct ones, as visualized in figure 1. Different from previous tracking methods, our unified formulation eradicates the need of an explicit sample management component.</p><p>To validate our approach, we perform extensive experiments on three benchmarks: OTB-2015 <ref type="bibr" target="#b26">[27]</ref> with 100 videos, VOT-2015 <ref type="bibr" target="#b16">[17]</ref> with 60 videos, and Temple-Color <ref type="bibr" target="#b19">[20]</ref> with 128 videos. Our unified approach demonstrates a significant gain of 3.8% in mean overlap precision on OTB-2015, compared to the baseline. Further, our tracker achieves state-of-the-art results on all three datasets.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Discriminative Tracking Methods</head><p>In recent years, discriminative tracking-by-detection approaches <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b28">29]</ref> have shown promising results on benchmarks, such as OTB <ref type="bibr" target="#b27">[28]</ref> and VOT <ref type="bibr" target="#b17">[18]</ref>. The appearance model within a tracking-by-detection framework is typically based on a discriminatively trained regressor <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b12">13]</ref> or classifier <ref type="bibr" target="#b24">[25,</ref><ref type="bibr" target="#b28">29]</ref>. These approaches are formulated in a supervised learning setting, where labeled training samples are collected from the sequence. Given a set of n training examples {(x j , y j )} n j=1 , the aim is to find the parameters θ ∈ Ω of the appearance model. Here, x j ∈ X denotes a feature vector in the sample space X and y j ∈ Y is the corresponding label in the label set Y. Many supervised learning methods in tracking <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b28">29]</ref> find the parameter values θ by minimizing a loss of the form,</p><formula xml:id="formula_0">J(θ) = n k=1 L(θ; x j , y j ) + λR(θ).<label>(1)</label></formula><p>Here, L : Ω×X ×Y → R specifies the loss L(θ; x j , y j ) for a training sample (x j , y j ) as a function of the parameters θ.</p><p>The impact of the regularization function R : Ω → R is controlled by the constant weight λ ≥ 0. Eq. (1) covers a variety of learning approaches, including support vector machines (SVMs) <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b28">29]</ref> and discriminative correlation filters (DCFs) <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b12">13]</ref>. A common approach <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b28">29]</ref> is to use a two-class learning strategy to differentiate between the target y j = 1 and background y j = −1. Alternatively, the DCF based trackers <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b12">13]</ref>, utilize continuous labels y j ∈ [0, 1] or let y j be the desired confidence map over an image region. Another strategy <ref type="bibr" target="#b10">[11]</ref> is to let Y be the possible transformations of the target box.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Training Sample Weighting</head><p>In discriminative tracking, the model is learned using training samples collected from the video frames. Typically, the training set is updated with new samples in each frame, to account for changes in the target and background appearance. We rewrite (1) to highlight this temporal sampling used in many tracking methods. Let (x jk , y jk ) denote the jth training sample in frame number k. Assume that n k samples from frame k ∈ {1, . . . , t} are included in the training set, where t denotes the current frame number. Typically, both positive and negative samples (x jk , y jk ) are extracted in a frame k, based on the estimated target location. The loss (1) is then expressed in the more general form,</p><formula xml:id="formula_1">J(θ) = t k=1 α k n k j=1 L(θ; x jk , y jk ) + λR(θ).<label>(2)</label></formula><p>Here, the constant weights α k ≥ 0 control the impact of samples from frame k. By increasing α k , a greater impact is given to samples {(x jk , y jk )} n k j=1 extracted from frame k. There exist several strategies to control the impact of training samples in <ref type="bibr" target="#b1">(2)</ref>. In DCF-based trackers <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b12">13]</ref>, a learning rate parameter γ ∈ [0, 1] is employed to update the weights as α k = (1−γ)α k+1 . Such a re-weighting strategy aims to reduce the impact of older samples in the learning. Trackers based on SVMs typically prune the training set by e.g. rejecting samples older than a threshold <ref type="bibr" target="#b25">[26]</ref> or removing support vectors with the least impact <ref type="bibr" target="#b10">[11]</ref>. However, these methods do not account for the problem of corrupted samples (x jk , y jk ) in the training set.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Corrupted Training Samples</head><p>Contrary to object detection, the problem of corrupted training samples is commonly encountered in tracking. The problem appears since the samples are not hand-labeled, but rather labeled by the tracking algorithm itself. Several factors contribute to the unintentional inclusion of corrupted training samples in the learning. (a) Inaccurate tracking predictions, due to e.g. target rotations or deformations, lead to misaligned samples. This can result in model drift or tracking failure. (b) Partial or full occlusions of the target lead to positive samples being corrupted by the occluding objects. This is a common source of tracking failure, since the appearance model is contaminated due to occlusions. (c) Perturbations, such as motion blur, can lead to a distorted view of the target. These factors contribute to the inclusion of corrupted training samples in the learning, thereby deteriorating the discriminative power of the model. State-of-the-Art: Several recent works have investigated the problem of corrupted training samples in the trackingby-detection paradigm <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b28">29]</ref>. Bolme et al. <ref type="bibr" target="#b0">[1]</ref> propose to reject new samples based on the Peak-to-Sidelobe Ratio (PSR) criterion. PSR is computed as the ratio between the maximum confidence score and the standard deviation of the surrounding scores (outside a specified neighborhood of the peak). Zhang et al. <ref type="bibr" target="#b28">[29]</ref> use an entropy-based minimization to determine the best model in an expert ensemble. The ensemble consists of the current tracking model and snapshots from earlier frames. If a disagreement occurs, the expert with the minimum entropy criterion is selected as the new tracker model. Kalal et al. <ref type="bibr" target="#b15">[16]</ref> tackle the drift problem by generating positive and negative samples based on spatial and temporal constraints. Supančič and Ramanan <ref type="bibr" target="#b24">[25]</ref> propose a strategy for updating the training set by revisiting previously rejected samples. Hong et al. <ref type="bibr" target="#b13">[14]</ref> use a key-point based long-term memory component to detect occlusions and refresh the short-term memory. Differences to Our Approach: As discussed above, existing tracking-by-detection approaches tackle the problem of corrupted samples with a dedicated separate component. This component is either based on distance comparisons <ref type="bibr" target="#b8">[9]</ref>, heuristics <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b29">30]</ref>, a set of experts <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b28">29]</ref>, a separate tracking model <ref type="bibr" target="#b13">[14]</ref>, or model fitting <ref type="bibr" target="#b24">[25]</ref>. Our approach differs from the aforementioned methods in several aspects. To the best of our knowledge, we are the first to propose a learning formulation that jointly optimizes the model parameters and the sample weights. Instead of binary decisions <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b28">29]</ref>, our approach is based on continuous importance weights. This enables us to down-weight the impact of corrupted training samples, while up-weighting correct ones. Further, our method allows mistakes to be corrected by redetermining the sample weights at each frame.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Our Approach</head><p>Here, we propose our formulation for jointly learn the appearance model and the training sample weights in a tracking-by-detection framework.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Motivation</head><p>To motivate our approach, we first distinguish three desirable characteristics to be considered when designing a method for decontaminating the training set. Continuous weights: Most existing discriminative trackers <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b28">29]</ref> rely on binary decisions for including or removing potential training samples. This is problematic in ambiguous scenarios, such as moderate occlusions or slight misalignments (see <ref type="figure" target="#fig_0">figure 1)</ref>, where the extracted samples are not entirely corrupted and still contain valuable information. Instead, continuous quality weights are expected to more accurately capture the importance of such samples. Re-determination of Importance: A common approach is to determine the importance of a sample based on previous frames only, e.g. rejecting new samples based on the current appearance model <ref type="bibr" target="#b0">[1]</ref>. Ideally, all available information should be considered when updating the importance of a specific training sample, including more recent frames. By exploiting information from all observed frames, the importance of older samples can be re-determined more accurately. This will enable previous mistakes to be corrected at a later stage in the tracking process. Dynamic Sample Prior: Methods purely based on bottomup statistics ignore prior knowledge associated with the samples. In cases of rapid target deformations and rotations, the tracker should emphasis recent samples for robustness. Dynamic prior knowledge is complementary to bottom-up information, and is expected to improve performance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Problem Formulation</head><p>Our approach jointly estimates both the model parameters θ and the weights α k . This is achieved by minimizing a single loss function J(θ, α) to learn both the appearance model θ and the training sample weights α = (α 1 , . . . , α t ).</p><p>To the best of our knowledge, we are the first to cast the problem of determining the sample quality in a joint optimization framework. We introduce the joint loss J(θ, α),</p><formula xml:id="formula_2">J(θ, α) = t k=1 α k n k j=1 L(θ; x jk , y jk ) + 1 µ t k=1 α 2 k ρ k + λR(θ) (3a) subject to α k ≥ 0 , k = 1, . . . , t (3b) t k=1 α k = 1. (3c)</formula><p>Different from the standard weighted loss (2), our formulation (3a) is a function of both the model parameters θ and the sample weights α k . As a result, the weights α k are no longer pre-determined constants. The constrains (3b) and (3c) ensure that the weights α k are non-negative and sum up to one. The second term in the joint loss (3a) is a regularization term on the sample weights α. This regularization is controlled by the flexibility parameter µ &gt; 0 and the prior sample weights ρ k &gt; 0, satisfying k ρ k = 1. The parameter µ controls the adaptiveness of the example weights α.</p><p>Increasing µ leads to a higher degree of flexibility in the weights α. We analyze the effect of µ and ρ k by considering the extreme cases of increasing (µ → ∞) and reducing (µ → 0) the flexibility parameter.</p><p>The case µ → ∞: This corresponds to removing the second term in (3a), implying no regularization on α. For a fixed model parameter θ, the loss <ref type="formula">(3)</ref> is then minimized by setting α m = 1 for the frame m with the smallest total loss nm j=1 L(θ; x jm , y jm ) and setting α k = 0 for k = m. The model will thus overfit to samples from a single frame k = m, if the second term in (3a) is removed. Therefore, it is imperative to use a regularization on the weights α. The case µ → 0: By introducing Lagrange multipliers, it can be shown that α k → ρ k when µ → 0, for a fixed θ. <ref type="bibr" target="#b0">1</ref> Thus, reducing the parameter µ also reduces the flexibility of the weights α k about the prior weights ρ k . The standard weighted loss (2) is therefore obtained in the limit µ → 0 by setting α k = ρ k . Our approach can be seen as a generalization of (2) by introducing flexible sample weights α k .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Optimization</head><p>Here, we propose a strategy for solving the joint learning problem (3). Our approach iteratively minimizes the loss by alternating between the model parameters θ and the example weights α. This strategy is motivated by the fact that <ref type="formula">(3)</ref> is convex in the weights α, given any fixed θ. Further, many existing supervised learning approaches, such as SVM and DCF, rely on convex optimization problems (1). It can be directly verified that <ref type="formula">(3)</ref> is biconvex if the weighted loss <ref type="formula" target="#formula_1">(2)</ref> is convex. That is, the optimization problem obtained by fixing either θ or α in <ref type="formula">(3)</ref> is convex. For biconvex problems, a standard approach is to use Alternate Convex Search (ACS) <ref type="bibr" target="#b9">[10]</ref>. In each frame, we perform N ACS iterations to minimize our formulation (3). In each iteration, we solve the two convex subproblems obtained by fixing either α or θ in (3). We call these steps "Update θ" and "Update α". Update θ: We first describe the subproblem of finding the optimal θ given a fixed α = α (i−1) . Here, α (i−1) denotes the estimate of the weights α in iteration i − 1 of the optimization. In the first iteration i = 1, the weights α (0) are initialized using estimates from the previous frame. The subproblem obtained by fixing the weights α = α (i−1) in (3) corresponds to optimizing the weighted loss (2) with respect to θ. This generates an updated model θ (i) . The optimization (2) is performed by the standard training method of the applied learning approach. Update α: The second step of iteration i corresponds to optimizing (3) with respect to α, while keeping θ = θ (i) <ref type="bibr" target="#b0">1</ref> The proof is provided in the supplementary material. Algorithm 1 Our approach: tracking in frame t Input: Current model parameters θ and weights {α k } t−1 k=1 . Current training set {(x jk , y jk )} n k ,t−1 j=1,k=1 . 1: Estimate the target location in frame t using θ. 2: Extract training samples {(x jt , y jt )} nt j=1 in frame t. 3: Update the prior weights {ρ k } t k=1 using, e.g., (5). 4: Initialize weights α</p><formula xml:id="formula_3">(0) k = α k for k &lt; t and α (0) t = ρ t . 5: for i = 1, . . . , N do 6:</formula><p>Update θ: Find θ (i) by optimizing (2) using α (i−1) .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>7:</head><p>Update α: Find α (i) by solving (4) given θ (i) . 8: end for fixed. By defining the total loss in frame k by L</p><formula xml:id="formula_4">(i) k = n k j=1 L(θ (i) ; x jk , y jk ), the resulting subproblem is, minimize J (i) 2 (α) = t k=1 L (i) k α k + 1 µ t k=1 α 2 k ρ k (4a) subject to α k ≥ 0 , k = 1, . . . , t (4b) t k=1 α k = 1.<label>(4c)</label></formula><p>The above optimization problem can be efficiently solved with convex quadratic programming methods. We use the corresponding function in Matlab's Optimization Toolbox, which internally employs the interior point method.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Prior Weights Selection</head><p>As discussed in section 3.1, it is desirable to encode prior knowledge about the sample weights α k in the learning. In our approach, this prior information is incorporated using the prior weights ρ k , which serve as a regularizer for the sample weights α k . The impact of the prior weights ρ k are further controlled by the flexibility parameter µ. We propose a simple, yet effective strategy for setting the sample weights ρ k based on solely temporal information. In our strategy, recent samples are given larger prior weights to account for fast appearance changes. In general, additional information about the sampling process, such as the number of training samples n k in frame k, can be integrated into ρ k .</p><p>We use a learning rate parameter η ∈ [0, 1] to determine the prior weights for the K most recent frames, such that ρ k = (1 − η)ρ k+1 for k = t − K, . . . , t − 1. The prior weights for all frames older than t − K are set to constant, i.e. ρ k = ρ k+1 for k &lt; t − K. The above recursive definition implies the formula</p><formula xml:id="formula_5">ρ k = a , k = 1, . . . , t − K − 1 a(1 − η) t−K−k , k = t − K, . . . , t.<label>(5)</label></formula><p>Here, the constant a = t − K + (1−η) −K in <ref type="formula" target="#formula_5">(5)</ref> put a larger emphasis on recent frames to alleviate the problem of rapid appearance changes, caused by e.g. target deformations and out-of-plane rotations. Instead of letting the prior weights decrease towards zero for older samples, we assign all samples older than K frames equal prior importance. This allows a significant influence of old training samples in the learning. Algorithm 1 provides an overview of our method in a generic setting.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">The Tracking Framework</head><p>Here, we describe a tracking-by-detection framework using the unified learning formulation proposed in section 3.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Baseline Tracker</head><p>In recent years, the Discriminative Correlation Filter (DCF) based trackers have shown excellent performance on several benchmark datasets <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b17">18]</ref>. These trackers apply Fourier transforms to efficiently train a discriminative regressor on sample feature maps extracted from the video frames. We employ the recent SRDCF <ref type="bibr" target="#b4">[5]</ref> as our base supervised learning approach. Unlike other DCF methods, SRDCF employs a spatial regularization in the learning to alleviate the periodic effects induced by circular correlation.</p><p>The appearance model of the SRDCF tracker consists of a discriminatively trained convolution filter. In each new frame, a confidence map is first computed by applying the filter around the predicted target location. This confidence map is then maximized to estimate the target location. A single training example (x k , y k ) is added in each frame k.</p><p>The sample x k is a d-dimensional feature map, extracted around the target, that also includes the surrounding background information. The Gaussian label function y k contains the desired confidence map, when applying the sought convolution filter f θ on x k . In the SRDCF, the model pa-rameters θ thus consist of the filter coefficients in f θ . The standard SRDCF employs the weighted learning formulation (2), with a per-sample loss L given by,</p><formula xml:id="formula_6">L(θ; x k , y k ) = y k − d l=1 f l θ * x l k 2 .<label>(6)</label></formula><p>Here, * denotes circular convolution and the superscript x l k and f l θ denotes the lth channel of x k and f θ respectively. The loss (6) consists of the total squared error between the desired confidence map y k and the confidence scores obtained by applying the filter f θ to the sample x k .</p><p>The regularization R(θ) is determined by the spatial penalty function w, consisting of a positive penalization factor at each spatial location in the filter,</p><formula xml:id="formula_7">R(θ) = d l=1 w · f l θ 2 .<label>(7)</label></formula><p>Here, · denotes pointwise multiplication. The regularization ensures a limited spatial extent of the filter by penalizing coefficients outside the target region. The filter f θ is trained by transforming the loss (2) to a real-valued Fourier basis and solving the resulting normal equations. For more details about the SRDCF tracker, we refer to <ref type="bibr" target="#b4">[5]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Proposed Tracker</head><p>Here, we apply our unified learning formulation to the baseline tracker. To learn the appearance model, the baseline tracker minimizes the weighted loss (2), using exponentially decaying sample weights α k . Instead, we minimize the proposed unified formulation (3) to jointly estimate both the model θ and the sample weights α k , in each frame.</p><p>The proposed tracker follows the outline in algorithm 1. In a new frame t, we first estimate the target location as in the baseline tracking approach. The training set is then augmented with the new sample (x t , y t ). The prior weights ρ k are then updated as in <ref type="bibr" target="#b4">(5)</ref>. The importance weight of the new sample is initialized with its prior weight α</p><formula xml:id="formula_8">(0) t = ρ t . The weights α (0) 1 , . . . , α (0)</formula><p>t−1 of earlier samples are initialized with their estimates from the previous frame and then normalized such that k α (0) k = 1. To minimize the joint loss (3), we then perform an "Update θ" step followed by an "Update α" step in each iteration i of the optimization, as described in section 3.3. As mentioned in section 3.3, our joint learning formulation <ref type="formula">(3)</ref> is biconvex since the weighted loss (2) is convex. Update θ: The updated filter f (i) θ is computed using the training procedure in <ref type="bibr" target="#b4">[5]</ref>, given the weights α</p><formula xml:id="formula_9">(i−1) k .</formula><p>Instead of the incremental update, we use the general formula in <ref type="bibr" target="#b4">[5]</ref> to compute the normal equations. This enables arbitrary weights to be used. A fixed number of Gauss-Seidel iterations are then performed, with the current filter f is then used to redetermine sample weights α (i) . Since each frame only contains a single sample, the total loss in frame k is given by L</p><formula xml:id="formula_10">(i) k = L(θ (i) ; x k , y k )</formula><p>. This is efficiently computed using the Fast Fourier Transform (FFT), by applying Parseval's formula to <ref type="bibr" target="#b5">(6)</ref>. The new weights α (i) are then computed by solving the quadratic programming problem <ref type="bibr" target="#b3">(4)</ref>.</p><p>To achieve an upper bound on the memory consumption, we store a maximum number T of training samples. If the number of samples exceeds T , we simply remove the sample k ≤ K that has the smallest weight α k . <ref type="figure" target="#fig_1">Figure 2</ref> shows the estimated quality weights α k for an example sequence.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experiments</head><p>To evaluate our approach, we perform comprehensive experiments on three benchmark datasets: OTB-2015 <ref type="bibr" target="#b26">[27]</ref>, VOT-2015 <ref type="bibr" target="#b16">[17]</ref> and Temple-Color <ref type="bibr" target="#b19">[20]</ref>. <ref type="bibr" target="#b1">2</ref> </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Parameter Settings</head><p>The prior sample weights are set as described in section 3.4, using K = 50 and η = 0.035. In general, the flexibility parameter µ depends on the scale of the loss function L(θ; x, y) for different discriminative methods. This dependency can however be mitigated by appropriate normalization of L with, e.g., respect to the average number of samples n k per frame. We use µ = 5 in our experiments, which enables a large degree of adaptiveness in the weights (see <ref type="figure" target="#fig_0">figure 1 and 2)</ref>. The maximum number of stored training samples is set to T = 300. In the tracking scenario, the joint loss (3) is modified marginally in each frame by adding the new training samples for frame t. Therefore, we found <ref type="bibr" target="#b1">2</ref> Detailed results are presented in the supplementary material.  <ref type="table">Table 1</ref>. A comparison of our approach, using mean OP (%), with the baseline methods on the OTB-2015 dataset. The baseline tracker does not account for corrupted samples. We also compare our approach by incorporating the entropy and PSR strategies in the baseline tracker. The best result is displayed in red font. Our approach achieves a significant performance gain of 3.8% in mean OP, compared to the baseline tracker.</p><p>a single (N = 1) ACS iteration to be sufficient to refine the estimate of θ and α from the previous frame. This further ensures a minimal increase in computations compared to the original learning approach. Our joint learning is started at t = 10 frames into the sequence. This ensures a sufficient number training samples for our learning procedure.</p><p>For the baseline tracker <ref type="bibr" target="#b4">[5]</ref>, we use the Matlab implementation provided by the authors. For a fair comparison, we use the same parameter settings for both our tracker and the compared baseline SRDCF. For the OTB-2015, we use HOG features for both our and the baseline tracker, as in <ref type="bibr" target="#b4">[5]</ref>. For VOT-2015 and Temple-Color, we employ the same combination of HOG and Color Names for both trackers and use µ = 3 and T = 200 in our method. Furthermore, we fix the parameter settings for all videos in each dataset. In our approach, solving the quadratic programming problem (4) in the "Update α" step, is highly efficient. It takes around 5 milliseconds on a standard desktop computer. The computational cost of our tracker is completely dominated by the baseline training procedure used in the "Update θ" step. We obtain a slightly reduced frame rate (around 3 frames per second) compared to the baseline tracker.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Baseline Experiments</head><p>We first compare our approach with the baseline SRDCF tracker, which does not account for corrupted training samples. We also integrate two existing training sample management strategies into the baseline tracker, for additional comparisons. The first strategy <ref type="bibr" target="#b0">[1]</ref> is based on the Peak to Sidelobe ratio (PSR) of the tracking confidence scores. It is computed as the ratio gmax−mr σr , where g max is the maximum confidence, m r is the mean confidence and σ r is the standard deviation of the confidence scores outside the peak. The second strategy <ref type="bibr" target="#b28">[29]</ref> is based on an expert ensemble of previous snapshots of the tracking model. In each frame, the confidence scores are first computed for all experts. If the target location estimates differ, an entropy based score is used to rank the experts in the ensemble. The current tracking state is then set to the expert with the highest score. This corresponds to resetting the tracker model to the best previous state. New snapshots are stored periodically, while discarding the oldest one. For a fair comparison, we optimize the parameters for the PSR and entropy based strategies.  <ref type="table">Table 2</ref>. A comparison of our approach, using mean OP (%), with state-of-the-art trackers on the OTB-2015 and Temple-Color datasets. The best two results are shown in red and blue font respectively. On the OTB-2015 dataset, the best existing tracker provides a mean OP of 72.9%. On the Temple-Color dataset, both SRDCF and MEEM obtains a mean OP score of 62.2%. Our approach obtains state-of-the-art results, outperforming the best existing trackers by 3.8% and 3.6%, on the OTB-2015 and Temple-Color datasets, respectively.   We report the results using mean overlap precision (OP). The OP is computed as the percentage of frames where the intersection-over-union (IOU) overlap with the groundtruth exceeds a threshold of 0.5. <ref type="table">Table 1</ref> shows the mean OP results over all the 100 videos of OTB-2015 dataset. The baseline SRDCF tracker obtains a mean OP score of 72.9%. The PSR strategy improves the results with a mean OP score of 74.4%. Our approach significantly improves the performance by providing a gain of 3.8% in mean OP, compared to the baseline tracker. The substantial improvement over the baseline demonstrates the importance of decontaminating the training sample set. It is worth to mention that our approach is generic, and can be incorporated into other discriminative tracking frameworks.</p><p>We also validate the generality of our approach by applying the proposed joint learning formulation to an SVMbased discriminative model. SVMs have been successfully applied for tracking-by-detection in recent years <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b28">29]</ref>. We use a binary linear SVM, where L(θ; x, y) is the standard hinge-loss. As in the SRDCF case, we use the outline described in algorithm 1 and set the prior weights ρ k as in <ref type="bibr" target="#b4">(5)</ref>. In each frame k, we collect 1 positive and about 20 negative samples (x jk , y jk ) from the estimated target neighborhood, using the color-based feature representation <ref type="bibr" target="#b28">[29]</ref>. For the baseline SVM tracker, we fix the sample weights as α k = ρ k . For our SVM tracker, we minimize the loss (3) as described in section 3.3. The same parameter settings is used for both the baseline and our version of the SVMbased tracker. On OTB-2015, the baseline SVM tracker provides a mean OP of 58.2%. Our SVM tracker achieves a significant gain of 3.2%, with a mean OP of 61.4%.</p><formula xml:id="formula_11">#103 #151 #217 #293 #053 #093 #157 #271</formula><p>Ours SRDCF LCT HCF   </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">OTB-2015 Dataset</head><p>We perform a comprehensive comparison with 17 recent state-of-the-art trackers: EDFT <ref type="bibr" target="#b6">[7]</ref>, LSHT <ref type="bibr" target="#b11">[12]</ref>, DFT <ref type="bibr" target="#b23">[24]</ref>, ASLA <ref type="bibr" target="#b14">[15]</ref>, TLD <ref type="bibr" target="#b15">[16]</ref>, Struck <ref type="bibr" target="#b10">[11]</ref>, CFLB <ref type="bibr" target="#b7">[8]</ref>, ACT <ref type="bibr" target="#b5">[6]</ref>, TGPR <ref type="bibr" target="#b8">[9]</ref>, KCF <ref type="bibr" target="#b12">[13]</ref>, DSST <ref type="bibr" target="#b1">[2]</ref>, SAMF <ref type="bibr" target="#b18">[19]</ref>, DAT <ref type="bibr" target="#b22">[23]</ref>, MEEM <ref type="bibr" target="#b28">[29]</ref>, LCT <ref type="bibr" target="#b21">[22]</ref>, HCF <ref type="bibr" target="#b20">[21]</ref> and SRDCF <ref type="bibr" target="#b4">[5]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.1">State-of-the-art Comparison</head><p>A comparison with state-of-the-art trackers on the OTB-2015 is shown in <ref type="table">Table 2</ref> (first row). We report the mean OP over all the 100 videos. The MEEM tracker, with an entropy minimization based sample management, obtains a mean OP of 63.4%. The hierarchical convolutional features (HCF) tracker provides a mean OP of 65.5%. Our approach significantly outperforms the best compared tracker, by achieving a mean OP of 76.7%. <ref type="figure" target="#fig_4">Figure 3</ref> contains the success plot, showing the mean OP over the range of overlap thresholds <ref type="bibr" target="#b26">[27]</ref>, on the OTB-2015 dataset. For each tracker, area-under-the-curve (AUC) score is displayed in the legend. Among the compared tracking   methods, SRDCF, LCT and HCF provide the best results with AUC scores of 60.5%, 56.7% and 56.6% respectively. Our approach achieves the best results with an AUC score of 63.4%. <ref type="figure" target="#fig_5">Figure 4</ref> shows a qualitative comparison with state-of-the-art methods on the Box and Girl videos. Our approach down-weights corrupted training samples, leading to accurate target re-detection (frame 271 in Girl).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.2">Robustness to Initialization</head><p>To evaluate the robustness of our tracker, we follow the protocol proposed by <ref type="bibr" target="#b26">[27]</ref>. The robustness is evaluated using two different initialization strategies: spatial robustness (SRE) and temporal robustness (TRE). The first criteria, SRE, is based on initializing the tracker at different perturbations of the initial ground-truth location. In case of TRE, the tracker is initialized at 20 different frames with the corresponding ground-truth. We present the success plots for SRE and TRE, on the OTB-2015, in <ref type="figure" target="#fig_6">Figure 5</ref>. We compare with the top 5 trackers. Our approach achieves robustness in both cases, leading to a consistent performance gain.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.3">Attribute Based Analysis</head><p>In the OTB-2015, all videos are annotated with 11 different attributes. Our tracker outperforms previous approaches on all <ref type="bibr" target="#b10">11</ref> attributes. <ref type="bibr" target="#b1">2</ref>  <ref type="figure" target="#fig_8">Figure 6</ref> shows success plots for four attributes where corrupted samples are commonly included in the training set. In scenarios with challenging scale variations and out-of-plane rotations, inaccurate target estimations often lead to the inclusion of misaligned training samples. Our joint learning approach is capable of reducing or removing the impact of such samples, thereby lowering the risk of drift and tracking failure. In videos with significant background clutter or occlusions, positive training samples are often corrupted by background information. This a common cause for tracking failure in discriminative methods. By re-determining the sample weights in every frame using our joint formulation <ref type="formula">(3)</ref>, the effect of corrupted training samples is mitigated by the learning process itself. The effectiveness of our approach is demonstrated by the superior results achieved in the aforementioned scenarios.  <ref type="table">Table 3</ref>. Comparison with state-of-the-art, based on expected average overlap (EAO), on the VOT-2015 dataset. Our approach provides improved performance compared to the best existing tracker.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.4.">VOT-2015 Dataset</head><p>In VOT-2015 <ref type="bibr" target="#b16">[17]</ref>, consisting of 60 challenging videos, trackers are evaluated in terms of expected average overlap. This measure is based on empirically estimating the average overlap (as a function of sequence length) and the typical-sequence-length distribution (cutting-off both lopes at a threshold such that the mass is 0.5). The measure itself is then obtained as the inner product of the two functions. <ref type="table">Table 3</ref> shows the average expected overlap (AEO) on VOT-2015 for methods with publicly available implementations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.5.">Temple-Color Dataset</head><p>Finally, we perform experiments on the Temple-Color dataset with 128 videos. A comparison with state-of-the-art trackers is shown in <ref type="table">Table 2</ref> (second row). Among the compared methods, both MEEM and SRDCF obtains a mean OP of 62.2%. Our approach improves the state-of-the-art on this dataset with a mean OP of 65.8%. <ref type="figure" target="#fig_4">Figure 3</ref> shows the success plot over all the 128 videos in the Temple-Color dataset. MEEM and SRDCF provide AUC scores of 50.6% and 51.6% respectively. Our tracker outperforms state-ofthe-art approaches an AUC score of 54.1%.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusions</head><p>We propose a unified learning formulation to counter the problem of corrupted training samples in the trackingby-detection paradigm. Our approach efficiently downweights the impact of corrupted training samples, while up-weighting accurate samples. The proposed approach is generic and can be integrated into other discriminative tracking frameworks. Experiments demonstrate that our approach achieves state-of-the-art tracking performance.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>An illustration of our adaptive decontamination of the training set. We show the corresponding image patches and tracking predictions (red box) for selected training samples. The quality weights (blue), computed by our learning approach, determine the impact of the corresponding training samples (numbered in chronological order). The prior sample weights are plotted in red. Our approach down-weights samples that are misaligned (no. 119), partially occluded (no. 129) or fully occluded (no. 162-182).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .</head><label>2</label><figDesc>the condition k ρ k = 1. The prior weights ρ k The training sample impact weights computed by our joint learning formulation on the Skating sequence. The computed weights α k (blue curve) and corresponding prior weights ρ k (red curve) are plotted for two different time instances during the tracking process: in frame 100 (left) and frame 250 (right). Image patches and corresponding target estimations (red box) are shown for example frames. The parameters are set as described in section 5.1. A few training examples (e.g. no. 82 and 93) that are corrupted by an occluding object (the male skater) are initially assigned large weights (left). By efficiently redetermining all impact weights α k in each frame, previous mistakes are corrected. In this example, the corrupted samples (no. 82 and 93) are down-weighted at a later stage (right). On the other hand, accurate training samples (no. 1 and 58) are consistently assigned large impact weights.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 3 .</head><label>3</label><figDesc>Success plots for the OTB-2015 (a) and Temple-Color (b) datasets. For clarity, we only show the top 10 trackers in the legend. On the OTB-2015 and Temple-Color, our approach achieves state-of-the-art results with a gain of 2.9% and 2.5% in AUC respectively, compared to the best previous method.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 4 .</head><label>4</label><figDesc>A qualitative comparison of our approach with state-ofthe-art methods on the Box (top row) and Girl (bottom row) videos. Our approach accurately re-detects the target in the Girl video due to a decontaminated training set (last frame).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 5 .</head><label>5</label><figDesc>Robustness to initialization comparison on the OTB-2015 dataset. Success plots are shown for both spatial (SRE) and temporal (TRE) robustness. Our tracker provides consistent improvements in both cases, compared previous approaches.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_8"><head>Figure 6 .</head><label>6</label><figDesc>Attribute-based analysis of our approach on the OTB-2015 dataset. Success plots are shown for four attributes where corrupted samples are a common problem. For clarity, we only show the top 10 trackers in the legends. The title of each plot indicates the number of videos labelled with the respective attribute. Our approach provides consistent improvements compared to state-of-the-art methods.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Baseline [5] Baseline-Entropy Baseline-PSR Ours</figDesc><table>Mean OP 
+72.9 
+72.2 
+74.4 
+76.7 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head></head><label></label><figDesc>Success plot of out-of-plane rotation (59)</figDesc><table>Success plot of scale variation (61) 
+
+Ours [61.8] 
+SRDCF [57.0] 
+LCT [48.9] 
+HCF [48.4] 
+DSST [48.4] 
+SAMF [48.2] 
+MEEM [47.9] 
+ASLA [43.4] 
+Struck [39.5] 
+KCF [39.4] 
+
+0 
+0.2 
+0.4 
+0.6 
+0.8 
+1 
+
+Overlap threshold 
+
+0 
+
+10 
+
+20 
+
+30 
+
+40 
+
+50 
+
+60 
+
+70 
+
+80 
+
+90 
+
+Overlap Precision [%] 
+
+Ours [60.6] 
+SRDCF [55.9] 
+LCT [54.7] 
+HCF [54.1] 
+MEEM [54.0] 
+SAMF [53.6] 
+DSST [48.8] 
+KCF [45.7] 
+ASLA [45.0] 
+TGPR [44.5] 
+
+0 
+0.2 
+0.4 
+0.6 
+0.8 
+1 
+
+Overlap threshold 
+
+0 
+
+10 
+
+20 
+
+30 
+
+40 
+
+50 
+
+60 
+
+70 
+
+80 
+
+90 
+
+Overlap Precision [%] 
+
+Success plot of background clutter (30) 
+
+Ours [64.4] 
+HCF [58.6] 
+SRDCF [58.5] 
+LCT [55.0] 
+MEEM [52.8] 
+DSST [52.3] 
+SAMF [50.9] 
+ASLA [50.7] 
+KCF [49.7] 
+TGPR [46.6] 
+
+0 
+0.2 
+0.4 
+0.6 
+0.8 
+1 
+
+Overlap threshold 
+
+0 
+
+10 
+
+20 
+
+30 
+
+40 
+
+50 
+
+60 
+
+70 
+
+80 
+
+90 
+
+Overlap Precision [%] 
+
+Success plot of occlusion (47) 
+
+Ours [61.3] 
+SRDCF [57.7] 
+SAMF [56.0] 
+HCF [53.6] 
+MEEM [52.1] 
+LCT [52.1] 
+DSST [47.4] 
+KCF [45.1] 
+ASLA [42.3] 
+TGPR [41.2] 
+
+</table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgments: This work has been supported by SSF (CUAS), VR (EMC 2 and ELLIIT), the Wallenberg Autonomous Systems Program, the NSC and Nvidia.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Visual object tracking using adaptive correlation filters</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">S</forename><surname>Bolme</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">R</forename><surname>Beveridge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">A</forename><surname>Draper</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">M</forename><surname>Lui</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Accurate scale estimation for robust visual tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Danelljan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Häger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">Shahbaz</forename><surname>Khan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Felsberg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Coloring channel representations for visual tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Danelljan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Häger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">Shahbaz</forename><surname>Khan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Felsberg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SCIA</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Convolutional features for correlation filter based visual tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Danelljan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Häger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">Shahbaz</forename><surname>Khan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Felsberg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV Workshop</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Learning spatially regularized correlation filters for visual tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Danelljan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Häger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">Shahbaz</forename><surname>Khan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Felsberg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Adaptive color attributes for real-time visual tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Danelljan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Khan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Felsberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Van De Weijer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Enhanced distribution field tracking using channel representations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Felsberg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV Workshop</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Correlation filters with limited boundaries</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">K</forename><surname>Galoogahi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Sim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lucey</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Transfer learning based visual tracking with gaussian process regression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Ling</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xing</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Biconvex sets and optimization with biconvex functions: a survey and extensions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gorski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Pfeuffer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Klamroth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Math. Meth. of OR</title>
+		<imprint>
+			<biblScope unit="volume">66</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="373" to="407" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Struck: Structured output tracking with kernels</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hare</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Saffari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Visual tracking via locality sensitive histograms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Lau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-H</forename><surname>Yang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Highspeed tracking with kernelized correlation filters</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">F</forename><surname>Henriques</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Caseiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Martins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Batista</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>PAMI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Multi-store tracker (muster): A cognitive psychology inspired approach to object tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Hong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Mei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Prokhorov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Visual tracking via adaptive structural local sparse appearance model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-H</forename><surname>Yang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">P-n learning: Bootstrapping binary classifiers by structural constraints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Kalal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Mikolajczyk</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">The visual object tracking vot2015 challenge results</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kristan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Leonardis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Felsberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Čehovin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Fernández</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Vojír</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Nebehay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Pflugfelder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Häger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV Workshop</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">The visual object tracking VOT 2014 challenge results</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kristan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Pflugfelder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Leonardis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV Workshop</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">A scale adaptive kernel correlation filter tracker with feature integration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV Workshop</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Encoding color information for visual tracking: Algorithms and benchmark</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Blasch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Ling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TIP</title>
+		<imprint>
+			<biblScope unit="volume">24</biblScope>
+			<biblScope unit="issue">12</biblScope>
+			<biblScope unit="page" from="5630" to="5644" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Hierarchical convolutional features for visual tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-B</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-H</forename><surname>Yang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Long-term correlation tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">In defense of color-based model-free tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Possegger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mauthner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Learned-Miller. Distribution fields for tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Sevilla-Lara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">G</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Self-paced learning for long-term tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">S</forename><surname>Supančič</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Co-tracking using semi-supervised support vector machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Brennan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Tao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yang</surname></persName>
+		</author>
+		<title level="m">Object tracking benchmark. TPAMI</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">37</biblScope>
+			<biblScope unit="page" from="1834" to="1848" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Online object tracking: A benchmark</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-H</forename><surname>Yang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">MEEM: robust tracking via multiple experts using entropy minimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sclaroff</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Robust object tracking via sparsity-based collaborative model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zhong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-H</forename><surname>Yang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

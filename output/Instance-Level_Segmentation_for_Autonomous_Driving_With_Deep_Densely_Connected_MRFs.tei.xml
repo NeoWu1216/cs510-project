@@ -1,0 +1,999 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Instance-Level Segmentation for Autonomous Driving with Deep Densely Connected MRFs</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ziyu</forename><surname>Zhang</surname></persName>
+							<email>zzhang@cs.toronto.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Computer Science</orgName>
+								<orgName type="institution">University of Toronto</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sanja</forename><surname>Fidler</surname></persName>
+							<email>fidler@cs.toronto.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Computer Science</orgName>
+								<orgName type="institution">University of Toronto</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Raquel</forename><surname>Urtasun</surname></persName>
+							<email>urtasun@cs.toronto.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Computer Science</orgName>
+								<orgName type="institution">University of Toronto</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Instance-Level Segmentation for Autonomous Driving with Deep Densely Connected MRFs</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:41+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Our aim is to provide a pixel-wise instance-level labeling of a monocular image in the context of autonomous driving. We build on recent work [32] that trained a convolutional neural net to predict instance labeling in local image patches, extracted exhaustively in a stride from an image. A simple Markov random field model using several heuristics was then proposed in <ref type="bibr" target="#b31">[32]</ref> to derive a globally consistent instance labeling of the image. In this paper, we formulate the global labeling problem with a novel densely connected Markov random field and show how to encode various intuitive potentials in a way that is amenable to efficient mean field inference <ref type="bibr" target="#b14">[15]</ref>. Our potentials encode the compatibility between the global labeling and the patch-level predictions, contrast-sensitive smoothness as well as the fact that separate regions form different instances. Our experiments on the challenging KITTI benchmark <ref type="bibr" target="#b7">[8]</ref> demonstrate that our method achieves a significant performance boost over the baseline <ref type="bibr" target="#b31">[32]</ref>.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Object detection is one of the fundamental open problems in computer vision. The main objective is to place tight bounding boxes around each object of interest. In the past two years, detection performance has almost doubled thanks to the availability of large datasets as they enable training very deep representations <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b26">27]</ref>. While detection might have been a good proxy when performance was low, recent work has been trying to go beyond simple boxes by providing a detailed segmentation mask for each object instance <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b29">30,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b28">29]</ref>.</p><p>A mask is in many ways richer than a box: it allows an informed reasoning about occlusion and depth layering. For robotics applications where depth is available, it further enables a more precise 3D localization and segmentation <ref type="bibr" target="#b10">[11]</ref> which is important for, e.g., obstacle avoidance, route planning and object grasping. An instance mask is also more informative than pixel-wise class labeling as it allows counting, important for applications such as retrieval <ref type="bibr" target="#b20">[21]</ref>. from the image (row 1) and exploits a CNN to provide a soft instance labeling of each patch (row 2). Our MRF connects all pixel pairs inside the patches (yellow curves in row 2), as well as all pixel pairs from far away connected components obtained from patch-level CNN predictions (yellow curves in row 1), to provide a globally consistent instance labeling of the image (row 3).</p><p>Instance segmentation has been addressed in a variety of ways. In interactive segmentation, approaches like Grabcut <ref type="bibr" target="#b23">[24,</ref><ref type="bibr" target="#b3">4]</ref> require a user-supplied box, or a scribble on the foreground and background, in order to segment the objects. This is typically done with graph-cuts by combining appearance cues and smoothness. The most common approach to instance segmentation has been to utilize object detections and top-down shape priors to label pixels inside each detected box <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b8">9]</ref>. Methods that jointly reason about instance labeling and, possibly, depth ordering given object detections and class-level semantic segmentation have shown improved performance <ref type="bibr" target="#b27">[28]</ref>. Recently, approaches that train CNNs to predict instance labeling inside densely sampled image patches have shown very promising performance <ref type="bibr" target="#b31">[32]</ref>. However, deriving a globally consistent instance labeling of the image from local predictions is a challenging open problem.</p><p>In this paper, our goal is to estimate an accurate pixellevel labeling of object instances from a single monocular image in the context of autonomous driving. We propose a method that combines the soft predictions of a neural net run on many overlapping patches into a consistent global labeling of the entire image. We formulate this problem as a densely connected Markov random field (MRF) with several potentials encoding consistency with local patches, contrast-sensitive smoothness as well as the fact that separate regions form different instances. An overview of our MRF is given in <ref type="figure" target="#fig_0">Fig. 1</ref>. Our main technical contribution is a formulation that encodes all potentials in a way that is amenable to efficient mean field inference <ref type="bibr" target="#b14">[15]</ref>, and we go beyond <ref type="bibr" target="#b14">[15]</ref> by including Potts potentials as well. Our experimental evaluation shows significant improvements over <ref type="bibr" target="#b31">[32]</ref> on the challenging KITTI benchmark <ref type="bibr" target="#b7">[8]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>We focus our review on techniques operating on a single monocular image, and divide them into different types.</p><p>Instance-Level Segmentation by Detection. The most common approach to object instance segmentation is to first localize objects with a set of bounding boxes, and then exploit top-down information such as object's shape and appearance in order to accurately segment the object within each box <ref type="bibr" target="#b16">[17]</ref>. <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b30">31]</ref> proposed an MRF model to identify which detections are true positive, and output pixelwise class labels, thus performing instance segmentation. <ref type="bibr" target="#b21">[22]</ref> votes for object centers and uses a MRF to infer the assignment of pixels to object centers. R-CNN <ref type="bibr" target="#b8">[9]</ref> was used in <ref type="bibr" target="#b11">[12]</ref> to first generate object proposals, and then predictions from two CNNs (box and region-based) were fused to segment the object inside each box. This idea was extended to RGB-D in <ref type="bibr" target="#b10">[11]</ref>.</p><p>In <ref type="bibr" target="#b29">[30]</ref>, the authors propose a generative model that takes as input candidate detections and jointly assigns a pixel to an object instance as well as a depth layer. Inference is performed with coordinate ascent iterating between updating the layer assignment and the parameters of the appearance models. In contrast, we leverage the efficient inference algorithm for Gaussian MRFs <ref type="bibr" target="#b14">[15]</ref> to work directly on the pixel level (rather than layers), thus allowing more freedom in the final label assignment. In <ref type="bibr" target="#b27">[28]</ref>, semantic segmentation and object detection are run as a first step. The method then solves for instance labeling and depth ordering by minimizing an integer quadratic program. In our approach we use a CNN trained to directly predict instance labeling in a stride of local patches, and then solve for a consistent instance labeling using our densely connected MRF, thus not requiring to explicitly perform object detection.</p><p>3D CAD Models. Another line of work matches CAD models to images <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b9">10</ref>]. An image-aligned CAD model effectively provides an instance labeling of the image. CAD matching is however typically slow, and not very robust, as there is a large difference between the appearance of the synthetic models and objects in real images. Instead of matching CAD models, <ref type="bibr" target="#b13">[14]</ref> retrieves object segments from a dataset of labeled objects. Their probabilistic model then aims to find segments that optimally transform into the given image by respecting typical 3D relations. The output is an instance labeling of the image (a "scene collage"). Interactive Segmentation. Instance-level segmentation has also been done without prior knowledge about how the object looks like. In this line of work, the techniques rely on a user-supplied box, or a scribble on the foreground and background, and then derive the pixel-wise labeling of the object instance. For example, GrabCut <ref type="bibr" target="#b23">[24]</ref> utilizes annotations in the form of 2D bounding boxes, and computes the foreground/background models using EM. <ref type="bibr" target="#b2">[3]</ref> relies on scribbles as seeds to model appearance of foreground/background, and uses graph-cuts by combining appearance cues and a smoothness term <ref type="bibr" target="#b3">[4]</ref>.</p><p>Instances without Object Detection. Recent work has tried to explicitly reason about instance segmentation (no class detectors need to be run in advance). <ref type="bibr" target="#b25">[26]</ref> makes an optimal cut in a hierarchical segmentation tree to obtain object instance regions. <ref type="bibr" target="#b18">[19]</ref> trained a multi-output CNN that jointly predicts pixel-level class labeling of the image as well as bounding box locations and object instance numbers. Off-the-shelf clustering is used to derive the final object instance labeling of the image. In our work, we exhaustively sample bounding boxes and softly score each pixel belonging to a particular object instance. Our main efforts are then devoted to "clustering" (merging the predictions) which in our work is done via a densely connected MRF. Parallel to our work, <ref type="bibr" target="#b22">[23]</ref> proposes a recurrent neural net to label object instances sequential by keeping a memory of which pixels have been labeled so far.</p><p>We build on <ref type="bibr" target="#b31">[32]</ref> which trains a CNN on local patches to obtain a depth-ordered pixel-wise instance labeling of each patch. <ref type="bibr" target="#b31">[32]</ref> then uses a MRF along with a connected component algorithm to merge predictions in the possibly overlapping patches into a global instance labeling of the image. In our paper, we propose a densely connected MRF that exploits fast inference <ref type="bibr" target="#b14">[15]</ref>, and provides significantly better segmentations due to the dense connectivity in the model.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Object Instance Labeling</head><p>The goal of this paper is to perform instance-level segmentation given a single monocular image. We follow <ref type="bibr" target="#b31">[32]</ref> and learn deep representations to perform this task. Our contribution is then a novel densely connected Markov ran-dom field that is able to produce a single coherent explanation of the full image and amenable to the efficient mean field inference algorithm <ref type="bibr" target="#b14">[15]</ref>. As shown in our experimental evaluation the estimates provided by our approach are significantly better than those of <ref type="bibr" target="#b31">[32]</ref> in most metrics.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Deep Learning for Instance-level Segmentation</head><p>We follow <ref type="bibr" target="#b31">[32]</ref> to both generate surrogate ground truth and train the CNN. We provide the details for completeness. We generate training examples by extracting overlapping patches at multiple resolutions. Since KITTI does not have instance-level segmentations, we use <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b6">7]</ref> to obtain the segmentations for our training set. We label the instances according to their depth within the patch. Thus instances farther away from the camera will get higher IDs. Using depth ordering is important to produce a single labeling, breaking the symmetry of permutations of instancelevel segmentation. E.g., two instances can be labeled as either <ref type="bibr" target="#b0">(1,</ref><ref type="bibr" target="#b1">2)</ref> or (2,1). We then train a CNN to output a pixellevel instance labeling inside each patch. We use the architecture from <ref type="bibr" target="#b24">[25]</ref> pre-trained on ImageNet and fine-tune it for instance-level segmentation using our surrogate ground truth. The CNN gives us (probabilistic) pixel-level predictions of instances at the patch level. We propose a model to merge all the local predictions and produce a globally consistent image labeling. This is the contribution of our paper.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Densely Connected Pixel-wise MRF</head><p>Given an image x, we index the image patches with z. Let P z be the set of pixels in patch z. Let p z,i be the output of the softmax for the i-th pixel when we apply the CNN to patch z. Note that the CNN predicts up to 5 instances as well as background. Thus p z,i is a 6-D vector. The goal is to merge all the patch-level information and come up with a single explanation of the image in terms of all instances. We restrict the maximum number of instances to be 9 per image, which is sufficient for KITTI. Thus our global label space L g is {0, 1, · · · , 9} with 0 encoding background. Let y be the labeling of each pixel in the image with y i ∈ L g . Unlike <ref type="bibr" target="#b31">[32]</ref>, we are not interested in ordering the instances by depth. Thus any labeling that separates instances is valid.</p><p>We propose a novel densely connected pixel-wise MRF to solve for the problem of labeling the full image given the local patch-based predictions. The corresponding Gibbs energy E(y) of our MRF consists of three main terms: a pairwise smoothness term, a pairwise local CNN prediction term and a pairwise inter-connected component term, each encoding different intuitions about the problem:</p><formula xml:id="formula_0">E(y) = E smo (y) + E cnn (y) + E icc (y).<label>(1)</label></formula><p>Note that all terms are defined over densely connected pixel pairs. We cannot use the CNN output as a unary potential, as the label space of the local patches and the global image are different, i.e., only 6 labels (including background) possible locally, and instance 2 in a local patch might be totally different from instance 2 in another patch far away. We now describe each term in more details.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.1">Smoothness: E smo (y)</head><p>Following <ref type="bibr" target="#b14">[15]</ref>, we incorporate a contrast-sensitive smoothness term into our MRF to remove noisy tiny regions. The idea is to describe each pixel with a feature vector, and define a potential that encourages pixels with similar features to be more likely assigned the same label. The typical feature for each pixel has been color and position on image.</p><p>In our problem we use the combination of position and the output of the CNN to form our feature space. Our CNN is trained to differentiate between object instances, so the probability vectors that the CNN outputs are a very strong cue of how likely two pixels belong to the same object. Further, we use the position feature so that the smoothness has a lower influence between far apart regions in order not to over-smooth the result. Notice that we do not use color as a feature. This is because different object instances can take similar colors, and color may be somewhat deceiving due to shadows, saturation and specularities.</p><p>Formally, let d i be the 2-D position vector for pixel i in the image. We define the contrast-sensitive smoothness term as a sum of patch-specific contrast-sensitive smoothness terms, each defined over all pixel pairs in the patch:</p><formula xml:id="formula_1">E smo (y) = z i,j:i,j∈Pz,i&lt;j ϕ (z,i,j) smo (y i , y j ),<label>(2)</label></formula><p>where the potential is defined as</p><formula xml:id="formula_2">ϕ (z,i,j) smo (y i , y j ) = w smo µ smo (y i , y j )k smo f (z) i , f (z) j .<label>(3)</label></formula><p>Here w smo is the weight for the potential (which we learn) controlling the degree of smoothness, and k smo denotes a Gaussian kernel defined as</p><formula xml:id="formula_3">k smo f (z) i , f (z) j = exp − p z,i − p z,j 2 2 2θ 2 1 − d i − d j 2 2 2θ 2 2 , where f (z) i</formula><p>contains both the position d i and the output of the CNN p z,i . Note that θ 1 and θ 2 scale the features to reflect our notion of "closeness" in the feature space. Finally, the compatibility function µ smo (y i , y j ) in the potential takes the form of the Potts model:</p><formula xml:id="formula_4">µ smo (y i , y j ) = 1, if y i = y j 0, otherwise .</formula><p>This penalizes two pixels with similar positions and CNN predictions to have different labels. h−2(·) appends 2 zeros to vector pz,j. This is equivalent to shifting pz,i by 2 units towards right and zero-pad both vectors to make them aligned. The shift matches the modes of pz,i and pz,j. We input this shifted vector pair into our Gaussian kernel.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.2">Local CNN Prediction: E cnn (y)</head><p>Any given patch contains only a subset of the instances present in the full image. When we produce our image-level labeling, we would like to maintain the separation into different instances estimated at the local level (via the CNN), while producing a coherent labeling across all patches. For example, if the CNN predicts that in patch z pixel i belongs to instance 1 while pixel j belongs to instance 2, then any global configuration with y i = y j should be encouraged. However, it turns out to be important to have some preference over the ordering just to break the symmetry in our model to kick off the inference algorithm. We thus encourage ordering in the global labeling (in this example y i &lt; y j ).</p><p>To encode this patch-image compatibility in our energy, we define the local CNN prediction term as a sum of patchspecific compatibility terms, each defined over all pixel pairs in the patch:</p><formula xml:id="formula_5">E cnn (y) = z i,j:i,j∈Pz,i&lt;j ϕ (z,i,j) cnn (y i , y j ).<label>(4)</label></formula><p>The potential ϕ (z,i,j) cnn (y i , y j ) should ideally encode the fact that we want global instance labeling to agree with local predictions. That is, if two pixels are likely to be of the same (different) instance at the local level, they should also be the same (different) at the global level. This could be simply encoded with a compatibility potential that y i and y j are encouraged to have the same label if the output of the CNN p z,i and p z,j are similar, and their relative ordering (y i &gt; y j or vice versa) is respected if the CNN predicts them to be of different instances. This naive approach, however, will break the efficiency of inference, as we will no longer be able to use Gaussian filtering. Gaussian filtering is however crucial, since our local CNN prediction term is fully connected at patch level.</p><p>Instead, one of the main contributions of our paper is to approximate such compatibility potentials as a series of Gaussian potentials. Each potential is composed of a Gaussian kernel applied to a shifted version of the local softmax probabilities:</p><formula xml:id="formula_6">ϕ (z,i,j) cnn (y i , y j ) = T t=−T ϕ (z,t,i,j) cnn (y i , y j ),<label>(5)</label></formula><p>where T is the maximum shift allowed (fixed to be 2 in our experiments). We define the shifted pairwise potential ϕ (z,t,i,j) cnn (y i , y j ) as a product of its weight, a compatibility function and a Gaussian kernel defined over pairs of shifted local CNN predictions:</p><formula xml:id="formula_7">ϕ (z,t,i,j) cnn (y i , y j ) = w (s(z)) cnn µ (t) cnn (y i , y j )k (t) cnn (h t (p z,i ), h −t (p z,j )),<label>(6)</label></formula><p>where w (s(z)) cnn is the weight which depends on the size s(z) of patch z, and k (t) cnn is a Gaussian kernel characterized by its precision matrix Λ (t) cnn . When t &gt; 0, a shift towards right is applied to p z,i to create h t (p z,i ) while a shift towards left is applied to p z,j to create h −t (p z,j ). Note that shifting by t requires prepending t zeros, while shifting by −t requires appending t zeros. We refer the reader to <ref type="figure" target="#fig_1">Fig. 2</ref> for a visualization of this idea. If the modes of p z,i and p z,j match for any positive t, it means that the label of pixel i is predicted to be smaller than pixel j in patch z by the CNN. This is the case shown in <ref type="figure" target="#fig_1">Fig. 2</ref>. Therefore, globally we prefer any configuration with y i &lt; y j . The reverse is also true that if we achieve a good match with a negative t, then we prefer any configuration with y i &gt; y j . If the best match is achieved without shift, it means that we prefer y i = y j . This can be encoded via the following compatibility function:</p><formula xml:id="formula_8">µ (t) cnn (y i , y j ) =          −1, if y i &lt; y j , t &gt; 0 −1, if y i &gt; y j , t &lt; 0 −1, if y i = y j , t = 0 0, otherwise .<label>(7)</label></formula><p>Note that a negative value in µ (t) cnn (y i , y j ) implies that we encourage the configuration.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.3">Inter-Connected Component: E icc (y)</head><p>So far our MRF encourages smoothness as well as that global instance labeling to agree with local predictions. However, nothing prevents instances that are far apart and thus do not appear together in any patch from having the same label. Towards this goal, for each pixel i, we compute the probability that it belongs to foreground, by summing the output of local CNN predictions and re-normalizing. By thresholding this probability, we obtain a binary mask of activation. We index each connected component of the foreground of the binary mask with m, and the pixels it contains with C m . Each component might contain more than one car. However, it is reasonable to assume that each instance will never appear in two different components. We encode this in the inter-connected component term as a sum of terms defined over component pairs, and each of the terms fully connects cross-component pixel pairs:</p><p>E icc (y) = m,n:m&lt;n i,j:i∈Cm,j∈Cn</p><formula xml:id="formula_9">w icc µ icc (y i , y j ),<label>(8)</label></formula><p>with w icc the weight and µ icc (y i , y j ) a Potts potential</p><formula xml:id="formula_10">µ icc (y i , y j ) = 1, if y i = y j 0, otherwise .<label>(9)</label></formula><p>While this potential is not Gaussian, and we have dense connections, in the next section we show that the updates can still be computed in linear time.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Efficient Inference</head><p>Inference in our model consists of estimating the minimum energy configuration</p><formula xml:id="formula_11">y * = argmin y E smo (y) + E cnn (y) + E icc (y).</formula><p>Unfortunately this is NP-hard. Instead, we perform efficient approximated inference via mean field. Towards this goal, we approximate the Gibbs distribution P (y|x) = 1 Z(x) exp(−E(y|x)) with a fully decomposable distribution Q(y|x) = i Q i (y i |x). Note that we drop the conditioning from now on to simplify notation.</p><p>Mean field computes updates by iteratively minimizing the KL-divergence between the approximated distribution Q(y) and the true distribution P (y). We use an iterative algorithm which updates the local distributions {Q i (y i )} in parallel. In our model, the updates can be derived as</p><formula xml:id="formula_12">log Q i (y i = l) = − z:i∈Pz l ′ :l ′ ∈Lg j:j∈Pz,j =i ϕ (z,i,j) smo (l, l ′ )Q j (l ′ ) (10) − z:i∈Pz T t=−T l ′ :l ′ ∈Lg j:j∈Pz,j =i ϕ (z,t,i,j) cnn (l, l ′ )Q j (l ′ )<label>(11)</label></formula><p>− w icc n:n =m,i∈Cm j:j∈Cn</p><formula xml:id="formula_13">Q j (l) − log(Z i ),<label>(12)</label></formula><p>with Z i the local partition function which is easily computable as it only depends on a single node. We refer the reader to suppl. material for the derivation of these updates. We use the uniform distribution as our initialization. We now describe how to compute the updates efficiently.</p><p>Smoothness. Eq. (10) can be computed efficiently using the same high-dimensional Gaussian filtering algorithm of <ref type="bibr" target="#b14">[15]</ref>. This results in linear updates in the number of pixels. Local CNN Prediction. The inner most summation over pixels in Eq. (11) is the fundamental building block for the computation of the entire term. Explicitly it is given as</p><formula xml:id="formula_14">w (s(z)) cnn µ (t) cnn (l, l ′ ) j:j∈Pz,j =i k (t) cnn (h t (p z,i ), h −t (p z,j ))Q j (l ′ ).</formula><p>This can be interpreted as a convolution with a Gaussian kernel G Λ (t) cnn evaluated at h t (p z,i ). Since Gaussian convolution is essentially a low-pass filter, by the sampling theorem we can convolve a downsampled {Q j (l ′ )} with the Gaussian kernel, and upsample the output to compute convolution at h t (p z,i ). Following <ref type="bibr" target="#b14">[15]</ref>, we use the efficient permutohedral lattice data structure <ref type="bibr" target="#b0">[1]</ref>   convolution and upsampling. In the standard case of Gaussian filtering with permutohedral lattice, we embed a set of features encoding the position of {Q j (l ′ )} in the hyperplane in which the lattice lies. We then downsample by splatting the value of each Q j (l ′ ) onto the vertices of its enclosing simplex with barycentric weights. Then Gaussian blurring is performed over lattice points along each lattice direction. The final result is then computed by gathering values from lattice points for the already embedded features. Due to the fact that we introduced different shifts for the two elements of the kernel h t (p z,i ) and h −t (p z,j ), apart from the set of features {h −t (p z,j )} we need to embed in the first place, we have to embed an extra set of features {h t (p z,i )} at which we evaluate the convolution, in contrast to the standard case. An example is in <ref type="figure" target="#fig_2">Fig. 3a</ref>. As in the standard case, we first embed {h −t (p z,j )} encoding the position of {Q j (l ′ )} in the hyperplane. Note, however, that the features lie in a subspace of the hyperplane as they are padded with zeros (e.g., a line on a plane in <ref type="figure" target="#fig_2">Fig. 3a)</ref>. We then distribute the value of each Q j (l ′ ) onto the vertices of its enclosing simplex. This is followed by the filtering step over the lattice. As an extra step in contrast to the standard case, we now need to embed the first element of the kernel, i.e., {h t (p z,i )}, in the hyperplane, and the embeddings lie in another subspace. Finally we evaluate the convolution at the new embeddings.</p><p>Inter-Connected Component. The first term in Eq. <ref type="bibr" target="#b11">(12)</ref> is not a Gaussian kernel, however it is densely connected. This means that potentially we have an update quadratic in the number of pixels. We exploit the fact that all members within a connected component have the exact same pairwise interaction with all other pixels not in the component. This implies that all members within a connected component re-ceive the exact same messages passed from other components during each update. Note that it is linear to sum up the individual messages within a connected component and pass this summation j:j∈Cn Q j (l) to the members of other components. We visualize the message passing procedure for the inter-connected component potential in <ref type="figure" target="#fig_2">Fig. 3b</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experimental Evaluation</head><p>We evaluate our approach on the challenging KITTI benchmark <ref type="bibr" target="#b7">[8]</ref>. In particular, we use a subset of 3, 524 images from 55 videos and divide the images into training/validation/test sets such that given a video, all its images are exclusively contained in only one of the three sets. Altogether, we use 3260 images for training, 120 for validation, and 144 for testing. 131 images from either our validation or test set have been manually annotated with pixel-wise instance labeling for Cars by <ref type="bibr" target="#b4">[5]</ref>. We labeled the rest of the 133 images. Thus all validation and test images have ground truth annotations. Implementation Details. We generate surrogate ground truth for our training images with <ref type="bibr" target="#b4">[5]</ref> and train our CNN as in <ref type="bibr" target="#b31">[32]</ref>. In another experiment we also use the architecture DeepLab-LargeFOV from <ref type="bibr" target="#b5">[6]</ref>. By changing the CNN architecture from the naive adaptation of VGG-16 by <ref type="bibr" target="#b24">[25]</ref> to DeepLab-LargeFOV (denoted by 'w/ DeepLab <ref type="bibr" target="#b5">[6]</ref>' in our results), we observe substantial performance gain for our approach but a slight drop for the baselines. Thus we report results with both architectures. For our validation/test images (with typical size 375×1242), we extract densely overlapping patches of three sizes: large (270 × 432), medium (180 × 288), and small (120 × 192) in a sliding window fashion. We run the extracted patches through the CNN to obtain local instance predictions. Following <ref type="bibr" target="#b14">[15]</ref>, we apply a pixel-wise normalization to Gaussian kernels. We also normalize the aggregated message of each connected component by the number of pixels it contains. Normalization is able to cancel the bias caused by highly variable instance sizes. We tune all weights, hyper-parameters and kernel widths in our MRF on the validation set. We fix the number of iterations of the mean field update to be 50 in all experiments in the paper.</p><p>Baselines. We re-train the approach (in three different instantiations) proposed in <ref type="bibr" target="#b31">[32]</ref> on our validation set to obtain three strong baselines. Note that <ref type="bibr" target="#b31">[32]</ref> and our method use the exact same CNN unaries and patch extraction method, so we evaluate the two different MRFs on equal footing. The first baseline 'ConnComp' is the 'connected components ordering' potential in <ref type="bibr" target="#b31">[32]</ref> which applies a connected component algorithm to heuristically merged object instances and orders them according to their positions along the vertical axis. The second baseline 'Unary' additionally adds the 'CNN energy' potential in <ref type="bibr" target="#b31">[32]</ref>. The third baseline 'Unary+LongRange' further adds the pairwise 'long-range connections' from <ref type="bibr" target="#b31">[32]</ref>. We found that their pairwise 'shortrange connections' generally hurts performance, so we do not include it in our baselines.</p><p>Evaluation Metrics. Following <ref type="bibr" target="#b31">[32]</ref>, we use a number of metrics to provide a comprehensive evaluation of our model. We divide the metrics into two categories, namely class-level (i.e., Car vs. non-Car) and instancelevel. For the class-level evaluation, we report the standard intersection-over-union score for the foreground 'FIoU'.</p><p>For the instance-level evaluation, we provide the mean-weighted-coverage score and the mean-unweightedcoverage score introduced in <ref type="bibr" target="#b25">[26]</ref>, which we denote by 'MWCov' and 'MUCov' respectively. For each groundtruth instance in a given image, we find its maximally overlapping prediction and compute the IoU score between them. The weighted-coverage score for the image is then the average of the IoU scores weighted by the size of the ground-truth instances. Finally, 'MWCov' is obtained by averaging the weighted-coverage score across images. The mean-unweighted-coverage score is computed similarly but treats every ground-truth instance equally. 'MWCov' and 'MUCov' are important, because they directly evaluate how closely our predictions overlap with ground-truth instances, since these two metrics are based on IoU scores. However, they do not penalize false positive instances.</p><p>For each predicted instance, we compute the ratio of class-level (Car vs. non-Car) true positive pixels inside it. The ratio is then averaged across predicted instances and reported as 'AvgPr'. Similarly for each ground-truth instance, we compute the ratio of true positive pixels inside it. The ratio is then averaged across all ground-truth instances and reported as 'AvgRe'.</p><p>If a predicted instance does not overlap with any groundtruth instance, we deem it as a false positive instance. We average the number of false positive instances in each image across images, and report it as 'AvgFP'. Similarly, if a ground-truth instance does not overlap with any prediction, we deem it as a false negative instance. We average the number of false negative instances in each image across images, and report it as 'AvgFN'.</p><p>Finally, for each ground-truth instance, we find a prediction which overlaps more than 50% with it. We divide the number of such GT-prediction pairs either by the number of predictions to obtain instance-level precision denoted by 'InsPr', or by the number of ground-truth instances to obtain instance-level recall denoted by 'InsRe', and report the corresponding F1 score denoted by 'InsF1'. Intuitively, 'In-sPr' and 'InsRe' reflect the model's ability to avoid false positive instances and false negative instances respectively at a 50% threshold. The corresponding 'InsF1' score unifies the previous two metrics. 'InsF1' score (on the validation set) is the metric we use for selecting our model parameters.</p><p>Quantitative Results. The evaluation results on our test set are given in Tab. 1. We report results for three instantiations of our model: 'LocCNNPred' uses only the local CNN prediction term; 'LocCNNPred+InterConnComp' adds the inter-connected component term; while 'Full' denotes our full model. Following <ref type="bibr" target="#b31">[32]</ref>, we additionally apply a few post-processing steps including hole filling, removing tiny isolated regions and splitting the connected components of any prediction into separate instances. This is reported at the bottom of the table.</p><p>Notice that without post-processing the model 'LocC-NNPred' which has only the local CNN prediction term performs much worse than our baselines, because it allows instances that do not coexist in any patch to have the same labeling. Post-processing removes some of these mistakes and makes the model already outperform the baselines <ref type="bibr" target="#b31">[32]</ref> in a number of metrics. With the addition of the inter-connected component term, the model 'LocCN-NPred+InterConnComp' encourages far apart instances to take different labels, which improves the performance. Finally, our full model which further adds the smoothness term is able to remove noisy regions scattered around the image, especially around instance boundaries where the CNN predictions are not confident. Our full model boosts instance-level precision by a huge margin compared to 'LocCNNPred+InterConnComp', outperforming the baselines significantly in a number of metrics.</p><p>Qualitative Results. We show examples of successes of our model ('Full') without post-processing in <ref type="figure">Fig. 4</ref>. We compare our full model to ground truth and the baseline 'ConnComp' which has the highest 'InsF1' score compared to the others. While the baseline tends to merge neighboring instances into one, our model is more successful in telling Image Ground Truth <ref type="bibr" target="#b31">[32]</ref> Ours <ref type="figure">Figure 4</ref>: Successes of our model (without post-processing) with comparison to <ref type="bibr" target="#b31">[32]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Image</head><p>Ground Truth <ref type="bibr" target="#b31">[32]</ref> Ours <ref type="figure">Figure 5</ref>: Failures of our model, mostly due to large non-car vehicles, small objects or severe occlusion. them apart. Patch boundary is clearly noticeable in many of the baseline results, while our model prevents this from happening. This suggests that our model exploits the local CNN predictions in a much better way than the baselines.</p><p>A few failure cases of our model are shown in <ref type="figure">Fig. 5</ref>, which are largely due to the CNN output. Vehicles like vans that are similar to cars (but not labeled as cars) tend to confuse the CNN, thus introducing false positives into our results. Heavily occluded cars also pose great challenges.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusions</head><p>In this paper, we proposed a new approach for instancelevel segmentation. Our approach builds upon the recently proposed work <ref type="bibr" target="#b31">[32]</ref> which trains a CNN on local patches to obtain soft instance labelings. We propose a densely connected MRF that is amenable to the efficient inference algorithm by <ref type="bibr" target="#b14">[15]</ref> to derive a globally consistent instance labeling of the full image. Our MRF exploits local CNN predictions, long-range connections between far apart instances, and contrast-sensitive smoothness. Our experiments show significant improvements over <ref type="bibr" target="#b31">[32]</ref>.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Our approach densely samples patches of different sizes</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>Function h2(·) prepends 2 zeros to vector pz,i while</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 :</head><label>3</label><figDesc>(a) Suppose that {pz,i} are positive scalars. When t = 1, both ht(pz,i) and h−t(pz,j) are 2-D. The corresponding permutohedral lattice (in gray) lies on a 2-D hyperplane in a 3-D space. {h−t(pz,j)} are embedded in the hyperplane (blue dots). The embeddings follow a 1-D subspace due to zero-appending. Value of {Qj(l ′ )} splats onto the vertices of their respective enclosing simplexes (blue squares). After Gaussian blurring, vertices shown as green squares also get non-zero value. An extra step is to embed {ht(pz,i)} (red solid dots and red open dots). The embeddings lie on another 1-D subspace due to zero-prepending. Finally, convolution is evaluated at the new embeddings. Only red solid dots get non-zero values, while red open dots get a zero due to the inactivity of the vertices of their enclosing simplex. (b) Three car blobs are shown in the image. During each mean field update, we sum up individual messages from members of C3 and pass the summation to each member of C1 and C2. Similarly for messages from C1 to C2 and C3, and messages from C2 to C1 and C3.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>to perform downsampling,</figDesc><table>Cls. Eval 
+
+Instance Evaluation 
+IoU 
+MWCov MUCov AvgPr AvgRe AvgFP AvgFN InsPr InsRe InsF1 
+
+[32] 
+
+ConnComp 
+77.1 
+66.7 
+49.1 
+82.0 
+60.3 
+0.465 
+0.903 
+49.1 43.0 
+45.8 
+Unary 
+77.6 
+65.0 
+48.4 
+81.7 
+62.1 
+0.389 
+0.688 
+46.6 42.0 
+44.2 
+Unary+LongRange 
+77.6 
+66.1 
+49.2 
+82.6 
+62.1 
+0.354 
+0.688 
+48.2 43.1 
+45.5 
+Unary+LR (w/ DeepLab [6]) 
+77.7 
+68.2 
+50.2 
+85.3 
+63.2 
+0.285 
+0.562 
+39.5 40.1 
+39.8 
+
+Ours 
+
+LocCNNPred 
+77.4 
+58.3 
+40.9 
+80.4 
+62.6 
+0.403 
+0.681 
+25.3 32.9 
+28.6 
+LocCNNPred+InterConnComp 
+76.8 
+65.7 
+50.3 
+79.9 
+63.4 
+0.507 
+0.618 
+35.8 46.4 
+40.4 
+Full 
+77.1 
+69.3 
+50.6 
+80.5 
+57.7 
+0.451 
+1.076 
+56.3 47.4 
+51.5 
+Full (w/ DeepLab [6]) 
+78.5 
+73.7 
+54.3 
+82.8 
+61.3 
+0.458 
+0.812 
+63.3 51.6 
+56.8 
+With Post-processing 
+
+[32] 
+
+ConnComp 
+77.2 
+66.8 
+49.2 
+81.8 
+60.3 
+0.465 
+0.903 
+49.8 43.0 
+46.1 
+Unary 
+77.4 
+66.7 
+49.8 
+81.6 
+61.2 
+0.562 
+0.840 
+44.1 44.7 
+44.4 
+Unary+LongRange 
+77.4 
+67.0 
+49.8 
+82.0 
+61.3 
+0.479 
+0.840 
+48.9 43.8 
+46.2 
+Unary+LR (w/ DeepLab [6]) 
+77.3 
+70.9 
+52.2 
+85.7 
+61.7 
+0.597 
+0.736 
+40.2 45.9 
+42.8 
+
+Ours 
+
+LocCNNPred 
+76.7 
+67.5 
+52.9 
+82.5 
+61.3 
+0.646 
+0.743 
+39.4 51.6 
+44.7 
+LocCNNPred+InterConnComp 
+76.3 
+68.1 
+53.9 
+80.7 
+62.2 
+0.708 
+0.701 
+42.1 52.2 
+46.6 
+Full 
+77.0 
+69.7 
+51.8 
+83.9 
+57.5 
+0.375 
+1.139 
+65.3 50.0 
+56.6 
+Full (w/ DeepLab [6]) 
+78.5 
+74.1 
+55.2 
+84.7 
+61.3 
+0.417 
+0.833 
+70.9 53.7 
+61.1 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 1 :</head><label>1</label><figDesc></figDesc><table>Instance-level and Class-level Evaluation on the Test Set (144 images). See text for the explanation of the metrics. 
+For 'AvgFP' and 'AvgFN' smaller is better, for the rest higher is better. 
+
+</table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgments: This work was partially supported by ONR-N00014-14-1-0232, Samsung and NSERC.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Fast high-dimensional filtering using the permutohedral lattice</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Adams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Baek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">A</forename><surname>Davis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computer Graphics Forum</title>
+		<imprint>
+			<biblScope unit="volume">29</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="753" to="762" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Seeing 3D chairs: exemplar part-based 2D-3D alignment using a large dataset of CAD models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Aubry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Maturana</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Efros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Interactive graph cuts for optimal boundary &amp; region segmentation of objects in nd images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Boykov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-P</forename><surname>Jolly</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">An experimental comparison of min-cut/max-flow algorithms for energy minimization in vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Boykov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Kolmogorov</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2004" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="page" from="1124" to="1137" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Beat the MTurkers: Automatic Image Labeling from Weak 3D Supervision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L.-C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yuille</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Semantic image segmentation with deep convolutional nets and fully connected crfs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L.-C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Papandreou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kokkinos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Murphy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">3D Object Detection and Viewpoint Estimation with a Deformable 3D Cuboid Model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Dickinson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Are we ready for Autonomous Driving? The KITTI Vision Benchmark Suite</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Lenz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Rich feature hierarchies for accurate object detection and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1311.2524</idno>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Aligning 3D models to RGB-D images of cluttered scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">A</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Learning rich features from RGB-D images for object detection and segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbelaez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Simultaneous detection and segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hariharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">An Exemplar-based CRF for Multiinstance Object Segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gould</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Scene Collaging: Analysis and Synthesis of Natural Images with Semantic Layers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Isola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Efficient inference in fully connected crfs with gaussian edge potentials</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krähenbühl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="page" from="109" to="117" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">P</forename><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H S</forename><surname>Torr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Obj Cut</surname></persName>
+		</author>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">What, Where and How Many? Combining Object Detectors and CRFs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ladický</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sturgess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Alahari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H S</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Proposal-free network for instance-level object segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yan</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1509.02636</idno>
+	</analytic>
+	<monogr>
+		<title level="m">Arxiv</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Parsing IKEA Objects: Fine Pose Estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Pirsiavash</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Visual Semantic Search: Retrieving Videos via Complex Textual Queries</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Kong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Hough Regions for Joining Instance Localization and Segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Riemenschneider</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sternig</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Donoser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">M</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Recurrent instance segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Romera-Paredes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H S</forename><surname>Torr</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.08250</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Grabcut: Interactive foreground extraction using iterated graph cuts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Kolmogorov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Blake</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SIGGRAPH</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<ptr target="http://arxiv.org/abs/1503.02351" />
+		<title level="m">Fully Connected Deep Structured Networks</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Instance Segmentation of Indoor Scenes using a Coverage Loss</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Silberman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Sontag</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">Very Deep Convolutional Networks for Large-Scale Image Recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.1556</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Scene Parsing with Object Instances and Occlusion Ordering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tighe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Niethammer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Holistic 3D Scene Understanding from a Single Geo-tagged Image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Layered object models for image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hallman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">C</forename><surname>Fowlkes</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Describing the scene as a whole: Joint object detection, scene classification and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Monocular object instance segmentation and depth ordering with cnns</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

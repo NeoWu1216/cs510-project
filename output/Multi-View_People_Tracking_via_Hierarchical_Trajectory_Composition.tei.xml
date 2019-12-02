@@ -1,0 +1,1753 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Multi-view People Tracking via Hierarchical Trajectory Composition *</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuanlu</forename><surname>Xu</surname></persName>
+							<email>yuanluxu@cs.ucla.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">Dept. Computer Science and Statistics</orgName>
+								<orgName type="institution">University of California</orgName>
+								<address>
+									<settlement>Los Angeles</settlement>
+									<country>UCLA</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaobai</forename><surname>Liu</surname></persName>
+							<email>xiaobai.liu@mail.sdsu.edu</email>
+							<affiliation key="aff1">
+								<orgName type="department">Dept. Computer Science</orgName>
+								<orgName type="institution">San Diego State University (SDSU)</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yang</forename><surname>Liu</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Dept. Computer Science and Statistics</orgName>
+								<orgName type="institution">University of California</orgName>
+								<address>
+									<settlement>Los Angeles</settlement>
+									<country>UCLA</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Song-Chun</forename><surname>Zhu</surname></persName>
+							<email>sczhu@stat.ucla.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">Dept. Computer Science and Statistics</orgName>
+								<orgName type="institution">University of California</orgName>
+								<address>
+									<settlement>Los Angeles</settlement>
+									<country>UCLA</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Multi-view People Tracking via Hierarchical Trajectory Composition *</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:43+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>This paper presents a hierarchical composition approach for multi-view object tracking. The key idea is to adaptively exploit multiple cues in both 2D and 3D, e.g., ground occupancy consistency, appearance similarity, motion coherence etc., which are mutually complementary while tracking the humans of interests over time. While feature online selection has been extensively studied in the past literature, it remains unclear how to effectively schedule these cues for the tracking purpose especially when encountering various challenges, e.g. occlusions, conjunctions, and appearance variations. To do so, we propose a hierarchical composition model and re-formulate multi-view multi-object tracking as a problem of compositional structure optimization. We setup a set of composition criteria, each of which corresponds to one particular cue. The hierarchical composition process is pursued by exploiting different criteria, which impose constraints between a graph node and its offsprings in the hierarchy. We learn the composition criteria using MLE on annotated data and efficiently construct the hierarchical graph by an iterative greedy pursuit algorithm. In the experiments, we demonstrate superior performance of our approach on three public datasets, one of which is newly created by us to test various challenges in multi-view multi-object tracking.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Multi-view multi-object tracking has attracted lots of attentions in the literature <ref type="bibr" target="#b21">[22]</ref>. Tracking objects from multiple views is by nature a composition optimization problem. For example, a 3D trajectory of a human can be hierarchically decomposed into trajectories of individual views, trajectory fragments, and bounding boxes. While existing trackers have exploited the above principles more or less, they enforced strong assumptions over the validity of a particular cue, e.g. appearance similarity <ref type="bibr" target="#b0">[1]</ref>, motion consistency <ref type="bibr" target="#b8">[9]</ref>, sparsity <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b49">50]</ref>, 3D localization coincidence <ref type="bibr" target="#b23">[24]</ref>, etc., which are not always correct. Actually, different cues may dominate different periods over object trajectories, especially for complicated scenes. In this paper, we are interested in automatically discovering the optimal compositional hierarchy for object trajectories from various cues, in order to handle a wider variety of tracking scenarios. As illustrated in <ref type="figure" target="#fig_0">Fig. 1</ref>, suppose we would like to track the highlighted subject and obtain its complete trajectory (e). The optimal strategy for tracking may vary over space and time. For example, in (a), since the subject shares the same appearance within certain time period, we apply an appearance based tracker to get a 2D tracklet; in (b) and (c), since the subject can be fully observed from two different views, we can group these two boxes into a 3D tracklet by testing the proximity of their 3D locations; in (d), since the subject is fully occluded in this view, we consider sampling its position from the 3D trajectory curve constrained by background occupancy.</p><p>In this work, we formulate multi-view multi-object tracking as a structure optimization problem described by a hierarchical composition model. As illustrated in <ref type="figure" target="#fig_2">Fig. 2</ref>, our objective is to discover composition gradients of each object in the hierarchical graph. We start from structureless tracklets, i.e., object bounding boxes, and gradually compose them into tracklets of larger size and eventually into trajectories. Each trajectory entity may be observed in single view or multiple views. The composition process is guided by a set of criteria, which describe the composition feasibility in the hierarchical structure.</p><p>Each criterion focuses on one certain cue and in fact is equivalent to a simple tracker, e.g., appearance tracker <ref type="bibr" target="#b28">[29,</ref><ref type="bibr" target="#b44">45]</ref>, geometry tracker <ref type="bibr" target="#b34">[35]</ref>, motion tracker <ref type="bibr" target="#b1">[2]</ref>, etc., which groups tracklets of the same view or different views into tracklets of larger sizes. Composition criteria lie in the heart of our method: feasible compositions can be conducted recursively and thus the criteria can be efficiently utilized.</p><p>To infer the compositional structure, we divest MCMC sampling-based algorithms due to their heavy computation complexity. We approximate the hierarchy by a progressive composing process. The composition scheduling problem is solved by an iterative greedy pursuit algorithm. At each step, we first greedily find and apply the composition with maximum probability and then re-estimate parameters for the incremental part.</p><p>In the experiments, we evaluate the proposed method on a set of challenging sequences and the results demonstrate superior performance over other state-of-the-art approaches. Furthermore, we design a series of comparison experiments to systematically analyze the effectiveness of each criterion.</p><p>The main contributions of this work are two-fold. Firstly, we re-frame multi-view multi-object tracking as a hierarchical structure optimization problem and present three tracklet-based composition criteria to jointly exploit different kinds of cues. Secondly, we establish a new dataset to cover more challenges, to present richer visual information and to provide more detailed annotations than existing ones.</p><p>The rest of this paper is organized as follows. We review the related work in Section 2, introduce the formulation of our approach in Section 3, and discuss the learning and inference procedures in Section 4. The experiments and comparisons are presented in Section 5, and finally comes the conclusion in Section 6.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>Our work is closely related to the following four research streams.</p><p>Multi-object tracking has been extensively studied in the last decades. In the literature, the tracking-by-detection pipeline <ref type="bibr" target="#b46">[47,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b32">33,</ref><ref type="bibr" target="#b40">41,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b7">8]</ref> attracts wide-spreaded attentions and acquires impressive results, thanks to the considerable progress in object detection <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b36">37,</ref><ref type="bibr" target="#b33">34]</ref>, as well as in data association <ref type="bibr" target="#b47">[48,</ref><ref type="bibr" target="#b31">32,</ref><ref type="bibr" target="#b5">6]</ref>. In particular, network flow based methods <ref type="bibr" target="#b31">[32,</ref><ref type="bibr" target="#b5">6]</ref> organize detected bounding boxes in-to directed multiple Markov chains with chronological order and pursue the trajectory as finding pathes. Andriyenko et al. <ref type="bibr" target="#b1">[2]</ref> propose to track objects in discrete space and use splines to model trajectories in continuous space. Our approach also follows this pipeline but considers bounding boxes as structureless elements. With preliminary associations to preserve locality, we can better explore the nonlocal properties <ref type="bibr" target="#b22">[23]</ref> of trajectories in the time domain. For example, tracklets with evident appearance similarities can be grouped together without considering the time interval.</p><p>Multi-view object tracking is usually addressed as a data association problem across cameras. The typical solutions include, homography constraints <ref type="bibr" target="#b23">[24,</ref><ref type="bibr" target="#b3">4]</ref>, ground probabilistic occupancy <ref type="bibr" target="#b13">[14]</ref>, network flow optimization <ref type="bibr" target="#b41">[42,</ref><ref type="bibr" target="#b5">6,</ref><ref type="bibr" target="#b24">25]</ref>, marked point process <ref type="bibr" target="#b37">[38]</ref>, joint reconstruction and tracking <ref type="bibr" target="#b18">[19]</ref>, multi-commodity network <ref type="bibr" target="#b35">[36]</ref> and mutiview SVM <ref type="bibr" target="#b48">[49]</ref>. All these methods have certain strong assumptions and thus are restricted to certain specific scenarios. In contrast, we are interested in discovering the optimal composition structure to obtain complete trajectories in a wide variety of scenarios.</p><p>Hierarchical model receives heated endorsement for its effectiveness in modeling diverse tasks. In <ref type="bibr" target="#b16">[17]</ref>, a stochastic grammar model was proposed and applied to solve the image parsing problem. After that, Zhao et al. <ref type="bibr" target="#b50">[51]</ref> and Liu et al. <ref type="bibr" target="#b26">[27]</ref> introduced generative grammar models for scene parsing. Pero et al. <ref type="bibr" target="#b30">[31]</ref> further built a generative scene grammar to model the constitutionality of Manhattan structures in indoor scenes. Ross et al. presented a discriminative grammar for the problem of object detection <ref type="bibr" target="#b14">[15]</ref>. Grosse et al. <ref type="bibr" target="#b15">[16]</ref> formulated matrix decomposition as a structure discovery problem and solved it by a context-free grammar model. In this paper, our representation can be analogized as a special hierarchical attributed grammar model, with similar hierarchical structures, composition criteria as production rules, and soft constraints as probabilistic grammars. The difference lies in that our model is fully recursive and without semantics in middle levels.</p><p>Combinatorial optimization receives considerable attentions in the surveillance literature <ref type="bibr" target="#b42">[43]</ref>. When the solution space is discrete and the structure cannot be topologically sorted (e.g., loopy graphs), there comes the problem of combinatorial optimization. Among all the solutions, MCMC techiques are widely acknowledged. For example, Khan et al. <ref type="bibr" target="#b23">[24]</ref> integrated the MCMC sampling within the particle filer tracking framework. Yu et al. <ref type="bibr" target="#b45">[46]</ref> utilized the single site sampler for associating foreground blobs to trajectories. Liu et al. <ref type="bibr" target="#b27">[28]</ref> introduced a spatial-temporal graph to jointly solve the region labeling and object tracking problem by Swendsen-Wang Cut <ref type="bibr" target="#b4">[5]</ref>. In this work, though facing a similar combinatorial optimization problem, we propose a very efficient inference algorithm with acceptable trade-off.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Representation</head><p>In this section, we first introduce the compositional hierarchy representation, and then discuss the proposed problem formulation for multi-view multi-object tracking.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Hierarchical Composition Model</head><p>Given an input sequence containing videos shot by multiple cameras, we follow a default tracking-by-detection pipeline and apply <ref type="bibr" target="#b33">[34]</ref> to obtain detected bounding boxes. After that, we associate them into short trajectory fragments, i.e., tracklets, similar to <ref type="bibr" target="#b19">[20,</ref><ref type="bibr" target="#b39">40]</ref>. Tracklets preserve better local properties of appearance and motion as well as better robustness against errors and noises, compared with bounding boxes.</p><p>We denote a tracklet as O, which contains the appearance and geometry information over a certain period of time:</p><formula xml:id="formula_0">O = {(a i ,l i ,t i ): i =1, 2,...,|O|},<label>(1)</label></formula><p>where a i is the appearance feature, l i the location information (i.e., 2D bounding box and 3D ground position) and t i the time stamp. Note that the 3D ground position is calculated by projecting the foot point of the 2D bounding box onto the world reference frame. For convenience, we denote the start time and end time of a tracklet by t s and t e , respectively. We further augment a set of states</p><formula xml:id="formula_1">x(O) for each tracklet O x(O)={ω i : i =1,...,|O|},<label>(2)</label></formula><p>where ω i ∈{ 1, 0} indicates the state of visibility/invisibility on the 3D ground plane at time t i . x(0) describes the sparsity of a trajectory and can be utilized to enforce the consistency of object appearing and disappearing over time.</p><p>As shown in <ref type="figure" target="#fig_2">Fig. 2</ref>, we organize the scene as a compositional hierarchy G to recover the trajectory for each object in both single views and 3D ground. The compositional hierarchy G is denoted as</p><formula xml:id="formula_2">G =(V N ,V T ,S,X),<label>(3)</label></formula><p>where V T denotes the set of terminal nodes, V N indicates the set of non-terminal nodes, S is the root node representing the scene, and X represents the set of states of both terminal and non-terminal nodes. A non-terminal node O is constructed by composing two nodes O 1 and O 2 together, that is</p><formula xml:id="formula_3">O ← f (O 1 ,O 2 ),g i (x(O)) = f i (x(O 1 ),x(O 2 )), (4)</formula><p>where g i (·) and f i (·) are associated operations on states. Note that g i (·) and f i (·) can assign states in either bottomup or top-down direction, which act like functions of passing messages.  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Bayesian Formulation</head><p>According to Bayes' rule, we can solve the problem of inferring the hierarchical composition model by maximizing a posterior, that is,</p><formula xml:id="formula_4">G * =a r gm a x G p(G|I) ∝ arg max G p(I|G) · p(G),<label>(5)</label></formula><p>where I denotes the input video data.</p><p>Prior. Due to the property of hierarchy, we can further factorize the prior p(G) as</p><formula xml:id="formula_5">p(G)= Oi∈V N p(x(O i )) k p cp k (O i1 ,O i2 ) δi==k ,<label>(6)</label></formula><p>where δ i is an indicator for the type of criterion used in composition, and O i1 and O i2 are two children nodes of</p><formula xml:id="formula_6">tracklet O i . p(x(O))</formula><p>is a unary probability defined on the state of O. We employ a simple Ising/Potts model to penalize the discontinuity of the trajectory, i.e.,</p><formula xml:id="formula_7">p(x(O)) ∝ exp{−β |O|−1 i=1 1(ω i = ω i+1 ) },<label>(7)</label></formula><p>where β is a coefficient. p(x(O)) in fact constrain the number of times a trajectory switches between visible and invisible.</p><formula xml:id="formula_8">p cp k (O i ,O j )</formula><p>represents the composition probability using the k-th type of cue. We will discuss details about of composition criteria in Section 3.3.</p><p>Likelihood. The video data I is only dependent on the terminal nodes V T and can be further decomposed as</p><formula xml:id="formula_9">p(I|G)= ⎛ ⎝ Oi∈V T aj ∈Oi p fg (a j ) ⎞ ⎠ · aj ∈I\V T p bg (a j ) = Oi∈V T aj ∈Oi p fg (a j ) p bg (a j ) · aj ∈I p bg (a j ),<label>(8)</label></formula><p>where p fg (·) and p bg (·) are foreground and background probabilities, respectively. The second term aj p bg (a j ) measures the background probability over the entire video data and thus can be treated as a constant, and the first term measures the divergence between foreground and background, which can be analogous to a probabilistic foreground/background classifier. We use the detection scores to approximate this log-likelihood ratio.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Composition Criteria</head><p>In this section, we introduce details of the proposed composition criteria.</p><p>Appearance Coherence. Instead of using traditional descriptors (e.g., SIFT, color histograms, MSCR) to measure the appearance discrepancy, we employ the powerful DCNN to model people's appearance variations. Notice that most DCNNs are trained over generic object categories and insufficient to provide fine-grained level of information about peoples identities <ref type="bibr" target="#b43">[44]</ref>. We therefore fine-tune the CaffeNet <ref type="bibr" target="#b20">[21]</ref> using people image samples with identity labels. The new DCNN consists of 5 convolutional layers, 2 max-pooling layers, 3 fully-connected layers and a final 1000-dimensional output. The last two layers are discarded and replaced by random initializations. The output is new 1000 labels on people's identities. Note the training samples are augmented from unlabeled data and identity labels are obtained in an unsupervised way.</p><p>Similar to bag-of-words (BoW), our DCNN plays the role of a codebook, which codes a person image with common people appearance templates. We use this 1000dimensional output as our appearance descriptor. Given two tracklets O i and O j , the appearance coherence constraint</p><formula xml:id="formula_10">p cp 1 (O i ,O j ) is defined as p cp 1 (O i ,O j ) ∝ exp{− an∈Oi am∈Oj a n − a m 2 |O i |·|O j | }. (9) p cp 1 (O i ,O j )</formula><p>actually measures the mean complete-link appearance dissimilarities among object bounding boxes belonging to two tracklets.</p><p>Geometry Proximity. Given tracklets from a single view or cross views, we first project them on the world refer-ence frame to measure their geometric distances uniformly. However, considering tracklets with different time stamps and lengths, it is not a trivial task to determine whether the two given tracklets belong to the same object or not. The reason lies in: i) the time stamps of tracklet pairs might not be well aligned; ii) the localizations across views usually lead to remarkable amount of errors.</p><p>In order to address these issues, we introduce a kernel to measure these time series samples. The kernel K(O i ,O j ) to measure the distance between two tracklets O i and O j is defined as the product of two kernel distances in space and time</p><formula xml:id="formula_11">K(Oi,Oj)= (ln,tn)∈O i (lm,tm)∈O j φ l (ln,lm) · φt(tn,tm) |Oi|·|Oj| ,<label>(10)</label></formula><p>where φ l (l n ,l m ) and φ t (t n ,t m ) are two RBF kernels between two points. We use different σ l and σ t values for the two kernels, respectively. This new kernel acts like a sequential convolution filter and takes both spatial and temporal proximities into consideration. Given a set of training samples D,</p><formula xml:id="formula_12">D = {(O i ,O j ,y n ): n =1,...,|D|},<label>(11)</label></formula><p>where y n ∈{1, 0} indicates whether or not the two tracklets O i and O j belong to the same identity, we can train a kernel SVM with the energy function </p><p>where C is a regularization factor.</p><p>We therefore interpret the normalized classification margin as the composition probability p cp 2 (O i ,O j ). Motion Consistency. We model the motion information of a tracklet O as a continuous function of its 3D ground positions l w.r.t. time t, i.e., l = τ (t). We define a constraint on two tracklets that they can be interpreted with the same motion function. However, finding this motion pattern is a challenging problem. The reason lies in two-fold: i) inaccurate 3D positions due to perspective effects, detection errors and false alarms; ii) missing detections and object inter-occlusions in certain views, especially for crowded scenarios. In this paper, we address these issues in the following two aspects.</p><p>Firstly, we employ the b-spline function to represent the motion pattern of the trajectory. B-spline functions can enforce high-order smoothness constraints, which enables learning from sparse and noisy data. Considering a tracklet O with 3D positions {l i : i =1 ,...,|O|}, starting time t s and ending time and t e , the spline function τ (t) uses some quadratic basis functions B k (t), and represents the motion  path as a linear combination of B k (t):</p><formula xml:id="formula_14">τ (t)= k α k B k (t), s.t. τ ′′ (t s )=τ ′′ (t e )=0,<label>(13)</label></formula><p>where τ ′′ (t) denotes the second derivative of τ (t). The constraints enforce zero curvature at the starting and the ending point. Secondly, we take advantages of the multi-view setting and derive feasible regions for object 3D positions to further confine the fitted motion curve. As illustrated in <ref type="figure" target="#fig_5">Fig. 3</ref>, given bounding boxes of a single object in the views (a), (b) and (c), we first perform exhaustive search to find the two anchor points (yellow dots in the image) along two sides of the foot position of each object. An anchor point is defined as a position where the surrounding 8×8 area contains most of background regions. Note that we generate background masks by GMM background modeling.</p><p>Once obtaining all the anchor points for an object, we can find the union area Ω, i.e., a polygon on the world ground plane, as shown the shaded area in (d). These polygons serve as additional localization feasibility constraints on the motion pattern. That is, the spline fitting is formulated as minimizing the following objective function:</p><formula xml:id="formula_15">min α k ,B k E(O i ,O j )= (ln,tn)∈Oi∪Oj l n − k α k B k (t n ) 2 , s.t. α k B k (t n ) ∈ Ω n .<label>(14)</label></formula><p>This is a constrained convex programming problem considering that all polygons are convex. We refer the readers to find more details about b-spline and robust fitting algorithms in <ref type="bibr" target="#b9">[10]</ref>. The probability p 3 (O i ,O j ) is defined upon the averaged residuals for spline fitting, i.e.,</p><formula xml:id="formula_16">p cp 3 (O i ,O j ) ∝ exp{− E(O i ,O j ) |O i ∪ O j | }.<label>(15)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Learning and Inference</head><p>In this section, we first discuss the learning procedure for our constraints and then introduce how to infer the hierarchical compositional structure.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Learning Constraints</head><p>Appearance Coherence. Even for fine-tuning a DCNN, fair amount of training samples are required. We therefore augment the training data by external samples from public people detection datasets, e.g., CaltechPedestrians, NICTA, ETH and TUD-Brussels. The augmented training set contains around 30,0000 samples of cropped people images. We resize all the samples to 128×256 and horizontally flip them to double the training set size. And then we extract dense HSV color histograms with 16 bins from 16×16 non-overlapping patches for each image. The computed histograms are concatenated into a 6144-dimensional feature vector. We perform K-means clustering on the data and obtain 1000 clusters. Each cluster is regarded as a class and we utilize them to fine tune our DCNN. In general, the finetuning process converges after 100000 iterations and costs about 8 hours.</p><p>Geometry Proximity. Given the training data and groundtruth of a scenario, we first generate initial tracklets and then associate them with the groundtruth. A tracklet is treated as a fragment of a groundtruth trajectory if more than 50% of its bounding boxes are correctly assigned (i.e., hit/miss cutoff with 50% IoU ratio). The training data set D can thus be constructed using tracklets from the same trajectory as positive pairs samples and those from different trajectories as negative pairs. We learn the parameters of our kernel SVM for each pair of views (including selfto-self). The kernel parameters σ l and σ t are also tuned by cross-validation.</p><p>Note we also estimate the normalization constant for each constraint p cp k (O i ,O j ) using the training data.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Inferring Hierarchy</head><p>Our objective is to find a compositional hierarchy G by maximizing the posterior probability formulated in Equation <ref type="bibr" target="#b4">(5)</ref>. The optimization algorithm should accomplish two goals: i) composing hierarchical structures, and ii) estimating states for terminal and non-terminal nodes.</p><p>The main challenge in optimizing Equation <ref type="bibr" target="#b4">(5)</ref> lies in the size of the solution space. For example, if there are n terminal nodes, even a single group can be formed in 2 n−1 different ways, which is exponential. Although M-CMC sampling-based algorithms <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b42">43]</ref>    solve such kinds of combinatorial optimization problems, they are typically computationally expensive and difficult to converge, especially for our case, with thousands of terminal nodes and numerous possible compositions. Hereby, we approximate the construction of the hierarchical structure by a progressive composing process. In the beginning, given a set of initial tracklets V T , we initialize the state ω i ∈ x(O) for each tracklet O as visible. We then enumerate all the tracklets over all composition criteria, and find two tracklets O i and O j with maximum probability to be composed into a new tracklet O n , that is,</p><formula xml:id="formula_17">max Oi,Oj ,δn p(x(O n )) k p cp k (O i ,O j ) δn==k ,<label>(16)</label></formula><p>where δ n is an indicator for which cue is selected. We then group these two tracklets O i and O j together, and create their parent node O n . The states for this newly merged node O n are reestimated by</p><formula xml:id="formula_18">x(O n )=x(O i ) ∪ x(O j ), t s n =min(t s i ,t s j ),t e n = max(t e i ,t e j ), |x(O n )| = t e n − t s n +1.<label>(17)</label></formula><p>Note we set all the states of missing time stamps within the time scope [t s n ,t e n ] to 0, i.e., invisible. This encourages future filling-in operations.</p><p>If a composition performed based on motion consistency constraint, we then fill in the missing fragments by interpolations, and create a corresponding tracklet O m ∈ V T . The new tracklet O m will be naturally incorporated into the hierarchical structure by subsequent compositions.</p><p>We continue this process iteratively. If the maximum composition probability reaches the lower limit, we terminate the algorithm and connect all the top non-terminal nodes to the root node S. Each sub-tree connected to the root node is essentially an object trajectory.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experiment</head><p>In this section, we first introduce the datasets and the parameter settings, and then show our experimental results as well as component analysis of the proposed approach.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Datasets and Settings</head><p>We evaluate our approach on three public datasets: (i) EPFL dataset 1 <ref type="bibr" target="#b13">[14]</ref>. We adopt the Terrace sequence 1, Passageway sequence and Basketball sequence in our experiments. In general, each sequence consists of 4 different views and films 6-11 pedestrians walking or running around, lasting 3.5-6 minutes. Each view is shot at 25fps and in a relatively low resolution 360×288.</p><p>(ii) PETS 2009 dataset 2 <ref type="bibr" target="#b12">[13]</ref>. This dataset is widely used in evaluating tracking tasks and sequence S2/L1 is spe-  cially designed for multi-view-based tasks. With 3 surveillance cameras and 4 DV cameras, 10 pedestrians are recorded entering, passing through, staying and exiting the pictured area. The video is downsampled to 720×576 and the frame rate is set to 7fps.</p><p>(iii) CAMPUS dataset. To cover more complete challenges not presented in existing databases, we design this dataset based on the idea of dense foreground (around 15-25 objects, frequent conjunctions and occlusions), complex scenarios (objects conducting diverse activities, dynamic background, interactions between objects and background), various object scales (tracking targets sometimes either too tiny or huge to be accommodated in certain cameras). We incorporate 4 sequences into this dataset: Garden 1, Garden 2, Auditorium and Parking Lot. Each sequence is shot by 3-4 high-quality DV cameras mounted around 1.5m-2m above ground and each camera covers both overlapping regions and non-overlapping regions with other cameras. The videos are recorded with frame rate 30fps and duration about 3-4 minutes. The resolution is preserved in 1920×1080, for better precision and richer information.</p><p>For all three datasets, videos in each sequence are synchronized. We fully annotate the groundtruth trajectories for all the videos in all the sequences using <ref type="bibr" target="#b38">[39]</ref>. Note that we assign an unique ID for each object, whether it appears once or several times in the scene. Since the ultimate task of multi-view multi-object tracking is to discover the complete 3D trajectory of any targeted individual under a camera network, we believe uniquely assigned ID should be the groundtruth to fully evaluate the trackers, which poses higher requirements than conventional tracking tasks <ref type="bibr" target="#b21">[22]</ref>. In experiments, we use the beginning 10% video data for training and the rest for testing.</p><p>All the parameters are fixed in the experiments. For object detection, we use the PASCAL VOC fine-tuned ZF net, score threshold 0.3 and NMS threshold 0.3, which obtains proper trade-off between the efficiency and effectiveness. As for tracklet initialization, we construct a graph with edges only connected among successive frames and within limited scale changes. That is, sizes of two successive bounding boxes should not change more than 25% larger or smaller, in either height or width. We then run the successive shortest path algorithm <ref type="bibr" target="#b31">[32]</ref> to generate tracklets. Empirically, this produces short but identity consistent tracklets. β =0 .05 in the unary probability p(x(O)). The motion consistency constraint is conducted on tracklets with time interval no longer than 2 seconds, with the B-spline of order at most 3 and breaks at most 4. In the hierarchical composition, the lower limit is set to 0.2, which obtains good results.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Experimental Results</head><p>We employ the widely used CLEAR metrics <ref type="bibr" target="#b21">[22]</ref>, Multiple Object Detection Accuracy (MODA), Detection Precision (MODP), Tracking Accuracy (MOTA) and Tracking Precision (MOTP) to measure three kinds of errors in tracking: false positives, false negatives and identity switches. Besides, we also report the percentage of mostly tracked (MT), partly tracked (PT) and mostly lost (ML) groundtruth (referring to <ref type="bibr" target="#b25">[26]</ref>), as well as the number of identity switches (IDSW) and fragments (FRAG). Hit/miss for the assignment of tracking output to groundtruth is set to a threshold of Intersection-over-Union (IoU) ratio 50%.</p><p>We compare the proposed approach with 4 state-of-thearts methods: Probabilistic Occupancy Map (POM) <ref type="bibr" target="#b13">[14]</ref>, K-Shortest Path (KSP) <ref type="bibr" target="#b5">[6]</ref>, Branch-and-Price <ref type="bibr" target="#b24">[25]</ref> and Discrete-Continuous Optimization <ref type="bibr" target="#b2">[3]</ref>. We adopt the public code of POM detection and implement the data association algorithms "DP with appearance" <ref type="bibr" target="#b13">[14]</ref> and KSP <ref type="bibr" target="#b5">[6]</ref> according to their descriptions. The reported metrics for comparing methods are quoted on PETS 2009 dataset from <ref type="bibr" target="#b10">[11]</ref> and computed on the rest by conducting experiments.</p><p>Quantitative evaluations on EPFL and PETS 2009 datasets is shown in <ref type="figure" target="#fig_7">Fig. 4</ref> and CAMPUS dataset in Table 1, as well as qualitative results in <ref type="figure" target="#fig_9">Fig. 5</ref>. From the results, our method demonstrates superior performance over the competing methods. We can also observe the proposed method acquires significant margins on MODP, MOTP, IDSW and FRAG, which indicates two empirical conclusions: i) detection-based tracklet initialization is more beneficial to object overall localization than foreground-blobbased methods which mainly concerns ground positions; ii) when it comes to occlusions, multiple cues (e.g., appearance, geometry, and motion) are all neccessary to keep the trajectory identity consistent, which has also been approved in <ref type="bibr" target="#b17">[18]</ref>. Competing methods do not work well on CAM-PUS dataset mainly due to their strong dependence on clear visibility of ground plane and uniform object size.</p><p>Component Analysis. We set up three benchmarks to further analyze the benefits of each production rule on CAMPUS dataset. Our-1 outputs the initial tracklets directly, i.e., no composition performed; Our-2 composes the hierarchy only using the appearance coherence criterion; Our-3 further incorporates the geometry proximity criterion; Our-full employs all criteria proposed in this paper. From the results, it is apparent that each constraint contributes to a better hierarchical composition model.</p><p>Efficiency. Our method is implemented in MATLAB and runs on a desktop with Intel I7 3.0GHz CPU, 32GB memory and Nvidia GTX780Ti GPU. Given a 1080P sequence, the runtime on average is 15-20fps for object detection, 1000-1500fps for tracklet initialization, and 2-4fps for optimizing the hierarchical structure. Overall, the proposed algorithm obtains 1-3fps, which is related to the object density of the sequence. With proper code migration and optimization, e.g., batch processing, we believe the realtime processing can be achieved.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>This paper studies a novel formulation for multi-view multi-object tracking. We represent object trajectories as a compositional hierarchy and construct it with probabilistic constraints, which characterize the geometry, appearance and motion properties of trajectories. By exploiting multiple cues and composing them with proper scheduling, our method handles challenges in multi-view multi-object tracking well. Furthermore, we will explore more powerful inter-tracklet relations and better composition algorithms in the future.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>An illustration of utilizing different cues at different periods for the task multi-view multi-object tracking.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 2 .</head><label>2</label><figDesc>An illustration of the hierarchical compositional structure.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head></head><label></label><figDesc>1 − y n &lt;w, K(O i ,O)&gt;),</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 3 .</head><label>3</label><figDesc>An illustration of finding feasible regions (polygons) for interacting people.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 4 .</head><label>4</label><figDesc>Comparison charts using CLEAR metrics on EPFL and PETS 2009 datasets.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_9"><head>Figure 5 .</head><label>5</label><figDesc>Results generated by the proposed method on CAMPUS, EPFL and PETS 2009 datasets.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>are favored to</figDesc><table>Ours 
+
+[6] 
+[14] 
+
+Methods 
+
+0 
+
+0.1 
+
+0.2 
+
+0.3 
+
+0.4 
+
+0.5 
+
+0.6 
+
+0.7 
+
+0.8 
+
+0.9 
+
+1 
+
+Metric Measurement 
+
+Terrace 
+
+MODA 
+MODP 
+MOTA 
+MOTP 
+
+Ours 
+[6] 
+[14] 
+
+Methods 
+
+0 
+
+0.1 
+
+0.2 
+
+0.3 
+
+0.4 
+
+0.5 
+
+0.6 
+
+0.7 
+
+0.8 
+
+0.9 
+
+1 
+
+Metric Measurement 
+
+Passageway 
+
+MODA 
+MODP 
+MOTA 
+MOTP 
+
+Ours 
+[6] 
+[14] 
+
+Methods 
+
+0 
+
+0.1 
+
+0.2 
+
+0.3 
+
+0.4 
+
+0.5 
+
+0.6 
+
+0.7 
+
+0.8 
+
+0.9 
+
+1 
+
+Metric Measurement 
+
+Basketball 
+
+MODA 
+MODP 
+MOTA 
+MOTP 
+
+Ours 
+[3] 
+[25] 
+[6] 
+[14] 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>Table 1. Quantitative results and comparisons on CAMPUS dataset. Our-1, Our-2, Our-3 are three benchmarks set up for component evaluation. See text for detailed explanations.</figDesc><table>Our-full 
+49.30 
+72.02 
+49.03 
+71.87 
+31.25 
+62.50 
+6.25 
+299 
+200 
+Our-3 
+44.63 
+72.35 
+44.36 
+72.20 
+18.75 
+68.75 
+12.50 
+296 
+202 
+Our-2 
+42.10 
+71.08 
+41.69 
+70.97 
+12.50 
+75.00 
+12.50 
+448 
+296 
+Our-1 
+41.21 
+71.06 
+37.21 
+70.94 
+12.50 
+75.00 
+12.50 
+4352 
+4390 
+[6] 
+30.47 
+62.13 
+28.10 
+62.01 
+6.25 
+68.75 
+25.00 
+2577 
+2553 
+[14] 
+24.52 
+64.28 
+22.43 
+64.17 
+0.00 
+56.25 
+43.75 
+2269 
+2233 
+
+Garden2 
+
+Our-full 
+27.81 
+71.74 
+25.79 
+71.59 
+21.43 
+78.57 
+0.00 
+94 
+73 
+Our-3 
+23.39 
+71.13 
+22.50 
+71.08 
+14.29 
+85.71 
+0.00 
+92 
+72 
+Our-2 
+18.76 
+70.20 
+17.27 
+70.12 
+14.29 
+78.57 
+7.14 
+142 
+97 
+Our-1 
+17.68 
+70.12 
+10.24 
+70.11 
+14.29 
+78.57 
+7.14 
+700 
+733 
+[6] 
+24.35 
+61.79 
+21.87 
+61.64 
+14.29 
+85.71 
+0.00 
+268 
+249 
+[14] 
+16.51 
+63.92 
+13.95 
+63.81 
+14.29 
+78.57 
+7.14 
+241 
+216 
+
+Auditorium 
+
+Our-full 
+20.84 
+69.26 
+20.62 
+69.21 
+33.33 
+55.56 
+11.11 
+31 
+28 
+Our-3 
+18.83 
+68.99 
+18.62 
+68.95 
+22.22 
+61.11 
+16.67 
+30 
+28 
+Our-2 
+18.02 
+68.32 
+17.29 
+68.25 
+16.67 
+66.67 
+16.67 
+104 
+94 
+Our-1 
+17.78 
+68.33 
+14.11 
+68.28 
+16.67 
+66.67 
+16.67 
+523 
+536 
+[6] 
+19.46 
+59.45 
+17.63 
+59.29 
+22.22 
+61.11 
+16.67 
+264 
+257 
+[14] 
+17.90 
+61.19 
+16.15 
+61.02 
+16.67 
+66.67 
+16.67 
+249 
+235 
+
+ParkingLot 
+
+Our-full 
+24.46 
+66.41 
+24.08 
+66.21 
+6.67 
+66.67 
+26.67 
+459 
+203 
+Our-3 
+19.23 
+66.50 
+18.84 
+66.38 
+0.00 
+53.33 
+46.67 
+477 
+191 
+Our-2 
+12.85 
+65.70 
+12.23 
+65.61 
+0.00 
+46.67 
+53.33 
+754 
+285 
+Our-1 
+10.86 
+65.77 
+8.74 
+65.72 
+0.00 
+46.67 
+53.33 
+2567 
+2600 
+[6] 
+14.73 
+58.51 
+13.99 
+58.36 
+0.00 
+53.33 
+46.67 
+893 
+880 
+[14] 
+11.68 
+60.10 
+11.00 
+59.98 
+0.00 
+46.67 
+53.33 
+828 
+812 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Available at cvlab.epfl.ch/data/pom/ 2 Available at www.cvg.reading.ac.uk/PETS2009/a.html</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Robust fragmentsbased tracking using the integral histogram</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Adam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Rivlin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Shimshoni</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Multi-target tracking by continuous energy minimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Andriyenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Schindler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Discrete-continuous optimization for multi-target tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Andriyenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Schindler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Dynamic subspace-based coordinated multicamera tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ayazoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Dicle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Sznaier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Camps</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICCV</title>
+		<meeting>ICCV</meeting>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Generalizing swendsen-wang to sampling arbitrary posterior probabilities</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Barbu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. PAMI</title>
+		<imprint>
+			<biblScope unit="volume">27</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1239" to="1253" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">multiple object tracking using k-shortest paths optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Berclaz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Fleuret</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Turetken</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. PAMI</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1806" to="1819" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Gmmcptracker:globally optimal generalized maximum multi clique problem for multiple object tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dehghan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Assari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Target identityaware network flow for online multiple target tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dehghan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Torr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">The way they move: tracking multiple targets with similar appearance</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Dicle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Camps</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Sznaier</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICCV</title>
+		<meeting>ICCV</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Flexible smoothing with b-splines and penalties</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Eilers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Marx</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Statistical Science</title>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="89" to="121" />
+			<date type="published" when="1996" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Pets2009 and winter-pets 2009 results: A combined evaluation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ellis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Shahrokni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ferryman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Winter-PETS Workshop</title>
+		<meeting>Winter-PETS Workshop</meeting>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Object detection with discriminatively trained part based models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Felzenszwalb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. PAMI</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1627" to="1645" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Pets2009: Dataset and challenge</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ferryman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Shahrokni</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Winter-PETS Workshop</title>
+		<meeting>Winter-PETS Workshop</meeting>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Multi-camera people tracking with a probabilistic occupancy map</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Fleuret</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Berclaz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Lengagne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. PAMI</title>
+		<imprint>
+			<biblScope unit="volume">30</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="267" to="282" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Object detection with grammar models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">F</forename><surname>Felzenszwalb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">A</forename><surname>Mcallester</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. NIPS</title>
+		<meeting>NIPS</meeting>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Exploiting compositionality to explore a large space of model structures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Grosse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sci</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">T</forename><surname>Freeman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sci</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">B</forename><surname>Tenenbaum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. UAI</title>
+		<meeting>UAI</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Bottom-up/top-down image parsing with attribute grammar</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. PAMI</title>
+		<imprint>
+			<biblScope unit="volume">31</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="59" to="73" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Unified hierachical multi-ojbect tracking using global data assoication</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hofmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Haag</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Rigoll</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. PETS Workshop</title>
+		<meeting>PETS Workshop</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Hypergraphs for joint multi-view reconstruction and multi-object tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hofmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wolf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Rigoll</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Multiple target tracking by learning-based hierarchical association of detection responses</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Nevatia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. PAMI</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="898" to="910" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Caffe: Convolutional architecture for fast feature embedding authors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Karayev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Guadarrama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ACM Multimedia</title>
+		<meeting>ACM Multimedia</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Framework for performance evaluation of face, text, and vehicle detection and tracking in video: Data, metrics, and protocol</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kasturi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Goldgof</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Soundararajan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Manohar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Garofolo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Bowers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Boonstra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Korzhova</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. PAMI</title>
+		<imprint>
+			<biblScope unit="volume">31</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="319" to="336" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Sparse representation based image interpolation with nonlocal autoregressive modeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kasturi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Goldgof</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Soundararajan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Manohar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Garofolo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Bowers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Boonstra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Korzhova</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. IP</title>
+		<imprint>
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="1382" to="1394" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">A multiview approach to tracking people in crowded scenes using a planar homography constraint</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Khan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ECCV</title>
+		<meeting>ECCV</meeting>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Branchand-price global optimization for multi-view multi-object tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Leal-Taixe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Pons-Moll</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Rosenhahn</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Learning to associate: Hybridboosted multi-target tracker for crowded scene</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Nevatia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Creating consistent scene graphs using a probabilistic grammar</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chaudhuri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Mitra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Funkhouser</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ACM SIGGRAPH</title>
+		<meeting>ACM SIGGRAPH</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Contextualized trajectory parsing via spatio-temporal graph</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. PAMI</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">12</biblScope>
+			<biblScope unit="page" from="3010" to="3024" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Adaptive tracking via learning hybrid template online</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. CSVT</title>
+		<imprint>
+			<biblScope unit="volume">21</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="1588" to="1599" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Robust visual tracking and vehicle classification via sparse representation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Mei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Ling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. PAMI</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="2259" to="2272" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Understanding bayesian rooms using composite 3d object models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Pero</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bowdish</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Hartley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Kermgard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Barnard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Globallyoptimal greedy algorithms for tracking a variable number of objects</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Pirsiavash</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Fowlkes</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Occlusion geodesics for online multi-object tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Possegger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mauthner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Faster r-cnn: Towards real-time object detection with region proposal networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. NIPS</title>
+		<meeting>NIPS</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Multi-target tracking by rank-1 tensor approximation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Ling</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Hu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Multicommodity network flow for tracking multiple people</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Shitrit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Berclaz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Fleuret</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. PAMI</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1614" to="1627" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Discriminatively trained and-or tree models for object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-C</forename><surname>Zhu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">A 3-d marked point process model for multi-view people detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Utasi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Benedek</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Efficiently scaling up crowdsourced video annotation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Vondrick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Patterson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="184" to="204" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Tracklet association with online target-specific metric learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">L</forename><surname>Chan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Multiple target tracking based on undirected hierarchical relation hypergraph</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Tracking a large number of objects from multiple views</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Hristov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Hedrick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kunz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Betke</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICCV</title>
+		<meeting>ICCV</meeting>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Human reidentification by matching compositional template with cluster sampling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W.-S</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICCV</title>
+		<meeting>ICCV</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Person search in a scene by jointly modeling people commonness and person uniqueness</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ACMMM</title>
+		<meeting>ACMMM</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Realtime objectof-interest tracking by learning composite patch-based templates</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICIP</title>
+		<meeting>ICIP</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Multiple target tracking using spatio-temporal markov chain monte carlo data association</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Medioni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Cohen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Gmcp-tracker: Global multi-object tracking using generalized minimum clique graphs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zamir</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dehghan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ECCV</title>
+		<meeting>ECCV</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Global data association for multiobject tracking using network flows</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Nevatia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">object tracking with multi-view support vector machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Sui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. MM</title>
+		<imprint>
+			<biblScope unit="volume">17</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="265" to="278" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">Robust visual tracking via consistent low-rank sparse learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Ahuja</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-H</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Ghanem</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">111</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="171" to="190" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">Image parsing via stochastic scene grammar</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. NIPS</title>
+		<meeting>NIPS</meeting>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

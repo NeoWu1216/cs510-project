@@ -1,0 +1,618 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Accelerated Generative Models for 3D Point Cloud Data</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ben</forename><surname>Eckart</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">The Robotics Institute</orgName>
+								<orgName type="institution">Carnegie Mellon University</orgName>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="laboratory">NVIDIA Research</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kihwan</forename><surname>Kim</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="laboratory">NVIDIA Research</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alejandro</forename><surname>Troccoli</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="laboratory">NVIDIA Research</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alonzo</forename><surname>Kelly</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">The Robotics Institute</orgName>
+								<orgName type="institution">Carnegie Mellon University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jan</forename><surname>Kautz</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="laboratory">NVIDIA Research</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Accelerated Generative Models for 3D Point Cloud Data</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+					<note>/publication/accelerated-generative-models</note>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:36+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Finding meaningful, structured representations of 3D point cloud data (PCD) has become a core task for spatial perception applications. In this paper we introduce a method for constructing compact generative representations of PCD at multiple levels of detail. As opposed to deterministic structures such as voxel grids or octrees, we propose probabilistic subdivisions of the data through local mixture modeling, and show how these subdivisions can provide a maximum likelihood segmentation of the data. The final representation is hierarchical, compact, parametric, and statistically derived, facilitating run-time occupancy calculations through stochastic sampling. Unlike traditional deterministic spatial subdivision methods, our technique enables dynamic creation of voxel grids according the application's best needs. In contrast to other generative models for PCD, we explicitly enforce sparsity among points and mixtures, a technique which we call expectation sparsification. This leads to a highly parallel hierarchical Expectation Maximization (EM) algorithm well-suited for the GPU and real-time execution. We explore the trade-offs between model fidelity and model size at various levels of detail, our tests showing favorable performance when compared to octree and NDT-based methods.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Given the recent commoditization of different types of active range sensors (e.g., TOF, Lidar, structured light), spatial processing and visualization of large collections of 3D point clouds has become one of the most important stages in 3D imaging/vision pipelines <ref type="bibr" target="#b14">[15]</ref>. 3D point cloud processing introduces several new challenging problems such as (1) uneven sampling density, (2) unstructured organization of the incoming data, (3) level-of-detail processing given varying speed and memory requirements, and (4) measurement uncertainty from sensor noise. Additionally, modern depth sensors generate millions of data points per second, making it difficult to utilize all incoming data effectively in real-time for devices with limited computational resources.</p><p>Many current techniques for processing large amounts of point cloud data (PCD) either simply subsample the data or apply some sort of discretization, either through dense, sparse <ref type="bibr" target="#b15">[16]</ref> or hierarchical <ref type="bibr" target="#b6">[7]</ref> voxelization techniques. Representing continuous geometry through voxels creates discretization artifacts and offers no clear way of handling noise or data uncertainty. Furthermore, the discrete nature of voxels and sub-sampled point clouds greatly complicate spatial processing procedures that require continuous derivatives or high quality normal estimates. We address these challenges with a hierarchical and probabilistic representation of 3D point cloud data <ref type="bibr">(PCD)</ref> in the form of a hierarchy of Gaussian Mixture Models (GMMs). As a representation of 3D space, a GMM model has several advantages. First, being a continuous probability density function (PDF), the GMM does not require the discretization of 3D space. Second, the uncertainties of data measurements are embedded in the covariance matrices of the GMM, which combined with a special cluster to handle outliers, provide an effective way of handling noisy mea-surements. Finally, the storage requirements for a GMM are much lower than for the original PCD.</p><p>Though GMMs have been used before for PCD representation <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b7">8]</ref>, we introduce a novel top-down hierarchical model which confers the following benefits: (1) dynamic allocation of the number of mixtures, with new clusters being added in areas of high-frequency detail, (2) efficient parallel coarse-to-fine construction by recursively partitioning the points in the PCD into their most influential mixture/s, and (3) multiple levels of detail for point cloud re-sampling and occupancy map creation.</p><p>Many applications in 3D vision require grid-based occupancy estimates of space, including path planning <ref type="bibr" target="#b18">[19]</ref>, semantic perception <ref type="bibr" target="#b5">[6]</ref>, and 3D modeling <ref type="bibr" target="#b10">[11]</ref>. We show how our model may augment these applications by allowing dynamic run-time estimates of occupancy over sparse grids. Since the spatial extent and voxel resolution of these estimates can be determined dynamically at run-time, one can avoid many of the common problems with traditional techniques: constrained extent in large scenes, discretization artifacts as a result of coarse voxel sizes, or memory bottlenecks resulting from dense high-resolution voxel grids.</p><p>Although a generative or continuous parametric representation for PCD can facilitate many important applications such as registration, surface extraction, semantic segmentation, this is not our focus. Instead, we focus on a more basic and fundamental problem: how one might efficiently construct, sample, and integrate over these generative models. This work therefore can be used to augment all the aforementioned applications.</p><p>Our main contribution is a highly efficient and parallelizable method for hierarchical top-down GMM clustering that, as opposed to previous GMM-based techniques, applies sparse constraints on point to cluster assignments, thus enabling construction time logarithmic with respect to the overall model size. In addition, we present a novel importance sampling technique that allows for efficient integration of the PDF over a discretized volume of space that can be used to construct arbitrarily sized probabilistic occupancy maps.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>In most spatial processing applications that rely on point cloud data, using the raw points directly can be nearly intractable. Thus, most common operations one might want to perform: nearest neighbor queries, denoising, geometric or semantic inference, etc., stand to benefit from imposing some type of structure to the raw data. <ref type="table" target="#tab_1">Table 1</ref> summarizes typical data structures used for point cloud data.</p><p>Voxelization and occupancy grids <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b18">19]</ref> have been established as a popular method to discretize raw PCD over a dense grid, but memory problems emerge when needing fine resolution or large grids. Especially in cases of 3D  <ref type="bibr" target="#b16">[17]</ref> N Octree <ref type="bibr" target="#b10">[11]</ref> N log N 3D-NDT <ref type="bibr" target="#b0">[1]</ref> N 3D-NDT-Octree <ref type="bibr" target="#b13">[14]</ref> N log N GMM <ref type="bibr" target="#b3">[4]</ref> N J</p><p>Hierarchical GMM <ref type="bibr" target="#b9">[10]</ref> N 2 Proposed Method N log J points, many voxels may be unoccupied, leading to inefficient memory usage. Octrees and kd-trees can be much more space efficient <ref type="bibr" target="#b10">[11]</ref>, as the construction of a regularly subdivided hierarchy effectively compresses empty space. These structures incur additional overhead compared to dense grids, however, requiring superlinear construction time with respect to the size of the PCD. Whereas voxels and octrees rely on discretization to obtain structure from PCD, another class of algorithms instead model the data as a set of independent samples from some unknown distribution. These algorithms use the principle of maximum data likelihood to optimize a set of latent parameters that describe the original PCD. Known as generative models, these models can by construction provide robust probabilistic inference. Their trade-off, however, is the potentially high construction or inference cost and need for a priori knowledge.</p><p>For modeling 3D PCD, the most common generative model used in the literature is the Gaussian Mixture Model (GMM). Typically, GMMs are used to facilitate robust point cloud registration techniques <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b7">8]</ref>. The work of Jian and Vemuri <ref type="bibr" target="#b11">[12]</ref>, for example, convert a point cloud into a GMM by placing a covariance around each point. Though this minimizes the setup cost, inference then becomes very slow as the GMM is larger than the original raw points. Others, such as Eckart et al. <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b4">5]</ref> perform a maximum data likelihood optimization during the construction of the model in order to reduce its size, but this construction does not scale well when large amounts of mixtures are needed. In contrast to these methods, our proposed technique is exponentially faster with respect to the size of the model. A "flat" version must iterate linearly O(J) through all J mixtures, whereas our method is O(log J). Furthermore, we do not need to specify the number of mixtures a priori. Our coarse-to-fine construction allows us to both fil-ter out low-frequency details quickly (floors and walls) and drill down to deeper levels for high-frequency details.</p><p>The Normal Distributions Transform (NDT) <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b17">18]</ref> is a widely used and elegant technique that attempts to merge the concepts of a voxel grid or octree with a GMM by simply recording the mean and covariance of all points that fall into each voxel. The GMM can then be constructed as a weighted sum of the voxel's respective Gaussian parameters. Though the construction of such a data structure is very efficient, the requirement to voxelize at the beginning can cause a loss of fidelity.</p><p>Other work has experimented with hierarchical forms of GMMs for applications like 2D image segmentation <ref type="bibr" target="#b8">[9]</ref>. Typically, these methods operate bottom-up, repeatedly grouping together like clusters of points using divergence measures to split and merge the data. For example, Goldberger et al. <ref type="bibr" target="#b9">[10]</ref> construct an iterative EM-like algorithm using KL-Divergence in order to repeatedly merge candidate clusters. In contrast, we adopt a top-down hierarchical approach, motivated by the need to keep the calculation of point-mixture correspondences sparse for 3D point clustering. As such, our approach is more amenable to parallel hardware and is much more computationally efficient (see <ref type="table" target="#tab_1">Table 1</ref>). Another similar top-down construction is that of Kalaiah et al. <ref type="bibr" target="#b12">[13]</ref>, though this method is not generative.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Method Overview</head><p>Our model uses overlapping basis functions (anisotropic Gaussian mixtures) for representing 3D geometry. These functions are recursively applied in a top-down fashion to create a hierarchy of overlapping patches that approximate the original 3D PCD. The creation of this model is cast as the solution to a Maximum Likelihood Estimation (MLE) hierarchical Gaussian Mixture segmentation problem that can be solved by recursively employing the Expectation Maximization (EM) algorithm over increasingly smaller partitions of the point data.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Model Definition</head><p>Our world model is composed of J overlapping probabilistic mixtures Θ j plus a (J+1) th noise distribution. We choose our J mixtures to be weighted 3-dimensional multivariate Gaussians, Θ j = {π j , µ j , Σ j }, with π j being the weight and µ j and Σ j being the mean and covariance, respectively. Our noise distribution is chosen to be a uniform distribution over the bounding box of the point data. Together, these basis distributions produce a mixture model, which is itself a valid probability distribution.</p><p>Given a point cloud Z of size N , its probability of being generated by our model, given that each point is an iid sample of the world, is:</p><formula xml:id="formula_0">p(Z|Θ) = N i=1 p(z i |Θ) = N i=1 J+1 j=1 π j p(z i |Θ j ), (1) p(z i |Θ j ) = N (z i |Θ j ), for 1 ≤ j ≤ J, 1 η , for j = J + 1,<label>(2)</label></formula><p>where η is the size of the volume for which the noise cluster is active. To find the basis functions to best fit the point cloud data we employ the EM algorithm <ref type="bibr" target="#b1">[2]</ref>, which has been established as a way to iteratively maximize data likelihood when there is no closed form solution to the maximizer, yet there is a way of finding a maximum of joint data likelihood of the data and a set of associated latent variables. We define a set C of latent variables c ij that represents the binary associations between points z i ∈ Z and mixtures Θ j . In the E-Step, we calculate the posterior for all c ij ∈ C given Θ:</p><formula xml:id="formula_1">E[c ij ] = π j p(z i |Θ j ) J+1 j ′ =1 π j ′ p(z i |Θ j ′ )<label>(3)</label></formula><p>In the M-Step, we maximize the expected log-likelihood with respect to Θ, using our current</p><formula xml:id="formula_2">E[c ij ] def = γ ij : max Θ ij γ ij {ln π j + ln p(z i |Θ j )} (4)</formula><p>Given a fixed set of expectations, one can solve for the optimal parameters in closed form at iteration k:</p><formula xml:id="formula_3">µ k+1 j = i γ ij z i i γ ij (5) Σ k+1 j = i γ ij z i z T i i γ ij − µ k+1 j µ k+1 j T (6) π k+1 j = i γ ij N<label>(7)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Expectation Sparsity</head><p>Given the above definitions and a sufficiently high number of mixtures J, the posterior over correspondences will be sparse due to the nature of 3D geometry. We can see this fact intuitively: Consider that in an indoor scene, for example, the geometric structure of a light fixture will not be statistically informative to a point sampled on a couch beneath it. Thus, given a point cloud of size N , if we naively try to calculate all N J point-subsurface expectations (γ ij ), most will be zero or near-zero and not contribute meaningfully to the calculation. Therefore, one could save vast amounts of computation when trying to calculate γ ij by restricting the summation to only those {z i , Θ j } tuples that are known to have sufficiently non-zero conditional probability. We show in the next section how to solve this problem by constructing a top-down hierarchy of GMMs.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">A Top-Down Hierarchy of Mixtures</head><p>We can formally define our hierarchical Gaussian Mixture Model recursively by looking at the probabilistic form for a point z i ∈ R 3 . At the root of our tree, level 1 (l = 1), our model consists of a Gaussian Mixture of sizeĴ, with â J + 1th noise cluster:</p><formula xml:id="formula_4">p(z i |Θ l=1 ) =Ĵ +1 j=1 π l=1 j p(z i |Θ l=1 j ) (8) Each Θ l=1 j</formula><p>can then be refined as another Gaussian Mixture, using its correspondence variable:</p><formula xml:id="formula_5">p(z i |c l=1 i , Θ l=2 ) =Ĵ +1 k=1 π l=2|1 k p(z i |Θ l=2|1 k ),<label>(9)</label></formula><p>where the superscript indicates the selection of Gaussian parameters at level 2 given the parent node at level 1.</p><p>The above is a proper Gaussian Mixture that satisfies Ĵ +1 k=1 π l=2|1 k = 1. Our model is then fully defined by the set of all Θ l k and π l k . If we begin with a coarse decomposition intoĴ ≪ J mixtures, after convergence, the posterior over correspondences gives us a natural maximum likelihood partitioning of data intoĴ coherent geometric regions. We can then use this posterior as a partitioning function over our data, and reduce our problem intoĴ subproblems of roughly 1/Ĵth the size. Recursing this process multiple times generates a tree of GMMs, requiring many small EM algorithms of sizeĴ. The number of levels in the hierarchy would be</p><formula xml:id="formula_6">l = logĴ (J), where each level producesĴ l−1 EM problems of sizeĴ. Thus, we would need O( J−1 J−1 ) EM algorithms of size O(N lĴ ), where N l ≈ N J * l−1 .</formula><p>The entire procedure will be logarithmic in the number of mixtures and linear in the number of points, O(N logĴ (J)).</p><p>In order to maintain a valid global GMM, however, we need to share context between parents and children. Mathematically, we can derive this relation by assigning causal relationships to a set of l latent correspondence variables, C l , as depicted in <ref type="figure" target="#fig_2">Fig. 2</ref>. Using the model, we can calculate the probability of our observed variable by marginalizing over the latent variables. In the two layer case,</p><formula xml:id="formula_7">p(z i |Θ l=2 ) = C l=1 C l=2 p(z i , c l=1 i , c l=2 i |Θ l=2 ) = C l=1 C l=2 p(z i |Θ l=2 , c l=2 i )p(c l=2 i |c l=1 i )p(c l=1 i ) =Ĵ +1 j ′ =1Ĵ +1 j=1 π l=1 j ′ π l=2|1 j p(z i |Θ l=2|1 j )<label>(10)</label></formula><p>We can clearly see that for multiple levels, the correct mixing value must be propagated down the tree to the leaf node, forming a multiplicative chain.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Sparsification: Hard and Soft Partitioning</head><p>When we recurse into a new tree level, we utilize the set of posteriors γ ij of the parent level to obtain a parti- <ref type="figure" target="#fig_2">Figure 2</ref>. Graphical model of hierarchical GMM An example of a three-level hierarchy, where a series of causally linked latent variables are used to identify salient geometric regions of influence for each observed point zi.</p><formula xml:id="formula_8">N Θ l=3 π l=2 π l=3 c l=1 i π l=1 c l=3 i z i c l=2 i</formula><p>tion of our PCD. We call this process expectation sparsification. One possible partitioning strategy is to simply assign a point to the mixture for which its parent expectation was the highest. We will refer to this as hard partitioning. However, though this method retains mixture overlap inside every group ofĴ children, we will have no such overlap among groups of children from different parents.</p><p>We can use a soft partitioning scheme to constrain the amount of geometric context sharing among children of different parents while still maintaining logarithmic efficiency with respect to the number of mixtures. To do this, we introduce a parameter, λ p , that relaxes the hard partitioning constraint but still keeps γ ij sparse. Alg.1 describes the procedure in detail. To avoid double-counting observed points in the final GMM, we introduce a per-point weighting factor into the E-Step, called p i . The total collection of all weights is denoted P. ξ is a normalization constant such that pi ξ over all active partitions sums to 1.0. for z i , p i ∈ {Z, P} in parallel do 3:</p><p>calculate γ ij , ∀j ∈Ĵ 4:</p><p>for γ ij ≥ λp do 5:</p><p>add z i to partition j as {z i ,</p><formula xml:id="formula_9">p i γ ij ξ } 6:</formula><p>end for 7: end for 8:</p><p>return partitions j , ∀j ∈Ĵ 9: end procedure In this formulation, a point can now contribute to multiple partitions, but an additional piece of information, p i , needs to be recorded such that the observed point in a given partition contributes exactly Ĵ γ ij = p i . In this way, we can use λ p to control the amount of context sharing among children of different parents. Given that λ p is sufficiently large, the algorithm will remain both highly efficient and parallelizable as only a small amount of "border points" will need to be counted multiple times in different partitions.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.5.">Parallel Construction</head><p>Additionally, we can further accelerate the calculation of expectations by parallelization on the GPU. Inspecting Equations 5-7 reveals that one only needs to keep track of J zeroth, first and second moments, weighted by their expec-tations,</p><formula xml:id="formula_10">{T 0 j , T 1 j , T 2 j } def = { i γ ij , i γ ij z i , i γ ij z i z T i } (11)</formula><p>These constitute sufficient statistics for the GMM. For the purposes of parallelization, the calculation of the above three quantities can be done in two steps: (1) Calculation of each γ ij and (2) a weighted sum over all zeroth, first, and second moments. The former requires information about all J clusters but no information needs to be shared among points. The latter requires information about all N points but no information is needed from the J clusters once γ ij are calculated. This allows for point-level parallelism in calculating γ ij and an efficient point-level reduction sum when calculating the weighted moments.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Implementation Details</head><p>We first review the implementation of our hierarchical EM algorithm using hard partitions, and then in Sec. 4.1 discuss a generalization to soft partitioning.</p><p>Algorithm 2 shows the pseudocode for implementing the hard partitioned variant. while !Converged(λs) do 5:</p><p>{T 0 , T 1 , T 2 , currIdx} ← E step(Z, Θ, parentIdx) 6:</p><p>Θ ← M step(T 0 , T 1 , T 2 , l, λ d ) 7:</p><p>end while 8: parentIdx ← currIdx 9: end for 10: end procedure 11: procedure E STEP(Z , Θ, parentIdx) 12:</p><p>for i ∈ size(Z) in parallel do 13:</p><p>for j ∈ Children(parentIdx[i]) do 14:</p><formula xml:id="formula_11">γ ij ∝ π j N (z i |Θ j ) 15: {T 0 j , T 1 j , T 2 j } ←Accumulate(T 0 j , T 1 j , T 2 j , γ ij , z i ) 16: end for 17: currIdx[i] ← j s.t. max(γ i ) = γ ij 18:</formula><p>end for 19:</p><p>return {T 0 , T 1 , T 2 , currIdx} 20: end procedure 21: procedure M STEP(T 0 , T 1 , T 2 , l) 22:</p><p>for j ∈ Level(l) in parallel do 23:</p><formula xml:id="formula_12">Θ j ← ML Estimator(T 0 j , T 1 j , T 2 j ) 24:</formula><p>if !Supported(T 0 j , λ d ) then π j ← 0 25: end for 26:</p><p>return Θ 27: end procedure HIERARCHICAL EM: The algorithm takes as an input a point cloud Z, the maximum number of levels of recursion, L, and two convergence parameters λ s , λ d . The first convergence parameter controls the stopping condition for a given set of EM steps, and the second convergence parameter controls the degree of geometric complexity of the final output by dropping clusters with insufficient support. To initialize Θ, we set our means to be the corners of the unit cube centered around zero. Note that during the execution of our algorithm we implicitly and recursively scale and offset the data to fit within the unit cube. The mixing weights are initially equal. Since these values are the same regardless of the recursion level for every new set ofĴ mixtures, we only need to set these once at the very beginning of the algorithm. Likewise, we need to initialize an integer array parentIdx of size N to the value of −1, which will give us the correct child indices when l = 0 ([0 . . . 7]) to iterate over inside the first level's E step. After initialization is complete, we then iterate through L levels of the EM algorithm. After a given level has converged, we update our parentIdx array to point to the Maximum Likelihood estimates of subsurface expectation, recorded in currIdx during each iteration of the E step. E STEP: The E step calculates expectations over the child mixtures given the ML expectation of every point to the set of parent mixtures. The weighted moments {T 0 , T 1 , T 2 } (Eq. 11) can be calculated efficiently and in parallel using sum reductions or CUDA's atomicAdd functionality. M STEP: While the E step parallelizes over points, the M step parallelizes over subsurfaces (see Section 3.5). The ML Estimator updates the model according to the standard MLE equations for GMM-based EM (cf. Eq. 5-7). Tikhonov regularization is done on the covariances to prevent numerical instability. Finally, clusters are dropped with insufficient support.</p><p>Note that if we implicitly encode the Gaussian Mixture tree in a large flat statically allocated array, the indexing functions Children and Level can be calculated in con- for j ∈ Children(k) do 4:</p><formula xml:id="formula_13">γ ij ∝ π j N (z i |Θ j ) 5: {T 0 j , T 1 j , T 2 j } ←Accumulate(T 0 j , T 1 j , T 2 j , p ik γ ij , z i ) 6:</formula><p>end for 7: end for 8:</p><p>return {T 0 , T 1 , T 2 } 9: end procedure By looking at the construction of the algorithm and noting that L = logĴ (J) and J ≪ N , we can see that the algorithm will run in O(k logĴ (J)(ĴN )), where k is the number of EM iterations until convergence. The normal "flat" EM algorithm would execute in O(kN J). Thus, we have produced an algorithm that speeds up model creation exponentially with respect to J, the total number of mixtures in the model. Furthermore, we have liberated J as a parameter that must be set a priori, instead letting the convergence criterion λ s and low support threshold λ d determine when the point cloud has been sufficiently segmented.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Soft Partitioning</head><p>For hard partitions, updating the pointer parentIdx after EM convergence is all that is necessary for hierarchical construction since in the subsequent level we can then use the updated parentIdx in conjunction with the Children function as our index array into the tree.</p><p>To generalize the algorithm presented in Alg.2 to soft partitions, however, we need to record a few more pieces of data. Instead of a single parentIdx array, we need to record all expectations that fall above λ p , as per the partitioning function outlined in Alg.1. Thus, we need to store both the index of partitioned points and their respective soft partitioning weights, piγij ξ . To do this, we modify line 8 of Alg.2 to instead call the Partition function from Alg. 1. The E step is then modified according to Alg.3. The only other change is that now inside ML Estimator of the M Step: the new mix value must now be normalized using N i p i and not the normal N (cf. Eq.5-7). With the modifications, a point in multiple subsurfaces will get distributed recursively throughout the hierarchy to all branches containing those subsurfaces in such a way that its expected contribution still sums to one among them. This important bookkeeping operation keeps consistency among the different paths down the tree.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">PCD Processing with Generative Models</head><p>Our work in this paper focuses on the basic and fundamental problem of how one might efficiently construct, sample, and integrate over a generative model for PCD. We have so far explained how one might efficiently construct the model (Sec 3), but once the model is obtained, it is not trivial to see how one might sample and integrate over it, two operations that are fundamental for spatial processing applications. In this section, we describe two algorithms to efficiently perform sampling and integration, which we apply to point cloud reconstruction and occupancy grid generation, respectively. Our contribution is a novel importance sampling algorithm for GMMs that allows us to significantly reduce the number of samples required during integration by Monte Carlo sampling. Because these algorithms are not specific to hierarchical GMMs, we simplify the notation to the PDF as defined in Equation 1.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Point Cloud Reconstruction</head><p>To regenerate a set of N points we sample the distribution defined by the GMM as shown in algorithm 4. First we determine how many samples H j to generate from each cluster j in <ref type="bibr">[1, J]</ref> according to the mixture weights π j . Then we generate the H j for each cluster according to the normal distribution defined by Θ j . Details on this technique, known as ancestral sampling, can be found in Bishop et al. <ref type="bibr" target="#b1">[2]</ref>. We present it here for completeness as this is an important operation on our model. Refer to <ref type="figure" target="#fig_0">Figure 1e</ref> for a graphical example of this result.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Algorithm 4 Point Cloud Reconstruction</head><formula xml:id="formula_14">1: procedure PCD RECONSTRUCT( Θ, J, N ) 2: calculate Π j = j i=1 π i , ∀j ∈ J 3:</formula><p>S ← N random uniform samples in [0, 1) 4:</p><p>H ← histogram(S, Π) , Π provides bins extents 5:</p><p>for j = 1 . . . J do 6:</p><p>P j ← H j points sampled from N (µ j |Σ j ) 7:</p><p>end for 8:</p><p>return P j , ∀j ∈ J 9: end procedure</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Occupancy Grid Generation</head><p>To construct an occupancy grid we can stochastically sample points directly from the model to perform a Monte Carlo estimation of the probability that a given region of space is occupied. More formally, to build a discrete occupancy voxel grid we would like to spatially integrate our PDF over each voxel to obtain its probability estimate,</p><formula xml:id="formula_15">p(V k |Θ) = V k J+1 j=1 π j p(v|Θ j )dv,<label>(12)</label></formula><p>where V k is a particular indexed cube or voxel.</p><p>Since there is no analytical solution to this integral, we resort to Monte Carlo sampling. However, uniform sampling the PDF over the space of the voxel grid will likely yield estimates with very high variance since the previously discussed sparsity will render many areas to essentially zero probability. Thus, we employ the use of importance sampling. To see how importance sampling is quite efficient in this context, we need to re-interpret the GMM as a weighted sum of zero-mean isotropic Gaussians that have been skewed and shifted through 3D space. To do this, we perform a Cholesky decomposition on the covariances, Σ j = U T j U j . Then the multivariate normal equation is,</p><formula xml:id="formula_16">N (x i |Θ j ) = ξ −1 j e − 1</formula><p>(a) Input PCD (1.6 mil pts) <ref type="bibr" target="#b20">[21]</ref> (b) Occupancy grid map of these samples, per cluster, fall into a particular voxel and then multiply this ratio by the appropriate mixing parameter. Thus,</p><formula xml:id="formula_17">p(V k |Θ) ≈ J+1 j=1 π j N i=N i=1 I V k (x i )<label>(15)</label></formula><p>where x i ∼ N (µ j |Σ j ) and I is an indicator function for whether x i falls within the bounds of V k .</p><p>Since the sampling function matches the underlying PDF (up to a multiplicative constant), these calculations yield unbiased estimates of the voxel probabilities and have low variance for even a fairly small number of samples. Furthermore, we precalculate all the samples X before reconstruction so that the entire process amounts to simply binning (voxelizing) the results of J different affine transformations over a relatively small static set of random or pseudorandom points. Since the model itself contains no voxels, as opposed to voxel-based or NDT methods, we are free to dynamically choose the extent and resolution of the occupancy grid at run-time, according to any number of application-specific constraints, arbitrarily defined axes, frustum culling, or locus of attention. <ref type="figure" target="#fig_4">Figure 3</ref> demonstrates this process for a large scene. Once we create a model from the points (in this case, a hierarchical GMM with a max depth of 5), we no longer need the raw PCD, and instead can at runtime produce a high quality occupancy map using the model only <ref type="figure" target="#fig_4">(Figure 3b</ref>).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Model Evaluation</head><p>We evaluate our model with respect to reconstruction fidelity and construction execution time. We used for testing the Stanford Bunny (∼36k points) and the Stanford 3D scene dataset, containing scenes with approximately ∼1-3 million points <ref type="bibr" target="#b19">[20,</ref><ref type="bibr" target="#b20">21]</ref>. On all these experiments, we statically setĴ = 8 and our sparsity constraint, λ p = 0.1.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.1.">Reconstruction Fidelity</head><p>The reconstruction fidelity provides a measure of how well our model can re-create the original point cloud. For this purpose, we use a PSNR (Peak Signal to Noise Ratio) metric derived from the Hausdorff distance as suggested  by <ref type="bibr" target="#b2">[3]</ref>. Specifically, given a reference a point cloud of size N , we stochastically generate an equivalent N amount of points from our model as described in section 5.1. Then, for every point in the original point cloud, we find the nearest neighbor in the reconstructed cloud. The logarithm of the inverse root mean squared error for all points relative to the bounding box size around the point cloud gives our PSNR metric. Note that the PSNR is on a logarithmic scale. Thus, linear increases in PSNR correspond to exponential reductions in average point-to-point recreation error. By computing the PSNR at different levels of details of our model we can provide an insight on the trade-off between model size and fidelity and fairly compare these trade-offs against other generative techniques. <ref type="figure" target="#fig_5">Figure 4</ref> shows a visual representation of the PDF, the PSNR and model size for three different levels of Bunny model. Though many different potential GMMs may be extracted from the hierarchy, we restrict our comparisons to GMMs consisting of leaf nodes are different max levels. For example, a "Level 3" GMM would the GMM extracted from the hierarchy by taking all the leaves of the GMM tree at a max depth of 3. As seen in <ref type="figure" target="#fig_5">Figure 4</ref>, the PDF from Level 2 provides a fairly good approximation while at the same time using ∼170 less storage than the original PCD. By level 4, the fidelity is such that points generated from the model are virtually indistinguishable from the original PCD. Because model construction using the hierarchical GMM framework can be viewed as the sparse embedding of 3D points into a higher dimensional 10D space, we can save on storage space with respect to the original size of the PCD, while still retaining a high level of geometric fidelity. We don't claim that we provide a state-of-the-art compression algorithm, but we note instead that our model allows for important savings in storage, in addition to its other properties. We compare our model against the 3D-NDT representation <ref type="bibr" target="#b0">[1]</ref> and its octree-based variant <ref type="bibr" target="#b13">[14]</ref>. We chose the 3D-NDT as it is a widely used state-of-the-art generative model. To generate the trendlines for 3D-NDT, we calculate models at increasingly finer voxel resolution, and for the octree variant, we use increasingly smaller splitting thresholds. As a baseline we compute a subsampled version of the At similar size models, the hierarchical GMM has much better PSNR (reconstruction performance) with respect to the original data when compared against the 3D-NDT, 3D-NDT-Octree, and a simple subsampling strategy for point cloud reduction.</p><p>original point cloud. Randomly subsampling of the PCD can be seen as a basic way to reduce the data size and is a common preprocessing technique for many 3D point algorithms. <ref type="figure" target="#fig_6">Fig. 5</ref> shows the fidelity reconstruction vs storage size results. In every case but the bunny, we find that our model performs favorably to both NDT variants. This is because our optimization procedure yields a more compact representation without the need for voxelization. In the case of the bunny, however, the original point cloud is small enough that at higher model sizes we see diminishing returns over the octree-based NDT. In terms of statistical downsampling, both the hierarchical GMM and 3D-NDT are clearly much better choices to downsize the data while still retaining high geometric fidelity: for example, the level 5 GMM for Burghers achieves 72 PSNR with respect to the original point cloud, whereas a subsampled point cloud of equivalent size only yields 60 PSNR. Similarly, the smallest GMM more than doubles the PSNR over downsampling.</p><p>To give another interpretation of this data: the level 3 GMM for Burghers contains as much reconstruction fidelity as if the point cloud were subsampled to about a fifth of its size, however, the level 3 GMM uses about 450x less memory.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.2.">Computational Speed and Scalability</head><p>We now take a look at the execution time of the hierarchical model construction. We implemented our algorithm in C++/CUDA and are able to run it on desktop and mobile platforms. <ref type="table">Table 2</ref> shows the construction times for each level in the hierarchy over different data sets using hard partitions. Note that, even on the mobile platform, the PCD  <ref type="table">Table 3</ref>. Construction speed-up relative to a flat GMM model. The table compares the E Step execution time of the hierarchical GMM compared with a flat GMM having the same number of mixtures on the full Burghers model (∼4.5M pts). At higher detail levels, the proposed hierarchical GMM is significantly faster to build than the flat GMM. from a depth camera can be processed at rates higher than 60FPS for a level 2 decomposition. In addition, we compare the construction time of our hierarchical model against the flat GMM model. We show in <ref type="table">Table 3</ref> that our hierarchical method becomes increasingly faster relative to a flat version with larger numbers of clusters, making our method more suitable in applications where high fidelity is desired yet construction times need to remain low.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Conclusion and Future Work</head><p>We introduced a hierarchical data structure based on Gaussian mixture models that comprises a compact and generative representation for 3D point cloud data. Model creation is accelerated by producing bounds on spatial interactions between the points and model. Thus, hierarchical model construction is orders of magnitude faster than the equivalent flat model, which follows as a result of replacing a large EM problem into multiple smaller ones. We demonstrated that the PDF can be used to effectively model the original data at different levels of detail, reconstruct point clouds of arbitrary sizes, and compute probabilistic occupancy estimates, fundamental components of many spatial perception and 3D modeling applications. Compared to discrete methods or hybrid approaches such as the NDT, our model yields higher fidelity results at smaller sizes, with modest construction time trade-offs even on mobile hardware. Future work will explore techniques for hierarchical shape-based object recognition, and locally rigid globally non-rigid surface registration with our generative models.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Processing PCD with a Hierarchy of Gaussian Mixtures: (a) Raw PCD from Stanford Bunny (35k vertices), (b) and (c) Two levels of detail extracted from the proposed model. Each color denotes the area of support of a single Gaussian and the ellipsoids indicate their one σ extent. Finer grained color patches therefore indicate higher statistical fidelity but larger model size, (d) a log-scale heat-map of a PDF from a high fidelity model. (e) stochastically re-sampled PCD from the model (5k points), (f) occupancy grid map also derived directly from the model.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head></head><label></label><figDesc>procedure PARTITION(Z, P, Θ,Ĵ, λp) 2:</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Algorithm 2</head><label>2</label><figDesc>Hierarchical EM with Hard Partitions 1: procedure HIERARCHICAL EM(Z, L, λs, λ d ) 2: Init: parentIdx ← {−1} N ; Θ ← Θinit 3: for l = 0 . . . L − 1 do 4:</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head></head><label></label><figDesc>stant time: Children(i) = [(i + 1)Ĵ . . . (i + 2)Ĵ − 1] and Level(l) = [Ĵ (Ĵ l −1) J−1 . . .Ĵ (Ĵ l+1 −1) procedure E STEP({Z , P} K , Θ) 2:for z i , p ik ∈ {Z, P} k , ∀k = 1 . . . K in parallel do 3:</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 3 .</head><label>3</label><figDesc>Occupancy estimates: Left: Raw PCD. Right: an example high resolution occupancy map obtained by sampling a hierarchical GMM (max depth 5) produced from the points.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 4 .</head><label>4</label><figDesc>Levels of Fidelity:The colors in each heatmap shows the accumulated PDF values projected onto the screen space. PSNR, model size, and the reduced storage size are shown for each level. We vary the level of detail (L2 to L4) to show the trade-off between storage size and fidelity. The original PCD is 421 kB.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 5 .</head><label>5</label><figDesc>A comparison of data structure size vs fidelity over several standard point cloud datasets. The blue dashed line indicates the original point cloud size. Note the x-axis is on log scale. The star markers indicate different levels in the GMM hierarchy.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 1 .</head><label>1</label><figDesc></figDesc><table>A Comparison of 3D Point Cloud Data Structures 
+Hierarchical: Hierarchical methods compress free space and are 
+therefore more compact than dense grids. Generative: Generative 
+models add parametric structure to PCD, facilitating statistical in-
+ference, maximum likelihood, or continuous optimization meth-
+ods. Voxel Free: The lack of voxelization present in the model 
+avoids discretization errors, allowing higher fidelity at smaller 
+model sizes. Construction complexity: N is the number of points 
+in the PCD, and J the number of mixtures in a GMM, with J ≪ N 
+for most typical applications. 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head></head><label></label><figDesc>L1 32.6ms (31Hz) 2.6ms (385Hz) 10.6ms (95Hz) L2 57.8ms (17Hz) 4.3ms (233Hz) 15.3ms (65Hz) L3 72.6ms (14Hz) 7.7ms (130Hz) 22.0ms (45Hz) L4 92.2ms (11Hz)<ref type="bibr" target="#b10">11</ref>.7ms (85Hz) 31.5ms (32Hz)Table 2. Hierarchy construction time. L1 to L4 refers to a level of the hierarchy (i.e., L3 denotes the the process including L1 to L3). D refers to a desktop computer (i5-3500/GTX660) used for the computation, and M denotes a Mobile device (NVIDIA Shield tablet). Raw depth refers to the point cloud directly captured from Softkinetic DS325 depth camera.</figDesc><table>Burghers (D) 
+Bunny (D) 
+Raw depth (M) 
+307k pts 
+44k pts 
+60k pts 
+#J Hierarchy 
+Flat Speed-up 
+8 
+79.2 ms 
+61.6 ms 
+0.78× 
+64 
+145.6 ms 
+166.5 ms 
+1.14× 
+512 
+184.2 ms 
+1145.4 ms 
+6.22× 
+4096 
+213.8 ms 
+8750.8 ms 
+40.93× 
+32768 
+251.0 ms 71061.7 ms 
+283.11× 
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">(xi−µ j ) T U T j Uj (xi−µ j ) (13) = ξ −1 j e − 1 2 Aj xi−bj 2 ,(14)where A j = U j and b j = U j µ j , and ξ j is a normalization factor. Thus, we can interpret each input x i as undergoing an affine transformation before being evaluated through a zero-mean Gaussian function with identity covariance. To efficiently sample from the GMM therefore we first sample uniformly over [0, 1] in 3 dimensions and then transform the values through the Φ −1 (probit) function. Our derived affine transformations of the samples X ∼ N (0|I) for each of J subsurfaces place them in the GMM space. Furthermore, since the GMM is simply a linear combination of many Gaussians, once we have a collection of transformed samples, one only needs to keep track of what proportion</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">The normal distributions transform: A new approach to laser scan matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Biber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Straßer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE/RSJ International Conference on Intelligent Robots and Systems</title>
+		<imprint>
+			<date type="published" when="2003" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">M</forename><surname>Bishop</surname></persName>
+		</author>
+		<title level="m">Pattern Recognition and Machine Learning</title>
+		<meeting><address><addrLine>New York, Inc., Secaucus, NJ, USA</addrLine></address></meeting>
+		<imprint>
+			<publisher>Springer-Verlag</publisher>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Measuring error on simplified surfaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Cignoni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rocchini</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Scopigno</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Metro</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computer Graphics Forum</title>
+		<imprint>
+			<biblScope unit="volume">17</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="167" to="174" />
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">REM-Seg: A robust EM algorithm for parallel segmentation and registration of point clouds</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Eckart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kelly</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IROS</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="4355" to="4362" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Mlmd: Maximum likelihood mixture decoupling for fast and accurate point cloud registration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Eckart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Troccoli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kelly</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kautz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on 3D Vision</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Using occupancy grids for mobile robot perception and navigation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Elfes</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computer</title>
+		<imprint>
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="46" to="57" />
+			<date type="published" when="1989" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">One billion points in the cloud-an octree for efficient processing of 3d laser scans</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Elseberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Borrmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Nüchter</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ISPRS Journal of Photogrammetry and Remote Sensing</title>
+		<imprint>
+			<biblScope unit="volume">76</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="76" to="88" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">A generative model for the joint registration of multiple point sets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">D</forename><surname>Evangelidis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kounades-Bastian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Horaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">Z</forename><surname>Psarakis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision-ECCV 2014</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="109" to="122" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Levels of details for Gaussian Mixture Models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Garcia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Nielsen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Nock</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACCV</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2010" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Hierarchical clustering of a mixture model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Goldberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">T</forename><surname>Roweis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Octomap: An efficient probabilistic 3d mapping framework based on octrees</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Hornung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">M</forename><surname>Wurm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bennewitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Stachniss</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Burgard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Autonomous Robots</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="189" to="206" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Robust point set registration using gaussian mixture models. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Jian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">C</forename><surname>Vemuri</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1633" to="1645" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Statistical geometry representation for efficient transmission and rendering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kalaiah</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Varshney</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics</title>
+		<imprint>
+			<biblScope unit="volume">24</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="348" to="373" />
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Scan registration for autonomous mining vehicles using 3d-ndt</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Magnusson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lilienthal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Duckett</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Field Robotics</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">3d is here: Point cloud library (pcl)</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Rusu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Cousins</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Robotics and Automation</title>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">3d mapping with multi-resolution occupied voxel lists</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ryde</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Autonomous Robots</title>
+		<imprint>
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page">1</biblScope>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">3d mapping with multi-resolution occupied voxel lists</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ryde</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Auton. Robots</title>
+		<imprint>
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="169" to="185" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Normal distributions transform occupancy maps: Application to large-scale online 3d mapping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Saarinen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Andreasson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Stoyanov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ala-Luhtala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Robotics and Automation (ICRA), 2013 IEEE International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="2233" to="2238" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Integrating grid-based and topological maps for mobile robot navigation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Thrun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bü</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI&apos;96</title>
+		<imprint>
+			<date type="published" when="1996" />
+			<biblScope unit="page" from="944" to="950" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Zippered polygon meshes from range images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Turk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Levoy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 21st Annual Conference on Computer Graphics and Interactive Techniques</title>
+		<meeting>the 21st Annual Conference on Computer Graphics and Interactive Techniques</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="1994" />
+			<biblScope unit="page" from="311" to="318" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Dense scene reconstruction with points of interest</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q.-Y</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page">112</biblScope>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

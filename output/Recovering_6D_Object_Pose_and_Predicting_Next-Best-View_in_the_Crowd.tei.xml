@@ -1,0 +1,1099 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Recovering 6D Object Pose and Predicting Next-Best-View in the Crowd</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andreas</forename><surname>Doumanoglou</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Imperial College London</orgName>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="department">Center for Research &amp; Technology Hellas (CERTH)</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rigas</forename><surname>Kouskouridas</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Imperial College London</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sotiris</forename><surname>Malassiotis</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="department">Center for Research &amp; Technology Hellas (CERTH)</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tae-Kyun</forename><surname>Kim</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Imperial College London</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Recovering 6D Object Pose and Predicting Next-Best-View in the Crowd</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:45+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Object detection and 6D pose estimation in the crowd (scenes with multiple object instances, severe foreground occlusions and background distractors), has become an important problem in many rapidly evolving technological areas such as robotics and augmented reality. Single shotbased 6D pose estimators with manually designed features are still unable to tackle the above challenges, motivating the research towards unsupervised feature learning and next-best-view estimation. In this work, we present a complete framework for both single shot-based 6D object pose estimation and next-best-view prediction based on Hough Forests, the state of the art object pose estimator that performs classification and regression jointly. Rather than using manually designed features we a) propose an unsupervised feature learnt from depth-invariant patches using a Sparse Autoencoder and b) offer an extensive evaluation of various state of the art features. Furthermore, taking advantage of the clustering performed in the leaf nodes of Hough Forests, we learn to estimate the reduction of uncertainty in other views, formulating the problem of selecting the next-best-view. To further improve pose estimation, we propose an improved joint registration and hypotheses verification module as a final refinement step to reject false detections. We provide two additional challenging datasets inspired from realistic scenarios to extensively evaluate the state of the art and our framework. One is related to domestic environments and the other depicts a bin-picking scenario mostly found in industrial settings. We show that our framework significantly outperforms state of the art both on public and on our datasets.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Detection and pose estimation of everyday objects is a challenging problem arising in many practical applications, such as robotic manipulation <ref type="bibr" target="#b17">[18]</ref>, tracking and augmented reality. Low-cost availability of depth data facilitates pose estimation significantly, but still one has to cope with many challenges such as viewpoint variability, clutter and oc- clusions. When objects have sufficient texture, techniques based on key-point matching <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b29">30]</ref> demonstrate good results, yet when there is a lot of clutter in the scene they depict many false positive matches which degrades their performance. Also, holistic template-based techniques provide superior performance when dealing with texture-less objects <ref type="bibr" target="#b13">[14]</ref>, but suffer in cases of occlusions and changes in lighting conditions, while the performance also degrades when objects have not significant geometric detail. In order to cope with the above issues, a few approaches use patches <ref type="bibr" target="#b30">[31]</ref> or simpler pixel based features <ref type="bibr" target="#b4">[5]</ref> along with a Random Forest classifier. Although promising, these techniques rely on manually designed features which are difficult to make discriminative for the large range of everyday objects. Last, even when the above difficulties are partly solved, multiple objects present in the scene, occlusions and distructors can make the detection very challenging from a single viewpoint, resulting in many ambiguous hypotheses. When the setup permits, moving the camera can be proved very beneficial for accuracy increase. The problem is how to select the next best viewpoint, which is crucial for fast scene understanding.</p><p>The above observations motivated us to introduce a complete framework for both single shot-based 6D object pose estimation and next-best-view prediction in a unified manner based on Hough Forests, a variant of Random Forest that performs classification and regression jointly <ref type="bibr" target="#b30">[31]</ref>. We adopted a patch-based approach but contrary to <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b30">31,</ref><ref type="bibr" target="#b4">5]</ref> we learn features in an unsupervised way using deep Sparse Autoencoders. The learnt features are fed to a Hough Forest <ref type="bibr" target="#b11">[12]</ref> to determine object classes and poses using 6D Hough voting. To estimate the next-best-view, we exploit the capability of Hough Forests to calculate the hypotheses entropy, i.e. uncertainty, at leaf nodes. Using this property we can predict the next-best-viewpoint based on current view hypotheses through an object-pose-to-leaf mapping. We are also taking into account the various occlusions that may appear from the other views during the next-best-view estimation. Last, for further false positives reduction, we introduce an improved joint optimization step inspired by <ref type="bibr" target="#b0">[1]</ref>. To the best of our knowledge, there is no other framework jointly tackling feature learning, classification, regression and clustering (for next-best-view) in a patch-based inference strategy.</p><p>In order to evaluate our framework, we do an extensive evaluation for single shot detection of various state of the art features and detection methods, showing that the proposed approach demonstrates a significant improvement compared to the state of the art techniques, on many challenging publicly available datasets. We also evaluate our next-best-view selection to various baselines and show its improved performance, especially in cases of occlusions. To demonstrate more explicitly the advantages of our framework, we provide an additional dataset consisting of two realistic scenarios shown in <ref type="figure" target="#fig_0">Fig. 1</ref>. Our dataset also reveals the weaknesses of the state of the art techniques to generalize to realistic scenes. In summary, our main contributions are:</p><p>• A complete framework for 6 DoF object detection that comprises of a) an architecture based on Sparse Autoencoders for unsupervised feature learning, b) a 6D Hough voting scheme for pose estimation and c) a novel active vision technique based on Hough Forests for estimating the next-best-view.</p><p>• Extensive evaluation of features and detection methods on several public datasets.</p><p>• A new dataset of RGB-D images reflecting two usage scenarios, one representing domestic environments and the other a bin-picking scenario found in industrial settings. We provide 3D models of the objects and, to the best of our knowledge, the first fully annotated binpicking dataset.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>Unsupervised feature learning has recently received the attention of the computer vision community. Hinton et al. <ref type="bibr" target="#b14">[15]</ref> used a deep network consisting of Restricted Boltzmann Machines for dimensionality reduction and showed that deep networks can converge to a better solution by greedy layer-wise pre-training. Jarrett et al. <ref type="bibr" target="#b15">[16]</ref> showed the merits of multi-layer feature extraction with pooling and local contrast normalization over single-layer architectures, while Le et al. <ref type="bibr" target="#b18">[19]</ref> used a 9-layer Sparse Autoencoder to learn a face detector only from unsupervised data. Feature learning has also been used for classification <ref type="bibr" target="#b26">[27]</ref> using RNNs, and detection <ref type="bibr" target="#b2">[3]</ref> using sparse coding, trained with holistic object images and patches, respectively. Coates et al. <ref type="bibr" target="#b6">[7]</ref> investigated different single-layer unsupervised architectures such as k-means, Gaussian mixture modes, and Sparse Autoencoders achieving state of the art results when parameters were fine-tuned. Here, we use the Sparse Autoencoders of <ref type="bibr" target="#b6">[7]</ref> but in a deeper network architecture, extracting features from raw RGB-D data. In turn, in <ref type="bibr" target="#b12">[13]</ref> and <ref type="bibr" target="#b33">[34]</ref> it was shown how CNNs could be trained for supervised feature learning, while in <ref type="bibr" target="#b22">[23]</ref> and <ref type="bibr" target="#b23">[24]</ref> CNNs were trained to perform classification and regression jointly for 2D object detection and head pose estimation, respectively.</p><p>Object detection and 6 DoF pose estimation is also frequently addressed in the literature. Most representative are techniques based on template matching, like LINEMOD <ref type="bibr" target="#b13">[14]</ref>, its extension <ref type="bibr" target="#b24">[25]</ref> and the Distance Transform approaches <ref type="bibr" target="#b20">[21]</ref>. Point-to-Point methods <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b25">26]</ref> form another representative category where emphasis is given on building point pair features to construct object models based on point clouds. Tejani et al. <ref type="bibr" target="#b30">[31]</ref> combined Hough Forest with <ref type="bibr" target="#b13">[14]</ref> using a template matching split function to provide 6 DoF pose estimation in cluttered environments. They provided evidence that, using patches instead of the holistic image of the object, can boost the performance of the pose estimator in cases of severe occlusions and clutter. Brachmann et al. <ref type="bibr" target="#b4">[5]</ref> introduced a new representation in form of a joint 3D object coordinate and class labelling, which, however suffers in cases of occlusions. Additionally, Song et al. <ref type="bibr" target="#b27">[28]</ref> proposed a computationally expensive approach to the 6 DoF pose estimation problem that slides exemplar SVMs in the 3D space, while in <ref type="bibr" target="#b3">[4]</ref> shape priors are learned by soft labelling Random Forest for 3D object classification and pose estimation. Lim et al. <ref type="bibr" target="#b19">[20]</ref> achieved fine pose estimation by representing geometric and appearance information as a collection of 3D shared parts and objectness, respectively. Wu et al. <ref type="bibr" target="#b32">[33]</ref> designed a model that learns the joint distribution of voxel data and category labels using a Convolutional Deep Belief Network, while the posterior distribution for classification is approximated by Gibbs sampling. The authors in <ref type="bibr" target="#b31">[32]</ref> tackle the 3D object pose estimation problem by learning discriminative feature descriptors via a CNN and then passing them to a scalable Nearest Neighbor method to efficiently handle a large number of objects under a large range of poses. However, compared to our work, this method is based on holistic images of the objects, which is prone to occlusions <ref type="bibr" target="#b30">[31]</ref> and only evaluated on a public dataset that contains no foreground occlusions.</p><p>Hypotheses verification is employed as a final refinement step to reject false detections. Aldoma et al. <ref type="bibr" target="#b0">[1]</ref> proposed a cost function-based optimization to increase true positive detections. Fioraio et al. <ref type="bibr" target="#b10">[11]</ref> showed how single-view hypotheses verification can be extended to multi-view ones in order to facilitate SLAM through a novel Bundle adjustment framework. Buch et al. <ref type="bibr" target="#b5">[6]</ref> presented a two-stage voting procedure for estimating the likelihood of correspondences, within a set of initial hypotheses, between two 3D models corrupted by false positive matches.</p><p>Regarding active vision, a recent work presented by Jia et al. <ref type="bibr" target="#b16">[17]</ref> makes use of the Implicit Shape Model combined in a boosting algorithm to plan the next-best-view for 2D object recognition, while Atanasov et al. <ref type="bibr" target="#b1">[2]</ref> proposed a non-myopic strategy using POMDPs for 3D object detection. Wu et al. <ref type="bibr" target="#b32">[33]</ref> used their generative model based on the convolutional network to plan for the next-best-view but is limited in the sense that the holistic image of the object is needed as input. Since previous works are largely dependent on the employed classifier, more related to our work is the recently proposed Active Random Forests <ref type="bibr" target="#b8">[9]</ref> framework, which, however (similar to <ref type="bibr" target="#b32">[33]</ref>) requires the holistic image of an object to make a decision, making it not appropriate for our patch-based method.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">6 DoF Object Pose &amp; Next-Best-View Estimation Framework</head><p>Our object detection and pose estimation framework consists of two main parts: a) single shot-based 6D object detection and b) next-best-view estimation. In the first part, we render the training objects and extract depth-invariant RGB-D patches. The latter are given as input to a Sparse Autoencoder which learns a feature vector in an unsupervised manner. Using this feature representation, we train a Hough Forest to recognize object patches in terms of class and 6D pose (translation and rotation). Given a test image, patches from the scene pass through the Autoencoder followed by the Hough forest, where the leaf nodes cast a vote in a 6D Hough space indicating the existence of an object. The modes of this space represent our best object hypotheses. The second part, next-best-view estimation, is based on the previously trained forest. Using the training sample distribution in the leaf nodes, we are able to determine the uncertainty, i.e. the entropy, of our current hypotheses, and further estimate the reduction in entropy when moving the camera to another viewpoint using a pose-to-leaf mapping. <ref type="figure">Fig. 2</ref> shows an overview of the framework. In the following subsections, we describe each part in detail.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Single Shot-based 6D Object Detection</head><p>State of the art Hough Forests Features In the literature some of the most recent 6D object detection methods use Hough Forests as their underlying classifier. In <ref type="bibr" target="#b4">[5]</ref> simple two pixel comparison tests were used to split the data in the tree nodes, while the location of the pixels could be anywhere inside the whole object area. In our experiments, we also added the case where the pixel tests are restricted inside the area of an image patch. A more sophisticated feature for splitting the samples was proposed by Tejani et al. <ref type="bibr" target="#b30">[31]</ref> who used a variant of the template based LineMOD feature <ref type="bibr" target="#b13">[14]</ref>. In comparison with the above custom-designed features, we use Sparse Autoencoders to learn an unsupervised feature representation of varying length and layers. Furthermore, we learn features over depth-invariant RGB-D patches extracted from the objects, as described below. Patch Extraction Our approach relies on 3D models of the objects of interest. We render synthetic training images by placing a virtual camera on discrete points on a sphere surrounding the object. In traditional patch-based techniques <ref type="bibr" target="#b11">[12]</ref>, the patch size is expressed directly in image pixels. In contrast, we want to extract depth invariant, 2.5D patches that cover the same area of the object regardless of the object distance from the camera, similar to <ref type="bibr" target="#b28">[29]</ref>. First, a sequence of patch centers c i , i = 1..N is defined on a regular grid on the image plane. Using the depth value of the underlying pixels these are back-projected to the 3D world coordinate frame, i.e. c i = (x, y, z). For each such 3D point c i we define a planar patch perpendicular to the camera, centered at c i and with dimensions d p ×d p , measured in meters, which is subdivided into V ×V cells. Then, we back-project the center of each cell to the corresponding point on the image plane, to compute its RGB and depth values via linear interpolation 1 . Depth values are expressed with respect to the frame centered at the center of the patch <ref type="figure">(Fig. 2)</ref>. Also, we truncate depth values to a certain range to avoid points not belonging to the object. Depth-invariance is achieved by expressing the patch size in metric units in 3D space. From each training image we extract a collection of patches P and normalize their values to the range [0, 1]. The elements corresponding to the four channels of the patch are then concatenated into a vector of size V × V × 4 (RGBD channels) and are given as input to the Sparse Autoencoder for feature extraction. Unsupervised Feature Learning We learn unsupervised features using a network consisting of stacked, fully connected Sparse Autoencoders, in a symmetric encoderdecoder scheme. An autoencoder is a fully connected, sym-  <ref type="figure">Figure 2</ref>: Framework Overview. After patch extraction, RGBD channels are given as input to the Sparse Autoencoder. The annotation along with the produced features of the middle layer are given to a Hough Forest, and the final hypotheses are generated as the modes of the Hough voting space. After refining the hypotheses using joint registration, we estimate the next-best-view using a pose-to-lead mapping learnt from the trained Hough Forest.</p><formula xml:id="formula_0">V dv RGB DEPTH . . . V x V x 4</formula><p>metric neural network, that learns to reconstruct its input. If the number of hidden units are limited or a small number of active units is allowed (sparsity), it can learn meaningful representations of the data. In the simplest case of one hidden layer with F units, one input (x) and one output (y) layer of size N , the Autoencoder finds a mapping f : R N → R F of the input vectors x ∈ R N as:</p><formula xml:id="formula_1">f = sigm(W x + b)<label>(1)</label></formula><p>The weights W ∈ R F ×N and the biases b ∈ R F are optimized by back-propagating the reconstruction error ||y − x|| 2 . The average activation of each hidden unit is enforced to be equal to ρ, a sparsity parameter with a value close to zero. The mapping f represents the features given as input to the classifier in the next stage. We can extract "deeper" features by stacking several layers together, to form an encoder-decoder symmetric network as shown in <ref type="figure">Fig. 2</ref>. In this case, the features are extracted from the last layer of the encoder (i.e. middle layer). In experiments, we use one to three layers in the encoder part, and analyse the effect of several parameters of the architecture on the pose estimation performance, such as the number of layers, the number of features and layer-wise pre-training <ref type="bibr" target="#b14">[15]</ref>. More details on the computation of these entropies can be found in <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b7">8]</ref>.</p><p>The objective function used is randomly selected in each internal node and samples are split using axis aligned random tests. The leaf nodes store a histogram of the observed classes of the samples that arrived, and a list of the annotation vectors d. During testing we extract patches from the test image with a stride s and pass them through the forest, to reach the corresponding leaf. We create a separate Hough voting space (6D space) for each object class, where we accumulate the votes of the leaf nodes. Each vector d stored in the leafs, casts a vote for the object pose and its center to the corresponding Hough space. The votes are weighted according to the probability of the associated class stored in the leaf. Object hypotheses are subsequently obtained by estimating the modes of each Hough space. Each mode can be found using non-maxima suppression and is assigned a score equal to the voting weight of the mode.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Next-Best-View Prediction</head><p>When detecting static objects, next-best-view selection is often achieved by finding the viewpoint that minimizes the expected entropy, i.e the uncertainty of the detection in the new viewpoint. There have been various methods proposed for computing the entropy reduction <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b32">33]</ref>. Hough Forests can facilitate the process since they store adequate information in the leaf nodes that can be used for predicting such reduction. The entropy of a hypothesis in the current view can be computed as the entropy of the samples stored in the leaf nodes that voted for this hypothesis. That is:</p><formula xml:id="formula_2">H(h) = l h H(S l h )<label>(2)</label></formula><p>where l h is a leaf voted for hypothesis h, and S l h the set of samples in these leaves. If the camera moves to viewpoint v, the reduction in entropy we gain is: where h v is the hypotheses h as would be seen from viewpoint v. In order to measure the reduction in entropy, we need to calculate the second term of the right side of equation <ref type="formula">(3)</ref>, which requires to find the leaf nodes that should be reached from the viewpoint v. Since we want to compute the reduction before actually moving the camera, we can simulate h v by rendering the object placing a virtual camera at v, give the image as input to the forest and collect the resulting leaves. However this can be done more efficiently avoiding the rendering phase (contrary to <ref type="bibr" target="#b32">[33]</ref>): we save offline a mapping from object poses (discrete camera views) to leaf nodes using the training data as shown in <ref type="figure" target="#fig_2">Fig. 3a</ref>. Given a 6 DoF hypothesis and this mapping, we can predict which leaf nodes of the forest are going to be reached if we move the camera to viewpoint v. Because of the discretization of poses in the map index, we choose the view in the mapping that is closer to the camera viewpoint we want to examine. Thus, the next-best-view v best is calculated as:</p><formula xml:id="formula_3">r(v) = H(h) − H(h v ) = l h H(S l h ) − l hv H(S l hv ) (3)</formula><formula xml:id="formula_4">v best = arg max v r(v) = arg min v H(h v )<label>(4)</label></formula><p>In case of two or more uncertain hypotheses, the reduction in entropy is averaged in the new viewpoint. Also, to account for the cost of the movement, the reduction can be normalized by the respective cost.</p><p>In the general case of multiple objects present in the scene with cluttered background, we can further refine the entropy prediction to account for occlusions. In our previous formulations, we made the assumption that, from a view v the object is clearly visible. However, due to other objects present in the scene, some part or the whole object we are interested in, may be occluded <ref type="figure" target="#fig_2">(Fig. 3b)</ref>. In this case our estimated entropy reduction is not correct. What we need to do is to exclude from the entropy calculation the samples in the leaves that are going to be occluded. More formally:</p><formula xml:id="formula_5">H(h v ) = l hv H(S l hv \ S occ l hv )<label>(5)</label></formula><p>where S occ l hv are the samples that would be occluded in viewpoint v. In order to determine this set, first, we incrementally update the 3D point cloud of the scene when the camera moves. Then, we project the {x, y, z} coordinates of an annotated sample of a leaf onto the acquired scene as shown from view v, and estimate if it is going to be occluded or not. <ref type="figure" target="#fig_2">Figure 3c</ref> shows an example of our dataset, where there are two similar objects oreo we want to disambiguate. From the view -90 degrees to 0 it is difficult to understand the difference, while from 45 degrees onwards the difference becomes clearer. However, from the view of 90 degrees the objects of interest become occluded. Calculating the entropy as described above, we get the true reduction in entropy which is lower than in the 45 degree case.</p><p>Another example of the complete pipeline is shown in <ref type="figure" target="#fig_3">Fig. 4</ref>. Given an image <ref type="figure" target="#fig_3">(Fig. 4a)</ref> we extract the hypotheses from the Hough voting space <ref type="figure" target="#fig_3">(Fig. 4b)</ref>. Using the optimization described in next section 3.3 we refine this by selecting the best subset <ref type="figure" target="#fig_3">(Fig. 4c)</ref>. The best solution does not include the objects shown in red box. However, a solution containing these hypotheses, but not well aligned with the scene due to occlusion, has a similar low cost with the best one. Being able to move the camera, we find the next-best-view as described above according to the uncertain hypotheses and change the viewpoint of the camera <ref type="figure" target="#fig_3">(Fig. 4d)</ref>. We can re-estimate a new set of hypotheses ( <ref type="figure" target="#fig_3">Fig. 4e)</ref> with some hypotheses still being uncertain (but keeping good ones above a threshold) and the same process is repeated.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Hypotheses verification and joint registration</head><p>State of the art methods <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b4">5]</ref> assume that only one object instance exists in the scene. In case of multiple instances however, the produced set of hypotheses may be conflicting. To address this issue, we improved the global optimization approach of <ref type="bibr" target="#b0">[1]</ref> in order to automatically select the subset of all possible hypotheses that best explains the scene. For each hypothesis we render the 3D model of the object in the scene, we exclude the parts that are occluded and define p as a point of the object model and q its nearest neighbor in the scene. If ||p − q|| &gt; p e where p e a small constant, p is considered an outlier. Given a set of hypotheses H and a vector X = {x 1 , .., x i , .., x N } of boolean variables, which indicate that hypotheses h i is valid or not, we introduce the objective function C(X) that should be minimized in terms of X: </p><formula xml:id="formula_6">C(X) = (a 1 C 1 + a 2 C 2 ) − (a 3 C 3 + a 4 C 4 )<label>(6)</label></formula><p>where C 1 = (C 11 + C 12 + C 13 )/3 C 11 : normalized distance ||p − q||/p e C 12 : dot product of the normals of the points ) color similarity C 2 = p in /p tot , p in points for which ||p − q|| ≤ p e C 3 : fraction of conflicting inliers over the total inliers C 4 : fraction of penalized points over total points in a region Each C i is calculated only for the hypotheses that x i = 1. Contrary to <ref type="bibr" target="#b0">[1]</ref>, we normalize every term in the range [0, 1] and noted that each one has a different relative importance and common range of values. Therefore, unlike <ref type="bibr" target="#b0">[1]</ref>, we put a different regularizer a i in each term, which is found using cross-validation. Furthermore, we further reduce the solution space of the optimization by splitting the set of hypotheses H into non-intersecting subsets H i . Each subset can be optimized independently, decomposing the problem and reducing the time and complexity of the solution.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>The experiments regarding the patch size and feature evaluation were performed on a validation set of our own dataset. Object detection accuracy is measured using the F1-score and is averaged over the whole set of objects. When comparing with the state of the art methods, we use the public datasets and the evaluation metrics provided by the corresponding authors. When evaluating on our own dataset, we exclude the aforementioned evaluation set. Patch Size Evaluation A patch in our framework is defined over 2 parameters: d p is the actual size measured in meters, and V ×V is the number of cells a patch contains, which can be considered as the patch resolution. We used six different configurations shown in <ref type="figure">Fig. 5a</ref>. The maximum patch size used was limited to the 2/3 of the smallest object dimensions. The network architecture used for patch-size experiments is 2 layers (the encoder part) of 1000 and 400 hidden units respectively. <ref type="figure">Fig. 5a</ref> shows that an increase in the patch size significantly increases the accuracy, while on the other hand, an increase of the resolution offers a slight improvement, and that comes at the expense of additional computational cost. Another important factor is the stride s during patch extraction. <ref type="figure">Fig. 5b</ref> shows that the smaller the stride the more accurate the detection becomes.</p><p>Feature Evaluation using Hough Forests In order to evaluate our unsupervised feature we created 9 different network configurations to test the effect of both the number of features and the number of layers on the accuracy. We used 1-3 layers as the encoder of the network with the last layer of the encoder forming the feature vector used in the Hough Forest. We varied the length of this feature vector to be 100, 400 and 800. When we use 2 layers, the first has 1000 hidden units, while when we use 3 layers, the first two have 1500 and 1000 hidden units respectively. The patch size used for these experiments is d p = 48mm with V = 16, creating an input vector of 1024 dimensions. Using the same Hough Forest configuration, we evaluate three state of the art features: a) the feature of <ref type="bibr" target="#b30">[31]</ref>, a variant of LineMOD <ref type="bibr" target="#b13">[14]</ref> designed for Hough Forests, along with its split function, b) the widely used pixel-tests <ref type="bibr" target="#b4">[5]</ref> and c) K-means clustering, the unsupervised single-layer method that performed best in [7] 2 with 100, 400 and 800 clusters. Pixel-tests have been conducted inside the area of a patch for comparison purposes, however in the next subsection we compare the complete framework of <ref type="bibr" target="#b4">[5]</ref> with ours. Results are shown in <ref type="figure">Fig. 5c</ref>. The 3-layer Sparse Autoencoder shown the best performance. Regarding the Autoencoder, we notice that the accuracy increases if more features are used, but when the network becomes deeper, the difference diminishes. However, it can be seen that deeper features significantly outperform shallower ones. K-means performed slightly better than single-layer SAE, while pixel-tests had worse performance. The feature of <ref type="bibr" target="#b30">[31]</ref> had on average worse performance than Autoencoders and K-means, which is due to low performance on specific objects of the datasets. We further provide a visualization of the filters of the first layer learned by a network with a 3-layer encoder <ref type="figure">(Fig. 5d</ref>). The first two rows are filters in the RGB channel, where it can be seen a bias towards the objects used for the evaluation. Filters in the depth channel resemble simple 3D edge and corner detectors. Last, we have tried to pre-train each layer as in <ref type="bibr" target="#b14">[15]</ref>, without significantly influencing the results. State of the Art Evaluation In the experiments described in this subsection, we used an encoder of 3 layers with 1500, 1000 and 800 hidden units, respectively. The patch used has V = 8 and d p = 48mm, which was found suitable for a variety of object dimensions. The forests contain four trees limiting only the number of samples per leaf to 30. For a (a) Patch-grid size (b) stride (c) feature evaluation (d) 1st layer filters <ref type="figure">Figure 5</ref>: Patch extraction parameters fair comparison, we do not make use of joint registration or active vision except when specifically mentioned.</p><p>We tested our solution on the dataset of <ref type="bibr" target="#b4">[5]</ref>, which contains 20 objects and a set of images regarded as background. The test scenes contain only one object per image, there is no occlusion or clutter, and are captured with different illumination from the training set, so one can check the generalization of a 6 DoF algorithm to different lighting conditions. To evaluate our framework we extracted the first K = 5 hypotheses from the Hough voting space and chose the one with the best local fitting score. The results are shown in <ref type="table" target="#tab_1">Table 1</ref> where for simplicity we show only 6 objects and the average over the complete dataset. Authors provided comparison with <ref type="bibr" target="#b13">[14]</ref> only with one object, because it was difficult to get results using their method. This dataset was generally difficult to evaluate, mainly because some pose annotations were not very accurate, resulting in having some better estimations from the ground truth exceeding the metric threshold of acceptance. More details and results are included in the supplementary material. Our method showed that it can generalize well on different lighting conditions, even without the need of modifying the training set with Gaussian noise as suggested by the authors. We have also tested our method on the dataset presented in <ref type="bibr" target="#b30">[31]</ref>, which contains multiple objects of one category per test image, with much clutter and some cases of occlusion. Authors adopted one-class training, thus, avoiding background class images during training. For comparison, we followed the same strategy. Since there are multiple objects in the scene, we extract the top K = 10 modes of the {x, y, z} Hough space, and for each mode, we extract the H = 5 modes of the {yaw, pitch, roll} Hough space and put a threshold on the local fitting of the final hypotheses to produce the PR curves. <ref type="table" target="#tab_2">Table 2</ref> shows the results in the form of F1-score (metric authors used) for each of the 6 objects.</p><p>The results of methods <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b9">10]</ref> are taken from <ref type="bibr" target="#b30">[31]</ref>. In this dataset we see that our method significantly outperforms the state of arts, especially regarding the Camera which is small and looks similar with the background objects, and the Joystick, which has a thin and a thick part. Our features showed better performance on Milk that contains other distracting objects on it. It is evident that our learnt features are able to handle a variety of object appearances with stable performance and at the same time being robust to destructors and occluders. Note that without explicitly training a background class, all the patches in the image are classified as belonging to one of our objects. While <ref type="bibr" target="#b30">[31]</ref> designed a specific technique to tackle this issue, our features seem informative enough to produce good modes in the Hough spaces.</p><p>We have also tested <ref type="bibr" target="#b30">[31]</ref> and <ref type="bibr" target="#b4">[5]</ref> on our own dataset. We also tried <ref type="bibr" target="#b13">[14]</ref>, but although we could produce the reported results on their dataset, we were not able to get meaningful results on our dataset and so we do not report them. This is mainly because this method is not intended to be used in textured objects with simple geometry. We provide results both with and without using joint object optimization. Our dataset contains 3D models of six training objects, while the test images may contain other objects as well. More on our dataset and evaluation can be found in the supplementary material. <ref type="table" target="#tab_3">Table 3</ref> shows the results on our database. The work of <ref type="bibr" target="#b4">[5]</ref> is designed to work only with one object per image and it is not evaluated on the bin-picking dataset. Our method outperforms all others even without joint optimization, but we can clearly see the advantages of such optimization on the final performance. Active Vision Evaluation We tested our active vision method on our dataset, using two different types of scenes. One is the crowded scenario used for single-shot evaluation, and the other depicts a special arrangement of objects, one (a) Colgate <ref type="figure">Figure 6</ref>: Qualitative results of our framework. Image 6g is the next best view of image 6f.  <ref type="figure">Figure 7</ref>: Results on active vision on our crowded dataset scenes behind the other in rows, that is commonly seen in a warehouse <ref type="figure" target="#fig_2">(Fig. 3)</ref>. All results takes into account all the object hypotheses during the next-best-view estimation. We compare our next-best-view prediction with and without occlusion refinement with three other baselines <ref type="bibr" target="#b32">[33]</ref>: a) maximum visibility (selecting a view that maximizes the visible area of the objects), b) furthest away (move the camera to the furthest point from all previous camera positions), c) move the camera randomly.</p><formula xml:id="formula_7">(b) Oreo (c) Softkings (d) Coffecup (e) Juice (f) Camera (g) Joystick</formula><p>In the crowded scenario, we move the camera 10 times, measuring in each view the average pose estimation accuracy of the objects present in the scene <ref type="figure">(Fig. 7)</ref>. We see that our method without occlusion refinement slightly outperforms the maximum visibility baseline because usually the maximum reduction in entropy occurs when there is maximum visibility. Using occlusion refinement, however, we get a much better estimation of the entropy that is depicted in the performance.</p><p>When the objects are specially arranged, we were interested in measuring the increase in accuracy only in the single next-best-view, i.e. we allow the camera to move only once for speed reasons. This experiment <ref type="figure">(Fig. 8)</ref> makes very clear the importance of tackling occlusion when esti- <ref type="figure">Figure 8</ref>: Results on active vision on scenes with objects arranged mating the expected entropy. Our method with occlusion refinement was consistently finding the most appropriate view, whereas without this step, the next-best-view was usually the front view, with the objects behind being occluded.</p><p>Regarding the computational complexity of our single shot approach, training 3 layers of 800 features with 10 4 patches for 100 epochs takes about 10mins on GPU. Our forest was trained with a larger set of 5·10 6 patches. Thanks to our parallel implementation, we train a tree on an i7 CPU in 90 mins, while <ref type="bibr" target="#b30">[31]</ref> and <ref type="bibr" target="#b4">[5]</ref> require about 3 and 1 days, respectively. During testing, the main bottleneck is the Hough voting and mode extraction that takes about 4-7secs to execute, with an additional 2secs if joint optimization is used for 6 objects. Other methods need about 1sec.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusions</head><p>In this paper we proposed a complete framework for 6D object detection in crowded scenes, comprising of an unsupervised feature learning phase, 6 DoF object pose estimation using Hough Forests and a method for estimating the next-best-view using the trained forest. We conducted extensive evaluation on challenging public datasets, including a new one depicting realistic scenarios, using various state of the art methods. Our framework showed superior results, being able to generalize well to a variety of objects and scenes. As a future work, we want to investigate how different patch sizes can be combined, and explore how convolutional networks can help in this direction.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Sample photos from our dataset. a) Scene containing objects from a supermarket, b) our system's evaluation on a), c) Bin-picking scenario with multiple objects stacked on a bin, d) our system's evaluation on c).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head></head><label></label><figDesc>Pose Estimation During training, we extract patches from training images of objects and use the trained network to extract features from object patches, that form a feature vector f = {f 1 , f 2 , ..., f F }. These vectors are annotated using a vector d that contains the object class, the pose of the object in the training image and the coordinates of the patch center expressed in the object's frame, i.e. d = {class, yaw, pitch, roll, x, y, z}. The feature vectors along with their annotation are given as input to the Hough Forest. We propose three different objective functions: entropy minimization of the class distribution of the samples, entropy minimization of the {yaw, pitch, roll} variables, and entropy minimization of the {x, y, z} variables. Reducing the entropy towards the leaves, has the effect of clustering the training samples that belong to the same class and having similar position and pose on the object.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 :</head><label>3</label><figDesc>a) Offline construction of the pose-to-leaf mapping, b) Online occlusion refinement of the mapping, c) example of the effect of occlusion refinement in entropy estimation.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 :</head><label>4</label><figDesc>Example of hypotheses verification and active camera movement. a) Input test image, b) complete set of hypotheses overlaid on the image, c) hypotheses verification refinement, d) active camera movement, e) re-estimating hypotheses.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>1500 1000</figDesc><table>F 
+
+. 
+. 
+. 
+
+. 
+. 
+. 
+
+. 
+. 
+. 
+
+Optional 
+Layers 
+
+Feature 
+vector 
+
+. 
+
+. 
+
+. 
+. 
+
+. 
+
+. 
+. 
+
+. 
+
+. 
+
+Encoder 
+Decoder 
+
+1000 1500 V x V x 4 
+
+annotation 
+
+[ yaw, pitch, roll, x, y, z ] 
+
+Hough 
+Space 
+
+Joint Registration 
+
+Online Next Best View Estimation 
+
+Next View 
+Entropy 
+Estimation 
+
+Modes Extraction 
+
+Object Pose -Leaf 
+Mapping 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 1 :</head><label>1</label><figDesc>Results on the dataset of [5] (More on supplementary)</figDesc><table>Object 
+[14] (%) [5] (%) 
+Our (%) 
+Hole Puncher 
+-
+98.1 
+94.3 
+Duck 
+-
+81.6 
+87.7 
+Owl 
+-
+60.5 
+90.27 
+Sculpture 1 
+-
+82.7 
+89.5 
+Toy (Battle Cat) 
+70.2 
+91.8 
+92.4 
+... 
+-
+... 
+Avg. 
+-
+88.2 
+89.1 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="true"><head>Table 2 :</head><label>2</label><figDesc>Results on the dataset of<ref type="bibr" target="#b30">[31]</ref> </figDesc><table>Object 
+[14] 
+[10] 
+[31] 
+Our 
+F1 score 
+Coffee Cup 
+0.819 0.867 0.877 0.932 
+Shampoo 
+0.625 0.651 
+0.759 0.735 
+Joystick 
+0.454 0.277 0.534 0.924 
+Camera 
+0.422 0.407 0.372 0.903 
+Juice Carton 
+0.494 0.604 
+0.870 0.819 
+Milk 
+0.176 0.259 0.385 0.51 
+Average 
+0.498 0.511 0.633 0.803 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="true"><head>Table 3 :</head><label>3</label><figDesc>Results on our dataset</figDesc><table>Object 
+[31] 
+[5] 
+Our 
+Our 
+joint optim. 
+
+scenario 1 (supermarket objects) 
+amita 
+26.9 60.8 
+64.3 
+71.2 
+colgate 
+22.8 11.1 
+26.1 
+28.6 
+elite 
+10.1 71.9 
+74.9 
+77.6 
+lipton 
+10.5 26.9 
+56.4 
+59.2 
+oreo 
+26.9 44.4 
+58.5 
+59.3 
+softkings 
+26.3 26.9 
+75.5 
+75.9 
+
+scenario 2 (bin picking) 
+coffeecup 31.4 
+-
+33.5 
+36.1 
+juice 
+24.8 
+-
+25.1 
+29 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">The cell values calculation can be done efficiently and in parallel using texture mapping in gpu.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">We used the K-means (triangle) as described in<ref type="bibr" target="#b6">[7]</ref> </note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0" />
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">A global hypotheses verification method for 3d object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Aldoma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Tombari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">Di</forename><surname>Stefano</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Vincze</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2003" />
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Nonmyopic view planning for active object classification and pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Atanasov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Sankaran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">Le</forename><surname>Ny</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Pappas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Daniilidis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Robotics</title>
+		<imprint>
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Learning hierarchical sparse features for rgb-(d) object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJRR</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Robust instance recognition in presence of occlusion and clutter</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Bonde</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Badrinarayanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cipolla</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Learning 6d object pose estimation using 3d object coordinates</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Brachmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krull</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Michel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gumhold</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">In search of inliers: 3d correspondence by local and global voting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Buch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Kruger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">G</forename><surname>Petersen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">An analysis of single-layer networks in unsupervised feature learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Coates</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Decision forests for classification, regression, density estimation, manifold learning and semi-supervised learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Criminisi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Konukoglu</surname></persName>
+		</author>
+		<idno>MSR-TR-2011-114</idno>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+	<note type="report_type">Technical Report</note>
+	<note>Microsoft Research</note>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Active random forests: An application to autonomous unfolding of clothes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Doumanoglou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-K</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Malassiotis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Model globally, match locally: Efficient and robust 3d object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Drost</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ulrich</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Navab</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ilic</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Joint detection, tracking and mapping by semantic bundle adjustment</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Fioraio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">Di</forename><surname>Stefano</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Hough forests for object detection, tracking, and action recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gall</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Razavi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lempitsky</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Matchnet: Unifying feature and metric learning for patch-based matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Leung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sukthankar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Multimodal templates for real-time detection of texture-less objects in heavily cluttered scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hinterstoisser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Holzer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Cagniart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ilic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Konolige</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Navab</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">A fast learning algorithm for deep belief nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Osindero</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-W</forename><surname>Teh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Neural Computation</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">What is the best multi-stage architecture for object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Jarrett</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ranzato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Le-Cun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">A general boostingbased framework for active object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-J</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Chen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">BMVC</title>
+		<imprint>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kouskouridas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Charalampous</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gasteratos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Sparse pose manifolds</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">37</biblScope>
+			<biblScope unit="page" from="191" to="207" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Building high-level features using large scale unsupervised learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Le</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ranzato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Monga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Devin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Fpm: Fine pose parts-based model with 3d cad models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Lim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Fast object localization and pose estimation in heavy clutter for robotic bin picking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-Y</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Tuzel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Veeraraghavan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Taguchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">K</forename><surname>Marks</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Chellappa</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJRR</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Moped: A scalable and low latency object recognition and pose estimation system</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Martinez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Collet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">S</forename><surname>Srinivasa</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Deepidnet: Deformable deep convolutional neural networks for object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Ouyang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Qiu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-C</forename><surname>Loy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Hough networks for head pose estimation and facial feature localization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Riegler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ferstl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rüther</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">BMVA</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Discriminatively trained templates for 3d object detection: A real time scalable approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Rios-Cabrera</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tuytelaars</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Fast point feature histograms (fpfh) for 3d registration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Rusu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Blodow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Beetz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Convolutional-recursive deep learning for 3d object classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Huval</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Bath</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">D</forename><surname>Manning</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Sliding shapes for 3d object detection in depth images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">Depthencoded hough voting for joint object detection and shape recovery</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Bradski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B.-X</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+		<idno>ECCV. 2010. 3</idno>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">A textured object recognition pipeline for color and depth image data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Miller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Singh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Abbeel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Latent-class hough forests for 3d object detection and pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Tejani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kouskouridas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-K</forename><surname>Kim</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Learning descriptors for object recognition and 3d pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Wohlhart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">3d shapenets: A deep representation for volumetric shapes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+		<title level="m" type="main">Learning to compare image patches via convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zagoruyko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Komodakis</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

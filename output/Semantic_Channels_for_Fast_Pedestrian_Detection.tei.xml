@@ -1,0 +1,1280 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Semantic Channels for Fast Pedestrian Detection</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Arthur</forename><surname>Daniel Costea</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="laboratory">Image Processing and Pattern Recognition Research Center</orgName>
+								<orgName type="institution">Technical University of Cluj-Napoca</orgName>
+								<address>
+									<country key="RO">Romania</country>
+								</address>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sergiu</forename><surname>Nedevschi</surname></persName>
+							<email>sergiu.nedevschi@cs.utcluj.ro</email>
+							<affiliation key="aff0">
+								<orgName type="laboratory">Image Processing and Pattern Recognition Research Center</orgName>
+								<orgName type="institution">Technical University of Cluj-Napoca</orgName>
+								<address>
+									<country key="RO">Romania</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Semantic Channels for Fast Pedestrian Detection</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:45+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Pedestrian detection and semantic segmentation are high potential tasks for many real-time applications. However most of the top performing approaches provide state of art results at high computational costs. In this work we propose a fast solution for achieving state of art results for both pedestrian detection and semantic segmentation.</p><p>As baseline for pedestrian detection we use sliding windows over cost efficient multiresolution filtered LUV+HOG channels. We use the same channels for classifying pixels into eight semantic classes. Using short range and long range multiresolution channel features we achieve more robust segmentation results compared to traditional codebook based approaches at much lower computational costs. The resulting segmentations are used as additional semantic channels in order to achieve a more powerful pedestrian detector. To also achieve fast pedestrian detection we employ a multiscale detection scheme based on a single flexible pedestrian model and a single image scale. The proposed solution provides competitive results on both pedestrian detection and semantic segmentation benchmarks at 8 FPS on CPU and at 15 FPS on GPU, being the fastest top performing approach.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>A good perception and understanding of the surroundings is essential for an efficient and safe interaction with the environment. In this work we focus on traffic scenarios and in particular on the perception of pedestrians. They are the most important traffic participants and also the most vulnerable ones. Their perception can impose difficulties due to challenging weather, lighting conditions or difficult occlusion cases. In addition, their behavior can be sometimes very unpredictable.</p><p>Pedestrian detection is of high interest especially for the automotive industry, in order to design safe driver assistance systems or autonomous vehicles and represents one of the most challenging computer vision tasks. Computer vision based pedestrian detection is one of the most active research areas. The accuracy and precision of detectors increases every year, with a significant improvement over the last decade <ref type="bibr" target="#b5">[6]</ref>. However, the computational cost of the top performing approaches still represents a bottleneck. Most of the approaches are impractical for realtime applications. Our main goal is to obtain a powerful detector that competes well with the top performing approaches at significantly lower computational costs.</p><p>In this work we propose a sliding window type detection solution based on multiresolution filtered LUV+HOG channels <ref type="bibr" target="#b52">[53]</ref>, focusing on computational cost reduction by optimizing the feature extraction, multiscale sliding window and classification schemes. We show that the same framework can be used to obtain semantic segmentations by classifying pixels into semantic classes such as sky, building, road, vehicle. As seen in <ref type="figure" target="#fig_0">figure 1</ref>, semantic segmentations provide a higher level representation. Background classes provide semantic context that can be used for search space reductions for different applications, while foreground classes can provide an alternative detection approach for obstacles.</p><p>We use the semantic segmentations as context informa-tion for pedestrian detection and integrate them as semantic channels into the proposed solution. Eight semantic channels are used for six general semantic classes (sky, building, road, tree, vehicle, pedestrian) and two geometrical classes (horizontal and vertical structures). Experimental results showed improvements on detection rates using the additional semantic channels. The semantic channel for pedestrians provides an additional cue for their presence. This way, pedestrians are detected using two different recognition principles. The other 7 semantic channels provide the context. Finally we achieve a solution that provides both state of art pedestrian detection and semantic segmentation at 8 FPS on CPU and 15 FPS on GPU using 640 × 480 pixel images. The main contributions in this work are:</p><p>• design of computationally efficient multiresolution filtered channels</p><p>• fast multiscale detection scheme based on a single classifier model, a single feature scale and adaptive classification feature sampling</p><p>• semantic segmentation by classifying pixels using short range and long range features over multiresolution filtered channels</p><p>• pedestrian detection using multiresolution channels and semantic channels</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related work</head><p>Extensive work has been carried out during the last decades regarding pedestrian detection. The state of art is rapidly improving and each year multiple approaches appear that outperform the previous state of art. Without a doubt, the availability of challenging detection benchmarks, such as Caltech-USA <ref type="bibr" target="#b17">[18]</ref>, KITTI <ref type="bibr" target="#b20">[21]</ref>, KAIST <ref type="bibr" target="#b25">[26]</ref> has a significant impact on this increase.</p><p>There are several great surveys that can be considered for a detailed overview <ref type="bibr" target="#b5">[6]</ref>, <ref type="bibr" target="#b17">[18]</ref> on the state of art. We mention here only some of the main approaches related to our work and focus on sliding window based detection from monocular images. Dalal et al. proposed the HOG descriptor in <ref type="bibr" target="#b12">[13]</ref> which became one of the most used descriptors in pedestrian and object detection for more than 10 years. HOG descriptors are mostly used together with LUV color features in the form of image channels proposed by Dollar et al. in <ref type="bibr" target="#b16">[17]</ref>.</p><p>Over the years several multiscale detection schemes have been considered in order to achieve multiscale detection. The integral channel feature based approach <ref type="bibr" target="#b16">[17]</ref> used a single classifier model for a fixed size sliding window and resized the image multiple times. The features were recomputed for each individual image scale. The Fastest Pedestrian Detector in the West <ref type="bibr" target="#b15">[16]</ref> computed the image features only for half-octave scales and used approximations for the intermediate ones in order to reduce the computational costs. The VeryFast approach <ref type="bibr" target="#b3">[4]</ref> achieved pedestrian detection at over 50 FPS on GPU using a single image feature scale and half-octave pedestrian models that relied on feature approximations for the intermediate scales. In a previous work we proposed a solution based on a single classifier model and a single feature scale using Word Channel features <ref type="bibr" target="#b10">[11]</ref>. In <ref type="bibr" target="#b11">[12]</ref> we proposed a solution based on 8 classifier models and channel features computed at 3 halfoctave scales enabling competitive detection at over 100 FPS on CPU (over 20 FPS on mobile devices). Traditional integral channel features were further improved by proposing aggregate channel features (ACF) <ref type="bibr" target="#b13">[14]</ref>, informed haar features <ref type="bibr" target="#b51">[52]</ref>, locally decorrelated channel features <ref type="bibr" target="#b33">[34]</ref> and checkerboard filtered channels <ref type="bibr" target="#b52">[53]</ref>, all being based on the same 10 LUV+HOG channels.</p><p>Other works focused on the introduction of additional features such as: LBP <ref type="bibr" target="#b34">[35]</ref>, <ref type="bibr" target="#b46">[47]</ref> color from different color spaces <ref type="bibr" target="#b24">[25]</ref>, bag of words <ref type="bibr" target="#b10">[11]</ref>, covariance <ref type="bibr" target="#b44">[45]</ref>, <ref type="bibr" target="#b34">[35]</ref>. Improved results have also been obtained by using additional information such as optical flow <ref type="bibr" target="#b35">[36]</ref>. Part based approaches were considered in <ref type="bibr" target="#b18">[19]</ref>, <ref type="bibr" target="#b2">[3]</ref>. Strong performances have been achieved recently using deep learning techniques <ref type="bibr" target="#b42">[43]</ref>, <ref type="bibr" target="#b23">[24]</ref>.</p><p>Another active research area is the one regarding semantic segmentation. One of the baseline approaches is the Texton-boost approach proposed by Shotton et al. <ref type="bibr" target="#b39">[40]</ref>. Texton features, visual codebook based texture features, were used to generate texton channels. Individual pixels were classified using boosting over rectangular sums from different texton channels. The classification results were integrated as unary potential into a Conditional Random Field (CRF). Pairwise smoothness potentials were used to refine final segmentation. More complex CRFs have also been considered by using higher order P n Potts models <ref type="bibr" target="#b26">[27]</ref> and robust P n Potts models <ref type="bibr" target="#b27">[28]</ref> , hierarchical pixel and segment based CRF <ref type="bibr" target="#b37">[38]</ref>, global potentials based on co-occurrence statistics <ref type="bibr" target="#b29">[30]</ref> or intra-class spatial relationships <ref type="bibr" target="#b22">[23]</ref>, and dense CRFs <ref type="bibr" target="#b28">[29]</ref>. The computational cost for state of art CRF based approaches is dominated by the computation of unary potentials <ref type="bibr" target="#b36">[37]</ref>. In this work we propose a fast solution for computing robust pixelwise unary potentials, that can be integrated into any CRF solution.</p><p>Non-parametric semantic segmentation approaches represent an alternative to the previously described parametric approaches <ref type="bibr" target="#b40">[41]</ref>, <ref type="bibr" target="#b43">[44]</ref>, <ref type="bibr" target="#b48">[49]</ref>, <ref type="bibr" target="#b38">[39]</ref>. These approaches retrieve visually similar images from large databases, use label-transfer techniques for predicting class-labels and are more practical for dynamically changing large datasets with high number of semantic classes.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Multiresolution Channels</head><p>The 10 LUV+HOG image channels have served as baseline for several top performing approaches. Most of them used rectangular sums over these channels or variations of these channels in order to obtain classification features. Zhang et al. observed in <ref type="bibr" target="#b52">[53]</ref> that these approaches can be generalized by adding a filtering layer to the feature generation process. Each approach was characterized by a different set of convolution kernels. This way the rectangular features become simple pixel lookups and there is no need for integral images. In <ref type="bibr" target="#b52">[53]</ref> the best performance was achieved using 61 checkerboard kernels resulting in 610 image channels. Unfortunately, the convolution with a large set of kernels can be time consuming especially due to the large number of memory accesses.</p><p>Most of the filter sets that have been used in <ref type="bibr" target="#b52">[53]</ref> consist of high pass and low pass filters at multiple scales. The low pass filters have the role to capture features at different scales, while the high pass filters capture different structures such as edges or corners. In order to have a reduced but still relevant set of filters we use a box filter for low pass filters and two edge filters for high pass filters and apply <ref type="bibr">Figure 2</ref>. Multiresolution filtering scheme with N scales consisting of N low pass and 2 × N high pass filters over the 10 LUV+HOG. Green and red colors indicate +1 and -1 coefficients. The first 2 × 2 kernel is an aggregation kernel. them at 5 different scales. We use a 2 × 2 pixel aggregation and N − 1 smoothings with 3 × 3 box filters to obtain N different channel scales, and apply simple vertical and horizontal difference kernels over each smoothing to obtain edges at different scales. We choose only two orientations for difference filters, because any edge direction can be described using them. We obtain a total of N × 3 filterings using three different filter kernels as illustrated in figure 2. After computing the initial 10 image channels, we partition each channel into 2 × 2 pixel cells and compute the average. The convolutions are applied over these smaller resolution channels. For a 640 × 480 pixel image we obtain 320 × 240 pixel multiresolution channels.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Semantic context</head><p>Visual codebook based features were the baseline for several semantic segmentation approaches <ref type="bibr" target="#b39">[40]</ref>, <ref type="bibr" target="#b27">[28]</ref>, <ref type="bibr" target="#b29">[30]</ref>, <ref type="bibr" target="#b28">[29]</ref>. Local descriptors were computed densely over the input image and were matched to a set of visual words from a codebook that was obtained using clustering over descriptor samples from a training database. Pixels or superpixels were classified based on the distribution of the surrounding visual words. Due to the usual large size of dictionaries and dense feature computation of more complex features, such as SIFT, unary potential estimation dominate computational costs <ref type="bibr" target="#b36">[37]</ref> . We achieved full segmentation with 8 classes at 50 FPS in <ref type="bibr" target="#b10">[11]</ref> using smaller codebooks, simpler features and a GPU based implementation. In this work we show that the multiresolution channels described in the previous section can be used for even more robust segmentation results at significantly lower computational costs.  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Semantic Segmentation</head><p>In order to achieve multiclass segmentation we train an individual classifier for each semantic class to classify individual pixels. We use a sampling step rate of 4 pixels resulting in a 16 fold reduction of necessary classifications and show that the segmentation is still of good quality. Working with 320 × 240 pixel size multiresolution channels as input we need 4800 classifications to obtain full semantic segmentation for a single class.</p><p>As classification features for pixels we use the multiresolution channel features around them. We define two types of features sampled in a gridwise manner: short range and long range features (see <ref type="figure" target="#fig_1">figure 3</ref>). The short range features have the role to capture local structures and are sampled pix-elwisely over a grid of 25 × 25 pixels around the superpixel center. The long range features have the role of capturing the context and are sampled again over a 25 × 25 grid but with a step rate of 4 pixels between grid points, as seen in <ref type="figure" target="#fig_1">figure 3</ref>. The two grids result in 625 long range and 625 short range features from each filtered channel that describe a 200 × 200 and 50 × 50 pixel region in the original image.</p><p>The used classification scheme for pixels is very similar to the one used for classifying sliding windows for pedestrians. For each class we train a binary boosting based classifier using 5 level decision trees. We use 6 bootstrapping rounds in order to train classifiers with 64, 128, 192, 256, 320 and a final one with 384 decision trees. Contrary to pedestrian detection datasets, semantic segmentation training datasets can result in a large number of possible positive training samples, even of the order of millions. However, many training samples are almost identical and thus, redundant. To solve this issue, we use an initial training set with 5000 random positive samples and add 5000 hard positive samples after each boosting round. We do similarly with negative samples. For an accelerated classification we employ threshold based soft-cascading, used by most pedestrian detectors.</p><p>In order to provide semantic context for pedestrian detectors we train classifiers for the six most relevant semantic classes: sky, building, road/sidewalk, tree, vehicle and pedestrian. We train two classifiers also for horizontal and vertical structures, proposed in <ref type="bibr" target="#b21">[22]</ref>, that have the role to find foreground objects and their support regions. It is very important to have a consistent manually labeled training dataset that covers as many traffic scenarios as possible under different lightning and weather conditions at different times of the day. An ideal dataset would be the CityScapes database <ref type="bibr" target="#b8">[9]</ref> that contains 5000 images with high quality pixelwise annotation for 25 semantic classes. Unfortunately the dataset is still under development and is not yet released, but will be available by the end of 2015. For our experiments we combine three different semantic segmentation datasets that cover urban traffic scenarios. We use 701 images from CamVid <ref type="bibr" target="#b6">[7]</ref> , 552 from SiftFlow <ref type="bibr" target="#b31">[32]</ref> (only highway and street images), and 107 from KITTI <ref type="bibr" target="#b47">[48]</ref> datasets.</p><p>Example segmentations are illustrated in <ref type="figure">figure 4</ref>. Individual classification of pixels can result in noisy or inconsistent predictions. Several Conditional Random Fields (CRFs) have been defined for improving semantic segmentations. Outstanding results were achieved by Krahenbuhl and Koltun using dense CRFs <ref type="bibr" target="#b28">[29]</ref>. Dense CRFs are defined over uniform 2D grids. <ref type="figure">Figure 4</ref> shows the segmentation result after applying only 3 rounds of dense CRF iterations over each pixel and each 4th pixel. The best result is obtained using pixelwise CRF, however we prefer CRF defined over sparser grid-wise sampled pixels, considering the still relevant segmentation at 16 times lower computational costs (subsampling with a step rate of 4 pixels).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Semantic Channels</head><p>After training all classifiers, a classification cost can be determined for each pixel for each semantic class. Classification cost images are shown in <ref type="figure">figure 5</ref> for each class. We intend to integrate the semantic context for pedestrian detection as semantic channels next to the multiresolution channels. We consider two alternatives:</p><p>• raw semantic channels: using classification cost values</p><p>• CRF semantic channels: using discrete predictions from dense CRF inference An advantage of the pedestrian channel is, that it provides an additional pixel based detection scheme for pedes-trians. Even if it can not be used as a full pedestrian detector, considering that it represents only a very small fraction of training samples, it can still recognize specific parts of pedestrians and indicate their potential presence. Another advantage is the full scale invariance of semantic channels which is useful for the multiscale detection scheme that we describe in the following section.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Multiscale Detection</head><p>Several multiscale schemes have been presented in section 2. Traditional approaches used a single classifier for a fixed size pedestrian model and relied on the recomputation or approximation of image features at multiple scales. We showed in <ref type="bibr" target="#b10">[11]</ref>, that it is possible to robustly detect pedestrians using a single classifier for variable pedestrian sizes and a single image scale, based on Word Channel features, achieving detection at 16 FPS on GPU. In this work we show that detection with a single classifier and single image scale can be also achieved with multiresolution LUV+HOG channels, which are computationally much simpler than codebook based Word Channels.</p><p>To detect pedestrians at multiple scales, we compute the filtered channels for the original scale and apply sliding windows at multiple scales using a scale factor of 1.07 (approximately 10 scales per half octave). We extract classification features by sampling from the filtered channels in a gridwise manner. The grid is adapted to the size of the detection window. This way, the same number of features is obtained for a pedestrian of any size, using different grid spacings. In the case of classifier training, the image features are computed only at the original scale and the pedestrian images are not resized. Feature sampling is illustrated in <ref type="figure">figure 6</ref>.</p><p>Based on the described classification features a single <ref type="figure">Figure 6</ref>. Multiscale detection. Grid of sampled features is adapted to the pedestrian window. real-boost classifier is learned using 5 level decision trees and 5 bootstrapping rounds. We use 32, 512, 1024, 2048 and 4096 5-level decision trees during these rounds. We start with 10000 random negative samples and add 10000 hard negative samples after each bootstrapping round. A similar setup was used also in <ref type="bibr" target="#b52">[53]</ref>. For the sliding window we use the following adaptive step rates: 1/16 of the window width horizontally and 1/16 of the window height vertically. The search space is reduced by 35 % by conditioning the window centers to be between the rows 140 and 300 (valid for over 99 % percent of the pedestrians in the Caltech database <ref type="bibr" target="#b45">[46]</ref>). The filtered channel features are not scale invariant and pedestrians at different scales will have different representations. The pedestrians have significantly different representations also for different illumination, orientation or occlusions cases, and a single boosting classifier consisting of thousands of weak learners is still able to provide consistent results. Our intuition is that a powerful boosting classifier together with a large training dataset with pedestrians at various sizes is able to learn the relevant classification features independently for the different pedestrian representations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Experimental results</head><p>In the following we evaluate the semantic segmentation and the pedestrian detection component of the proposed solution. In the case of pedestrian detection we also show the impact on detection performance when using semantic channels.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.1.">Semantic segmentation evaluation</head><p>Considering that we focus on traffic scenarios we evaluate the proposed semantic segmentation approach on the CamVid benchmark <ref type="bibr" target="#b6">[7]</ref>. It is currently the largest traffic scene dataset with high quality pixelwise annotations for 32 semantic classes and consists of color video sequences captured by a camera mounted on a car. For evaluation we train an individual classifier for the classes Building, Tree, Sky, Car, Sign-Symbol, Road, Pedestrian, Fence, Column-Pole, Sidewalk and Bicyclist. We evaluate our semantic segmentation approach using pixelwise and sub-sampled dense CRF. For the sub-sampled dense CRF we use a step rate of 4 pixels for rows and columns. <ref type="table" target="#tab_0">Table 1</ref> provides the classification accuracy for each individual class, average accuracy for all classes, global accuracy and execution time. We also provide a comparison with several state of art approaches <ref type="bibr" target="#b7">[8]</ref> [10] <ref type="bibr" target="#b41">[42]</ref> [51] <ref type="bibr" target="#b19">[20]</ref> [31] <ref type="bibr" target="#b43">[44]</ref> and show that our results are competitive at significantly lower computational costs. The low accuracy for sign class is due to the small number of training samples (only 0.07 % of the training data) and can be solved using class weight balancing. The most confused classes were road and sidewalk.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.2.">Pedestrian detection evaluation</head><p>We use the Caltech-USA pedestrian detection benchmark <ref type="bibr" target="#b17">[18]</ref> for evaluating the performance of the proposed pedestrian detector. It is one of the mostly used pedestrian benchmarks and enables comparison between more then 50 state of art approaches. We use the extended training dataset for pedestrians by using each 3rd frame and the corresponding pedestrian annotations from the training videos sequences (the standard training set uses each 30th).</p><p>Training the 8 semantic pixel classifiers took around one hour using 24 Intel Xeon X5570 CPUs, part of the UTC-N GRID Center (POS CCE nr. 195) computing grid. The final pedestrian classifier was trained in less than an hour on the same grid.</p><p>As main detection performance metric we use the logaverage miss rate for [10 −2 , 10 0 ] false positives per image (FPPI) precision range, which is the standard evaluation metric on the Caltech benchmark. As testing setup we use the reasonable setup. First we evaluate the detection performance using only the multiresolution filtered channels with different number of scales. As seen in <ref type="figure" target="#fig_3">figure 7a</ref>, the best performance is achieved using 7 scales (210 multiresolution filtered channels). In <ref type="figure" target="#fig_3">figure 7b</ref> we show the effect of adding raw semantic channels and semantic channels obtained from dense CRF inference. <ref type="figure" target="#fig_3">Figure 7c</ref> shows the performance of the boosting classifier after each bootrapping round. Using a 5th bootsrapping round (also with 4096 weak learners) provided worse results, most probably due to overfiting. A similar effect was observed also when using deeper decision trees (7d). In all our experiments we used a 20 × 10 grid for sampling classification features for detection windows, resulting in 200 features for each individual channel. Denser grids did not provide performance improvements. <ref type="figure" target="#fig_4">Figure 8 provides</ref>   <ref type="bibr" target="#b1">[2]</ref>. The approaches are ordered by log-average miss rates. The best performance is achieved using multiresolution channels together with semantic channels (raw and CRF). <ref type="table" target="#tab_3">Table 2</ref> provides an overview of execution times and the achieved log-average miss rates on the Caltechreasonable test setup for approaches that provided details regarding computational costs <ref type="bibr" target="#b15">[16]</ref>   <ref type="bibr" target="#b1">[2]</ref>. The proposed solution provides competitive results at significantly lower computational costs. In the fol-  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.3.">Computational costs</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Conclusion</head><p>The main goal of this work was to provide a tool that can be used for visual perception in real-time applications and that can keep up with the robustness of current state of art approaches. We proposed a solution for pedestrian detection for validation purposes, however the approach can be also used for the detection of other object or obstacle types. The semantic segmentation is also an important visual cue and can help for a better higher-level understanding of the environment.</p><p>In this work we propose multiresolution channels for detection and semantic segmentation obtained from a computationally efficient filtering scheme. For fast detection we use a multiscale detection based on a single classifier model, a single features scale and adaptive classification features sampling. To obtain a more powerful detector, we integrate semantic segmentation as raw and CRF semantic channels next to the multiresolution channels. We focused also on keeping computational costs low and achieved a detection rate of 8 FPS on CPU and 15 FPS on GPU.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Semantic context provided by the proposed solution</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 3 .</head><label>3</label><figDesc>Field of interest for long (blue) and short (orange) features at different pixel locations. The short range features capture local structure, while the long range capture the context.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 4 .Figure 5 .</head><label>45</label><figDesc>Semantic segmentation refinement using dense CRF Semantic channels</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 7 .</head><label>7</label><figDesc>Detection performance on Caltech -reasonable test setup using different a) number of multiresolution scales, b) classification feature types, c) bootstrapping rounds and d) decision tree depths.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 8 .</head><label>8</label><figDesc>Benchmark results: Caltech -reasonable lowing we provide the average execution times for different steps of the solution using GPU (Nvidia GTX 980 Ti) / CPU (Intel Core i7 3.0 GHz) implementation. • 210 filtered channel computation: 2 ms / 21 ms • 8 semmantic channel prediction: 22 ms / 45 ms • dense CRF inference: -/ 28 ms • sliding window classifications: 14 ms / 29 ms</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 .</head><label>1</label><figDesc>CamVid segmentation benchmark results</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>a comparison, based on ROC curves, of the proposed solution with the current top approaches [53] [43] [50] [35] [6] [24] [34]</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head></head><label></label><figDesc>[17] [15] [5] [14] [11] [33] [1] [52] [35]</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 2 .</head><label>2</label><figDesc>Miss rate vs. frame rate The pedestrian detection for a 640 x 480 pixel image is achieved at an average rate of: • 60 FPS on GPU and 20 FPS on CPU with 210 filtered channels • 15 FPS on GPU and 8 FPS on CPU also with semantic channels</figDesc><table></table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgment This work has been partially supported by SmartCoDrive project (PNII-PCCA 18/2012) and MULTISENS project (PNII-ID-PCE-2011-3-1086), funded by the Romanian Ministry of Education and Research, UEFISCDI. We would like to thank Pusztai Kalman Communication Center the support in running our experiments.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Pedestrian detection with a large-field-of-view deep network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Angelova</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Real-time pedestrian detection with deep network cascades</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Angelova</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ogale</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ferguson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Partbased feature synthesis for human detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bar-Hillel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Levi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Krupka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Goldberg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Pedestrian detection at 100 frames per second</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Benenson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mathias</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Timofte</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Seeking the strongest rigid detector</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Benenson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mathias</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tuytelaars</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title level="m" type="main">Ten years of pedestrian detection, what have we learned? In ECCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Benenson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Omran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hosang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Semantic object classes in video: A high-definition ground truth database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">J</forename><surname>Brostow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Fauqueur</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cipolla</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Pattern Recognition Letters</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Segmentation and recognition using structure from motion point clouds</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">J</forename><surname>Brostow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Fauqueur</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cipolla</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">The cityscapes dataset</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cordts</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Omran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ramos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Scharwächter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Enzweiler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Benenson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Franke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR Workshop</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Multi-class segmentation for traffic scenarios at over 50 fps</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">D</forename><surname>Costea</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Nedevschi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IVS</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Word channel based multiscale pedestrian detection without image resizing and using only one classifier</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">D</forename><surname>Costea</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Nedevschi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Fast pedestrian detection for mobile devices</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">D</forename><surname>Costea</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">V</forename><surname>Vesa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Nedevschi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ITSC</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Histograms of oriented gradients for human detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Dalal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Triggs</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">Fast feature pyramids for object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Appel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>PAMI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Crosstalk cascades for frame-rate pedestrian detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Appel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Kienzle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ferguson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">The fastest pedestrian detector in the west</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Integral channel features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Tu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Pedestrian detection: An evaluation of the state of the art</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wojek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<publisher>PAMI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Object detection with discriminatively trained partbased models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">F</forename><surname>Felzenszwalb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+			<publisher>PAMI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Multi-class image labeling with top-down segmentation and generalized robust pˆn potentials</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Floros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Rematas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Leibe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Lenz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Stiller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<title level="m">Vision meets robotics: The kitti dataset. IJRS</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Decomposing a scene into geometric and semantically consistent regions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gould</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fulton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Koller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Multi-class segmentation with relative location prior. IJCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gould</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Rodgers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cohen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Elidan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Koller</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Taking a deeper look at pedestrians</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hosang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Omran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Benenson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Discriminative color descriptors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Khan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Van De Weijer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Khan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Muselet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Ducottet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Barat</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Multispectral pedestrian detection: Benchmark dataset and baseline</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">H J P N</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">C I S</forename><surname>Kweon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">P3 &amp; beyond: Solving energies with higher order cliques</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">P</forename><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title level="m" type="main">Robust higher order potentials for enforcing label consistency. IJCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H</forename><surname>Torr</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Efficient inference in fully connected crfs with gaussian edge potentials</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krähenbühl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Graph cut based inference with co-occurrence statistics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ladicky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">What, where and how many? combining object detectors and crfs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ladickỳ</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sturgess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Alahari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+		<title level="m" type="main">Nonparametric scene parsing via label transfer</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yuen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+			<publisher>PAMI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Switchable deep network for pedestrian detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Local decorrelation for improved pedestrian detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Nam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">H</forename><surname>Han</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Strengthening the effectiveness of pedestrian detection with spatially pooled features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Paisitkriangkrai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Van Den</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Hengel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Exploring weak stabilization for motion feature extraction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Active map inference in crfs for efficient semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Roig</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Boix</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>De Nijs</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ramos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kuhnlenz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Associative hierarchical crfs for object class image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Deep hierarchical parsing for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Sharma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Tuzel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">W</forename><surname>Jacobs</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<monogr>
+		<title level="m" type="main">Textonboost for image understanding: Multi-class object recognition and segmentation by jointly modeling texture, layout, and context</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Criminisi</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+			<publisher>IJCV</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Nonparametric scene parsing with adaptive feature relevance and semantic context</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Singh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kosecka</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Combining appearance and structure from motion features for road scene understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sturgess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Alahari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ladicky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<monogr>
+		<title level="m" type="main">Pedestrian detection aided by deep learning semantic tasks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Finding things: Image parsing with regions and per-exemplar detectors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tighe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<monogr>
+		<title level="m" type="main">Pedestrian detection via classification on riemannian manifolds</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Tuzel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Porikli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Meer</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+			<publisher>PAMI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Real-time pedestrian detection in urban scenarios</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Varga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">V</forename><surname>Vesa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Jeong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Nedevschi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCP</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Regionlets for generic object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Evidential combination of pedestrian detectors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Davoine</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Denoeux</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">Context driven scene parsing with attention to rare classes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Price</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Cohen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-H</forename><surname>Yang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">Exploring prior knowledge for pedestrian detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Wu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">Semantic segmentation of urban scenes using dense depth maps</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Yang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<analytic>
+		<title level="a" type="main">Informed haarlike features improve pedestrian detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Bauckhage</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Cremers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b52">
+	<analytic>
+		<title level="a" type="main">Filtered channel features for pedestrian detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Benenson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

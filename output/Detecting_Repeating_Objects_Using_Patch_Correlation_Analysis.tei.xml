@@ -1,0 +1,835 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Detecting Repeating Objects using Patch Correlation Analysis</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Inbar</forename><surname>Huberman</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">School of Computer Science and Engineering</orgName>
+								<orgName type="institution">The Hebrew University of Jerusalem</orgName>
+								<address>
+									<country key="IL">Israel</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Raanan</forename><surname>Fattal</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">School of Computer Science and Engineering</orgName>
+								<orgName type="institution">The Hebrew University of Jerusalem</orgName>
+								<address>
+									<country key="IL">Israel</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Detecting Repeating Objects using Patch Correlation Analysis</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:39+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>In this paper we describe a new method for detecting and counting a repeating object in an image. While the method relies on a fairly sophisticated deformable part model, unlike existing techniques it estimates the model parameters in an unsupervised fashion thus alleviating the need for a user-annotated training data and avoiding the associated specificity. This automatic fitting process is carried out by exploiting the recurrence of small image patches associated with the repeating object and analyzing their spatial correlation. The analysis allows us to reject outlier patches, recover the visual and shape parameters of the part model, and detect the object instances efficiently.</p><p>In order to achieve a practical system which is able to cope with diverse images, we describe a simple and intuitive active-learning procedure that updates the object classification by querying the user on very few carefully chosen marginal classifications. Evaluation of the new method against the state-of-the-art techniques demonstrates its ability to achieve higher accuracy through a better user experience.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Introduction</head><p>High object-count tasks are often encountered in industrial and scientific applications such as product inspection in manufacturing lines and cell counting for research and clinical purposes. These tasks typically require a considerable amount of repetitive human effort, and in many cases, a high degree of expertise. Automating the detection of objects using computerized vision is a highly challenging problem due to the visual complexity arising from irregular arrangement of the objects, variability in shape and illumination, mutual occlusions and similarity to other elements in the scene.</p><p>The object recognition literature in this context divides into two approaches. The first class of methods detect objects instances based on the raw response of various visual descriptors <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b17">18,</ref><ref type="bibr" target="#b23">24]</ref> or on more detailed and generative object models <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b29">30,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b0">1,</ref><ref type="bibr" target="#b19">20]</ref>. These methods assume the objects are well-resolved and identifiable in the image. The second class of methods <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b16">17]</ref> is geared towards massively-populated images, e.g., human crowds, where individual objects consist of very few pixels. These methods typically regress the object density based on various texture descriptors, and estimate the count by integrating the density. Unlike the previous category, typically these methods do not localize individual objects. Both classes, however, involve training and typically require a large number of example images along with the locations or number of the objects they contain. The learnt models often show a high degree of specificity to the trained data, e.g, for a particular type of cell culture, and hence offer a limited use with more diversity scenarios.</p><p>In this paper we present a new method for localizing and counting one or more distinct objects in an image with no prior training stage. The method can operate on as little data as the input image itself, thus alleviating the need for large annotated training sets and offering a wider applicability compared to data-specific trained systems. The method relies on the deformable part-based model (DPM) <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b12">13]</ref> to detect the object of interest and enjoys the model's tolerance to moderate geometric deformations. While this model is rich in parameters and requires non-trivial training efforts, the key idea behind our approach is to exploit the sheer number of object appearances in the image to automatically recover its parameters.</p><p>Similarly to other patch-based similarity measures <ref type="bibr" target="#b4">[5]</ref> we abstract the image content by considering small image patches as visual descriptors for the object parts and identify the ones associated with the repeating object by extracting highly-recurring windows in the image. Thus, we avoid the need to manually choose or pre-learn specific visual descriptors for the DPM. While the recurrent patches are likely to be part of the repeating object and can serve for its detection, some of the patches found may not be related to the object of interest and, at the same time, a single object occurrence is likely to stimulate the response of several patches. Thus, in order to disambiguate the occur-rences and reject outliers we further search for a structural dependency between the patches, namely the springs of the DPM. Here again, we utilize the power hidden in the repetitiveness in the image which gives rise to meaningful autoand cross-correlation functions of the patches occurrences that, in turn, allow us to derive spatial relations between the object parts. Besides requiring the user to provide the object scale, this procedure recovers the DPM parameters automatically and requires no training stage or data.</p><p>The recovered DPM provides a likelihood estimate for object occurrences across the image. We finally determine whether the object of interest appears in each potential location using a low-dimensional linear classifier which is tuned to the input image. The classifier's parameters are found by an intuitive active-learning procedure in which the user is asked to validate the classification of few carefully chosen instances. This user-assisted approach provides a practical tool for object counting and detection, without requiring any data beyond the input image, and is capable of adapting to the image particularities via a minimal user input. Evaluation against state-of-the-art shows that our object detection mechanism achieves higher accuracy on established datasets as well as our user assisted procedure fulfills this potential with very little input from the user.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Related Work</head><p>Object recognition is one of the most studied problems in computer vision. We focus here on works which are closely-related to object counting.</p><p>As noted above, one of the main paradigms for object detection consists of extracting various low-and mid-level visual descriptors from the image and using them to predict the existence of an object across the image. Example features used are: local histograms of oriented gradients <ref type="bibr" target="#b10">[11]</ref>, Hough transform <ref type="bibr" target="#b15">[16]</ref>, scale-invariant feature transform <ref type="bibr" target="#b17">[18]</ref>, and neural networks <ref type="bibr" target="#b23">[24]</ref>. The predicting is done by some classifier, e.g., SVM, which is pre-trained on a database of images annotated with object locations. Models that rely on a more sophisticated description of the object are able to achieve higher classification accuracy and robustness to defomations and occlusions. For example, a hierarchy of part detectors are learned together with a pixel-level segmentor in <ref type="bibr" target="#b29">[30]</ref>. Higher-level geometric constraints are added to the Hough transform in <ref type="bibr" target="#b3">[4]</ref>. Agrwal et al. <ref type="bibr" target="#b0">[1]</ref> learn a visual vocabulary of the object parts along with their spatial relations, whereas Leibe et al. <ref type="bibr" target="#b19">[20]</ref> learn their individual spatial distribution. A full deformable partbased model is used for human detection in <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b22">23,</ref><ref type="bibr" target="#b11">12]</ref>. While these methods achieve notable results, they consist of parameter-rich models that require a non-trivial amount of training data and effort. In the context of texture segmentation, a fully-unsupervised generative tree model is described in <ref type="bibr" target="#b1">[2]</ref>.</p><p>A second line of works tackles the regime where the repeating object is under-resolved consisting of few pixels. These works provide count estimates (without their spatial locations) by calculating the object density in the image. The latter is typically regressed over various texture attributes and the objects number is obtained by integrating the density. Chan et al. <ref type="bibr" target="#b7">[8]</ref> feed edge and texture features into a Gaussian process which predicts the number of pedestrians in video sequences. An extension that collects texture and periodicity descriptors from multiple scales is described in <ref type="bibr" target="#b16">[17]</ref>. While targeting less densely populated images, Cho et al. <ref type="bibr" target="#b8">[9]</ref> estimate crowd density using a neural network stimulated by various edge detectors. Training these methods requires set of images along with the number of objects they contain. Hence each example provides a single, or very few, constraints over the regression parameters. Lempitsky and Zisserman <ref type="bibr" target="#b20">[21]</ref> also assume the objects are well resolved and learn the density maps from user-provided set of locations, thus reducing the number of training images needed. This approach is further accelerated using regression trees in <ref type="bibr" target="#b13">[14]</ref>.</p><p>To tackle more practical scenarios and avoid the need for training data and its associated bias, Arteta et al. <ref type="bibr" target="#b2">[3]</ref> describe an interactive procedure in which a linear regression is used over dimensionally-reduced image descriptors. Yao et al. <ref type="bibr" target="#b30">[31]</ref> describe an interactive video annotation method based on Hough trees and provides live feedback to minimize human effort. The CellC <ref type="bibr" target="#b25">[26]</ref> and ImageJ <ref type="bibr" target="#b9">[10]</ref> are two open-source interactive GUIs designed for segmenting and counting cells in fluorescence microscope images. These methods use intensity-based thresholds defined by the user. Sommer et al. <ref type="bibr" target="#b27">[28]</ref> extracted sophisticated texture descriptors in where random forests are used for classification.</p><p>Similarly to our work Torii et al. <ref type="bibr" target="#b28">[29]</ref> exploit repetitiveness in images, however, their work focuses on place recognition task and their algorithm estimates the abundance of various visual words, regardless of their relation to any particular shape or object in the scene. Leung and Malik <ref type="bibr" target="#b21">[22]</ref> extract segments consisting of a repeating patten under affine transformations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">New Method</head><p>The main idea behind the new method is to avoid the costs involved in the conventional training used for object detection by exploiting the fact that the input image contains multiple appearances of the object of interest. The method derived in this section carries out this idea using a fairly-sophisticated visual model, namely the deformable part model in two steps. In the first step, given the user specified bounding box of the object, the DPM components are automatically recovered by extracting recurrent patches in the image and analyzing their spatial correlation. In the second step, the existence of the object at the potential lo-patches patches occurances cross-corr. DPM model cations indicated by the DPM is determined using a linear classifier. The latter is adapted to the input data by an intuitive active-learning procedure which requires the user to provide feedback on a very few marginal instances.</p><p>In the next two sections we describe the procedure for recovering the DPM visual descriptors (nodes) and their spatial arrangement (springs). In Section 3.3 we explain how the objects in the image are detected using the DPM found.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Extracting Recurrent Patches</head><p>Given an input image I(x) containing multiple instances of an object, we expect to find a number of recurring patches that take part in the object's pattern. We extract these patches from the image and use them as the visual descriptors of the object's DPM. The patches are extracted by a simple iterative procedure in which we consider, at each step, multiple random patches of the image, and pick the one with the maximal number of appearances. In this section we explain this procedure in detail. As the first step we consider a small square window centered around a random coordinate as a candidate patch p, and compute its crosscorrelation 1 function, ρ(x), with every patch in the image (centered around x).</p><p>The occurrence map z(x) of p is defined by a maximum suppression over ρ(x), specifically; we set z(x) = 1 where ρ(x) &gt; 1 − ε, unless ρ(x) &gt; ρ(y) at any pixel y inside a window around x of the same dimensions as the patches used, and z(x) = 0 elsewhere. We use ε = 1/20 in all the tests reported but expect this value to increase in presence of high noise levels. The patch sizes we use is 9-by-9 pixels assuming the object is three times this size. Therefore, similarly to <ref type="bibr" target="#b2">[3]</ref>, we ask the user to bound one of the objects in the image with a box and scale the image accordingly.</p><p>Recall that the occurrence map z(x) is a binary map, corrected map auto-corr.</p><p>sqrt. Gaus.</p><p>Gaussian t cross-correlation map where z(x) = 1 indicates the pixels in which the image I(x) and the patch p show a strong structural resemblance and is zero otherwise. Thus, we measure p's frequency in the image by ∑ x z(x). We repeat this step several times (consider 30 candidate patches in our implementation) and add the patch with the highest frequency to a list of recurrent-patches, p 1 , p 2 , ... and keep the corresponding occurrence maps z 1 , z 2 , .... This procedure is repeated until the frequency of the patch found falls below some fraction of the maximal frequency encountered in the previous steps (30% in our implementation). To avoid multiple selections of the same or very similar patches, we exclude pixels that neighbor occurrences of previously selected patches. More formally, at the j-th step we skip patches that overlap pixels</p><formula xml:id="formula_0">x in which ∑ j−1 i=1 z i (x) &gt; 0.</formula><p>We further accelerate the process by skipping candidate patches with low variance due to their inability to describe shape. <ref type="figure" target="#fig_0">Figure 1</ref> shows three patches recovered in this process and their occurrence maps.</p><p>While not dealing with object counting, Shechtman and Irani <ref type="bibr" target="#b26">[27]</ref> identify large shapes based on similarity between the patches that compose it. Our work relies on a different observations, where the patches are expected to appear once in every object occurrence.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Structure from Patch Correlation Analysis</head><p>It is highly likely that many of the recurrent patches found correspond to different parts of the repeating object and hence appear in a consistent spatial arrangement, see <ref type="figure" target="#fig_0">Figure 1</ref> as example. We detect this spatial dependency using a patch correlation analysis and use it to define the spring parameters of the DPM. This step allows us to associate patch occurrences with the occurrence of a unique object as well as reject outlier patches found in the previous step.</p><p>Here again we exploit the object's repetitiveness in the image which provides meaningful auto-and crosscorrelation functions τ ij between pairs of occurrence maps z i , z j , where 1 ≤ i, j ≤ n and n is the number of patches extracted. In principle, if the i-th and j-th patches correspond to two parts of the repeating object, both of them are expected to respond to the same occurrences of the object in the image. Each of these responses will be recorded both in z i and z j but at a different spatial offset which corresponds to the patches offsets in the object. This spatial dependency in the occurrence maps will trigger a peak in their crosscorrelation τ ij (x) around the coordinate x that is equal to the spatial offset vector. Note that while false responses may exist in the occurrence maps, it is less likely that these occurrences will exhibit a strong mutual correlation as to corrupt τ ij (x).</p><p>We detect strongly correlated patches by measuring the ratio between the maximal value in τ ij (x) and the secondlargest value which acts as a local optimum (greater from its eight nearest points). If this ratio is above some factor (two in our implementation) we mark the patch pair (i, j) as being correlated and extract their characteristic spatial offset by u ij = argmax x τ ij (x). <ref type="figure" target="#fig_0">Figure 1</ref> shows patch offsets recovered from the correlation functions. At the end of this procedure each patch has between zero to n − 1 paired patches. Finally, we discard patches with less than n/10 pairs.</p><p>As we noted earlier, the image may contain recurrent patches that do not belong to the object of interest. Typically, such patches result from straight edges which are abundant in natural images or the existence of an additional repeating pattern in the image. In the first case (edges) or repeating objects of the patch size (noise), the patches are not expected to show a strong correlation with other patches, hence be discarded due to their insufficient number of patch pairs. In Section 3.3 we explain how we cope with images that contain more than one large repeating object.</p><p>A straight edge in the object of interest poses a different problem where the relative location of the patches constructing it is not well defined (along the edge). In practice, as shown in <ref type="figure" target="#fig_1">Figure 2</ref>, the correlation map, ρ i (x) of such patches contains linear features instead of well-defined peaks. In order to come up with a valid occurrence map for such patches, we identify the locations of each linear feature in ρ i (x) using template matching with a single instance, r(x), of these features. We recover r(x) by first computing the auto-correlation function of ρ i (x), namely R(x), which contains a single instance convolved with itself, i.e., r(x) * r(x) (in case of a symmetric function). By approximating the function R(x) with a 2D Gaussian G σ (x) using a PCA, we approximate r(x) using G σ/2 (x) which is the square-root of G σ (x) with respect to the convolution operation. Finally, we apply a maximum suppression over ρ i (x) * r(x) to obtain the new occurrence map z i (x). We compute the auto-correlation function of every patch found, and apply this procedure only in cases where the Gaussian all patches occurances aggregated clustered occurances Planner Embedding. The set of recurring patches found so far correspond to vertices of an incomplete graph whose edges are the strongly-correlated patch pairs. Every edge in the graph is associated with the average spatial offset vector u ij between the patches. As the final step of constructing the shape model, we convert these relative relations into a consistent set of coordinates in the plane which we use below for efficient detection of potential object occurrences.</p><p>The planner embedding problem we are faced with can be solved by a straightforward application of the locallylinear embedding (LLE) technique <ref type="bibr" target="#b24">[25]</ref> in which we seek for global vertex coordinates, x 1 , ..., x n , that agree, as much as possible, with the spatial offsets u ij by minimizing min x1,...,xn</p><formula xml:id="formula_1">∑ (i,j)∈E ∥x i −x j −u ij ∥ 2 ,<label>(1)</label></formula><p>where E denotes the set of edges in the graph (pairs of correlated patches). Upon differentiation w.r.t, x 1 , ..., x n , we obtain a linear system over the x and y coordinates of the vertices. <ref type="figure" target="#fig_0">Figure 1</ref> depicts the planner arrangement found in this step. Note, that while the object instances can appear under different deformations, the highly-correlated patches we are considering correspond to adjacent object parts that experience only a small amount of the deformation. The resulting coordinates correspond to consistent biases in the location of every patch in the object. Note that our DPM is not restricted to a single version of an object or even a single object (see <ref type="figure">Figure 5</ref>). The DPM's graph can contain alternative nodes for certain parts of the object, as well as multiple connected components representing different uncorrelated objects.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Object Detection</head><p>In principle every response in every occurrence map computed provides an evidence for the appearance of an object. We use the recovered DPM to identify locations in the image in which there is a consensus among one or more such evidences. We further collect a small number of basic angular centroid occlusion comp. measures from each of these possible appearances and feed this data, as a feature vector, into a linear classifier which makes the final judgment whether an object appears in each of the suspected locations. In order to adapt the algorithm to the particularities of the input image and object shape, we allow the user to fine-tune the classifier via a small number of carefully-selected queries. Potential Occurrences.</p><p>In case a DPM has a tree structure the detection of object instances can be performed using dynamic programming <ref type="bibr" target="#b12">[13]</ref> in O(nN ) operations, where N is the number of image pixels (and n is the number of parts/patches). As noted above, we utilize the patch occurrence maps computed earlier to accelerate the search down to O(nm) where m is the number of object occurrences. This is done by collecting the coordinates in which the occurrence maps responded and shifting them to the object center as defined by the embedded coordinates, namely Ω i = {y : z i (y −x i ) = 1}. While each instance can appear with its own deformation, this transformation eliminates the consistent bias in the patches location in the object and, as shown in <ref type="figure" target="#fig_2">Figure 3</ref>, leads to substantial aggregation of the responses. Finally, in order to extract the consensus locations, we apply a multi-model RANSAC clustering <ref type="bibr" target="#b31">[32]</ref> over Ω = ∪ n i=1 Ω i with σ = 20 (two thirds of the object size). At every cluster k we store its center coordinate c k , the list of patches assigned to it C k , and their coordinates y j , where j ∈ C k .</p><p>Occurrence Descriptors. In order to determine whether the clusters found indicate a true object appearance or not while coping with the unique characteristics of the input image, we resort to a fairly low-dimensional linear separator to perform this classification. The classification is based on the following basic fidelity measures extracted at every cluster k found: (i) number of patches in the cluster, (ii) average correlation values between patches and the image (given by ρ), (iii) the average deformation in the cluster, given by</p><formula xml:id="formula_2">∑ j,j ′ ∈C k ,(ij ,i j ′ )∈E ∥y j −y j ′− u ij ,i j ′ ∥/ {j, j ′ ∈ C k , (i j , i ′ j ) ∈ E} ,<label>(2)</label></formula><p>(iv) the average distance between the centroid of the patches present in a cluster and its center ∥ ∑ j∈C k y j /|C k | − c k ∥, which is expected to vanish when all patches participate.</p><p>In order to compensate clusters near the image border we add (v) the distance between the cluster center, c k , and the closest boundary (as long as the distance falls below the object radius).</p><p>Repeating patterns in the image, besides the object of interest, are likely to consist of a different composition of patches. Hence, in order to differentiate between different populations of objects we apply PCA over the set of vectors that indicate which patch participates in each cluster, v k i = 1 if i ∈ C k and zero otherwise. Thus, as the (vii)-(ix) features, we compute the ⟨v k , a 1 ⟩, ⟨v k , a 2 ⟩ and ⟨v k , a 3 ⟩, where a 1 , a 2 and a 3 are the three most active principal directions. <ref type="figure" target="#fig_3">Figure 4</ref> visualizes some of the features we described and <ref type="figure">Figure 5</ref> demonstrates the improved ability to discriminate between distinct types of objects based on the last feature.</p><p>Occluded objects are another case requiring compensation due to missing patches. If the occluding object is an instance of the object being counted, its presence is likely to be captured by one of the clusters found. However, since none of the objects are identified at this stage, we only look at the feature values at locations of potential occluders. More specificity, we generate feature maps containing the feature values extracted from each cluster rendered at pixels that the object is expected to occupy, i.e., circles located around the cluster centers c k . We use the inputted object size as the diameter of the circles. The rest of the maps values are set to zero. Then, for each empty angular bin in a cluster we evaluate feature values from the maps and concatenate it to the cluster's feature vector describe above. Thus, the feature vectors we assign to each cluster, f k , is a 18-dimensional vector. The values arriving from different bins are added together. As shown in <ref type="figure" target="#fig_3">Figure 4</ref> the sampled points are the endpoints of rays emanating from the cluster centers, passing through the empty angular bins, and extending to a distance equals to the object size.</p><p>Occurrence Classification. Finally, we determine whether each cluster corresponds to an object appearance or not by feeding its feature vector to a linear SVM, namely, sign(⟨f j , w⟩ − b), where w and b are the separation vector and offset value. As noted above, we allow the user to tune this decision making to the particularities of the input image by updating these parameters through the following query-based procedure. At the first step, we initiate w = <ref type="figure" target="#fig_0">(1, 0, 0, ...)</ref>, i.e., consider only the number of patches, and compute biases b min and b max that lead to all positive and all negative decisions. We extract 20 clusters that uniformly sample this range with their scores, ⟨f j , w⟩, and allow the user to change their classification by picking b ∈ [b min , b max ] using a slider. The classifications are con-without PCA feature with PCA feature <ref type="figure">Figure 5</ref>: PCA-based patch composition demonstration: PCA descriptors allow us to differentiate between distinct types of repetitive objects. The top example is the result obtained with and without these descriptors when insisting to count only the white pieces. In the bottom examples we count two specific types of screws and pralines and exclude the rest (with PCA descriptors used).</p><p>veyed by rendering a red or green frame around each of the 20 objects.</p><p>Given the current w and b we set δ ± = min{|b−b min |, |b− b max |} and proceed with the following procedure. We randomly sample seven clusters that score b &lt; ⟨f k , w⟩ &lt; b+δ + /2 and another three with b+δ + /2 &lt; ⟨f k , w⟩ &lt; b+δ + . We do the same for the negative case; sample seven and three clusters whose score falls inside</p><formula xml:id="formula_3">[b − δ − /2, b] and [b−δ − , b−δ − /2].</formula><p>The classification of all the 20 clusters are presented to the user who can change them by clicking inside the colored frames that mark their classification. While the user does not have to click all 20 clusters, the proper classification of all these clusters is inputted in this step. We use this user input as well as all the clusters scoring above b+δ + and below b−δ − as tagged points in a soft-max SVM to obtain new w and b. The classification of clusters which are close to the separation margin is less reliable and therefore we devote more user validation over these clusters by biasing the cluster selection towards the margin (14 clusters out of 20).</p><p>We also decrease δ + by a factor of two if the classification of the three extreme clusters in [b+δ + /2, b+δ + ] was not changed by the user, and increase δ + by that factor if it was. The same goes for δ − and [b−δ − , b−δ − /2]. We repeat this procedure with the updated values of w, b and δ ± until there are no corrections entered or not enough clusters can be found within [b−δ − , b+δ + ]. By increasing and decreasing the interval [b−δ − , b+δ + ] we adapt online the criterion of marginal classifications and allow the system to perform both large and subtle updates in the classifier parameters.  <ref type="table">Table 1</ref>: Small refers to the cell images produced by <ref type="bibr" target="#b18">[19]</ref> and large to the addition of few false larger cells into the images in this dataset. The dataset titled lg.-sm. refers to training on the mixed cells (including the large cells) and testing on the images containing only small cells. The two error values in Lempitsky and Zisserman's column correspond to the two metrics they use. Each image in the datasets contains 250 cells.</p><p>#patches corr. deform. cent. ang. PCA borders occl. 77% 425% 125% 61% 116% 138% 183% 135% In contrast to the method of Arteta et al <ref type="bibr" target="#b2">[3]</ref>, this procedure does not require the user to inspect all the objects in the image and compare them to another image showing the system decisions. The user is also not required to outline regions or pinpoint items in the image.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Results</head><p>While the goal of this work is to derive a practical userassisted counting technique, we start with a test assessing the algorithm's accuracy limit. In this test, given the object scale, we recover the DPM automatically, as described in Section 3, but replace the user-assisted procedure with a training stage in which we optimize the linear classifier over 16 simulated fluorescence microscope cells images taken from <ref type="bibr" target="#b18">[19]</ref>, which were previously used to benchmark object counting algorithms <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b2">3]</ref>. <ref type="table">Table 1</ref> summarizes the results and shows that our object detection mechanism has potential to achieve a higher accuracy compared to the supervised density estimation method of Lempitsky and Zisserman <ref type="bibr" target="#b20">[21]</ref>.</p><p>Given the user supplied bounding box of the object, from  <ref type="table">Table 3</ref>: Counting errors at each iteration are shown in the first five rows. The final false positive H1 and negative H0 and the total number of mouse clicks are provided in the following rows. The total session time is given in the last row and the pre-process portion of our method is given in brackets (this time is included in the time row). All the images can be found in the supplementary material.</p><p>which we derive the object scale, we compared our method with template matching methods, namely the classic approach <ref type="bibr" target="#b6">[7]</ref> that uses a single template, and a newer one by Boiman and Irani <ref type="bibr" target="#b5">[6]</ref> which breaks the template into smaller windows. As shown in <ref type="table">Table 1</ref>, the DPM we extract from the image is more accurate than these approaches as it uses patches whose recurrence and mutual correlation were recovered from the entire data and not deduced from a single instance. A single template may also contain irrelevant background features if not carefully selected. <ref type="table">Table 1</ref> also shows the results obtained by running a circular Hough transform. The relatively high error produced is a result of the fact that incomplete objects create a wide range of scores that make it hard to find a suitable threshold for detecting occurrences.</p><p>It is worth noting that when training both our and Lempitsky and Zisserman's systems on a dataset containing a few extra false large cells, the performance on images consisting of only small cells decreases. This specificity to the training data is avoided in the user-assisted approaches.</p><p>In order to verify that each descriptor in the feature vector contributes to the classification accuracy, we repeated the fully-supervised experiment eight more times. In each experiment we ignored one of the feature elements and calculated the average error. <ref type="table" target="#tab_1">Table 2</ref> shows the increase in error compared to full feature vector.</p><p>In order to evaluate the user-assisted procedure against Arteta et al.'s we conducted a user study consisting of 15 participants and 5 images. Before asking the participants to use these systems, we demonstrated how each system operates by running an example session. The order of the methods and images, tested in this study, were chosen randomly for each participant. <ref type="table">Table 3</ref> shows the average counting error at each iteration of these user-assisted procedure. The results show that our counting procedure capable of achieving more accurate counts at slightly shorter user time and effort (mouse clicks). Moreover, the average error on the cell images (small) appears to be very close to the optimal solution obtained by a fully-supervised training stage (see <ref type="table">Table 1</ref>). We find the latter to be a positive indication that our update procedure is capable of reaching close-toideal separators. The results obtained from the CellC software <ref type="bibr" target="#b25">[26]</ref> are also given in <ref type="table">Table 3</ref> and appear to achieve a lower accuracy.</p><p>False positive and false negative errors cancel out when considering only the total object count, however these values are important when assessing the object localization error. <ref type="table">Table 3</ref> indicates that our method manages to achieve a considerably higher accuracy in this respect. We further asked each of the participants, at the end of their session, which system they found more easy to work with and all, but one, preferred our query-based approach.</p><p>Finally, <ref type="figure" target="#fig_4">Figure 6</ref> shows example images and the objects detected by the two methods. The water bottles image is an example where the object size changes due to perspective deformation. While the features we use namely, image patches, are not invariant to such transformation a sufficient number of instances at each size enables us to find enough identifying patches. Nonetheless, as we discuss below, we find this lack of invariance as well as rotational to be a drawback of our method.</p><p>In the supplementary material we provide all the results presented here as well as additional results, including videos capturing a user interaction session.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusions</head><p>We presented a new method for localizing and counting repeating objects in an image. While the new method consists of a fairly detailed DPM, it requires no training phase or data. They key idea that allow posing the model is to exploit the shear number of object repetitions in the image. Rather than resorting to content-specific feature spaces, we abstract the image content and use its own patches to search for recurrences. The DPM's shape is obtained by a patch correlation analysis which also serves us to efficiently identify potential object occurrences. Finally, we described a practical system which is capable of adapting to the unique characteristics of the image and the objects it contains. This approach consists of a simple and intuitive active-learning procedure which allows the user to correct the decision of the classifier over a small number of carefully-selected queries and without the need to inspect the entire input. Results show that the new algorithm is capable of achieving more accurate estimates on images from a known benchmark dataset, and that this accuracy is more easily achieved using the new user interaction system.</p><p>Despite the advantages presented in the previous section, there are many scenarios in which our method is not expect to perform well. Clearly, images with severe occlusions or considerable object variation will prevent it from identifying a sufficient number of repeating patches and their occurrences, which will undermine our ability to detect meaningful spatial dependency. Experiments show that at least 20 object repetitions are required for the method to perform. As noted earlier, we do not cancel rotational or scaling transformations and hence, in cases where these variations are significant, our method is not expected to perform well unless a sufficient number of instances are available in each configuration. Incorporating such invariances into our method cannot be done at a patch level and requires future work.</p><p>In Section 3 we specified a number of parameter values used by our method. Some of the values do not play a critical role, such as the number of candidate patches sampled or the termination criterion of this search where higher values do not achieve significant improvement. Some scale values do not show dependance on the data as they are defined relative to the object size, such as the patch size, RANSAC diameter, and occluder's search distance. The value that may benefit further adaptation is the patch correlation tolerance ε which may be depend on the level of noise or, perhaps in extreme cases, on the object's shape. Let us note that we produced all the results reported in the paper using the same set of specified values.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Left to right are: three recurrent patches and their occurrences in the image. The spatial offset between the occurrences indicated by the peak's location (orange arrow) in the cross-correlation functions. A visualization of the DPM recovered by our method.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>Left: correlation map of a patch containing a straight edge (blue dashed line). Center: the autocorrelation function of this map. Beneath is its Gaussian approximation and at the button is the square-root of the Gaussian approximation. Right: corrected occurrence map (purple).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 :</head><label>3</label><figDesc>All the patch occurrences found and their aggregation according to their embedded coordinates. approximation exhibits high eccentricity (above 2). Figure 2 shows the results of this correction step.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 :</head><label>4</label><figDesc>Features used for classification (left-to-right): difference between patches centroid and cluster center, angular bins occupancy and rays reaching to occluder pixels in the feature maps.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 6 :</head><label>6</label><figDesc>Images produced by the method of Arteta et al. and our. In both cases less mouse clicks (indicated by '#C') where used to produce our results.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 2 :</head><label>2</label><figDesc></figDesc><table>Percentage of error increase when omitting each 
+descriptor from the SVM classifier and testing on the lg.-
+sm. dataset. 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">cross-correlation value between two image patches p and q is defined by ⟨p − µp, q − µq⟩/(σpσq) where ⟨·, ·⟩ denotes the dot-product operator, µ denotes the patch average and σ its standard-deviation. The autocorrelation of p is obtained by setting q = p.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgments</head><p>This work was funded by the European Research Council, ERC Starting Grant 337383 "Fast-Filtering".</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Learning to detect objects in images via a sparse, part-based representation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Awan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Roth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="1475" to="1490" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Extracting texels in 2.1d natural textures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Ahuja</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Todorovic</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2007" />
+			<biblScope unit="page" from="1" to="8" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Zisserman. Interactive object counting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Arteta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">S</forename><surname>Lempitsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">A</forename><surname>Noble</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision -ECCV 2014 -13th European Conference</title>
+		<meeting><address><addrLine>Zurich, Switzerland</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="504" to="518" />
+		</imprint>
+	</monogr>
+	<note>Proceedings, Part III</note>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">On detection of multiple object instances using hough transforms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Barinova</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lempitsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2010 IEEE Conference on</title>
+		<imprint>
+			<date type="published" when="2010-06" />
+			<biblScope unit="page" from="2233" to="2240" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Similarity by composition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Boiman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Irani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Twentieth Annual Conference on Neural Information Processing Systems</title>
+		<meeting>the Twentieth Annual Conference on Neural Information Processing Systems<address><addrLine>Vancouver, British Columbia, Canada</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">19</biblScope>
+			<biblScope unit="page" from="177" to="184" />
+		</imprint>
+	</monogr>
+	<note>Advances in Neural Information Processing Systems</note>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Detecting irregularities in images and in video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Boiman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Irani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Int. J. Comput. Vision</title>
+		<imprint>
+			<biblScope unit="volume">74</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="17" to="31" />
+			<date type="published" when="2007-08" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Template matching using fast normalized cross correlation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Briechle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><forename type="middle">D</forename><surname>Hanebeck</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of SPIE: Optical Pattern Recognition XII</title>
+		<meeting>SPIE: Optical Pattern Recognition XII</meeting>
+		<imprint>
+			<date type="published" when="2001-03" />
+			<biblScope unit="volume">4387</biblScope>
+			<biblScope unit="page" from="95" to="102" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Privacy preserving crowd monitoring: Counting people without people models or tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Chan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z.-S</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Vasconcelos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2008-06" />
+			<biblScope unit="page" from="1" to="7" />
+		</imprint>
+	</monogr>
+	<note>CVPR 2008. IEEE Conference on</note>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">A neuralbased crowd estimation by hybrid global learning algorithm</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-Y</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">W S</forename><surname>Chow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-T</forename><surname>Leung</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Systems, Man, and Cybernetics</title>
+		<imprint>
+			<biblScope unit="volume">29</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="535" to="541" />
+			<date type="published" when="1999" />
+		</imprint>
+	</monogr>
+	<note>Part B</note>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Imagej for microscopy</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">J</forename><surname>Collins</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Biotechniques</title>
+		<imprint>
+			<biblScope unit="volume">43</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="25" to="30" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+	<note>Suppl</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Histograms of oriented gradients for human detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Dalal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Triggs</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition, 2005. CVPR 2005. IEEE Computer Society Conference on</title>
+		<imprint>
+			<date type="published" when="2005-06" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="886" to="893" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Object detection with discriminatively trained partbased models. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Felzenszwalb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1627" to="1645" />
+			<date type="published" when="2010-09" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Pictorial structures for object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">F</forename><surname>Felzenszwalb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Huttenlocher</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Int. J. Comput. Vision</title>
+		<imprint>
+			<biblScope unit="volume">61</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="55" to="79" />
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Learning to count with regression forest and structured labels</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fiaschi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Nair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Koethe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Hamprecht</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Pattern Recognition (ICPR), 2012 21st International Conference on</title>
+		<imprint>
+			<date type="published" when="2012-11" />
+			<biblScope unit="page" from="2685" to="2688" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">The representation and matching of pictorial structures. Computers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">A</forename><surname>Fischler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Elschlager</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on, C</title>
+		<imprint>
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="67" to="92" />
+			<date type="published" when="1973-01" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Class-specific hough forests for object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gall</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lempitsky</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2009-06" />
+			<biblScope unit="page" from="1022" to="1029" />
+		</imprint>
+	</monogr>
+	<note>CVPR 2009. IEEE Conference on</note>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Multi-source multi-scale counting in extremely dense crowd images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Idrees</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Saleemi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Seibert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 2013 IEEE Conference on Computer Vision and Pattern Recognition, CVPR &apos;13</title>
+		<meeting>the 2013 IEEE Conference on Computer Vision and Pattern Recognition, CVPR &apos;13<address><addrLine>Washington, DC, USA</addrLine></address></meeting>
+		<imprint>
+			<publisher>IEEE Computer Society</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="2547" to="2554" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Pca-sift: a more distinctive representation for local image descriptors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Ke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sukthankar</surname></persName>
+		</author>
+		<idno>II-506-II-513</idno>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 2004 IEEE Computer Society Conference on</title>
+		<meeting>the 2004 IEEE Computer Society Conference on</meeting>
+		<imprint>
+			<date type="published" when="2004-06" />
+			<biblScope unit="volume">2</biblScope>
+		</imprint>
+	</monogr>
+	<note>Computer Vision and Pattern Recognition</note>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Computational framework for simulating fluorescence microscope images with cell populations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lehmussola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Ruusuvuori</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Selinummi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Huttunen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Yli-Harja</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Med. Imaging</title>
+		<imprint>
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<biblScope unit="page" from="1010" to="1016" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Robust object detection with interleaved categorization and segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Leibe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Leonardis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Int. J. Comput. Vision</title>
+		<imprint>
+			<biblScope unit="volume">77</biblScope>
+			<biblScope unit="issue">1-3</biblScope>
+			<biblScope unit="page" from="259" to="289" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Learning to count objects in images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lempitsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems 23</title>
+		<editor>J. Lafferty, C. Williams, J. Shawe-Taylor, R. Zemel, and A. Culotta</editor>
+		<imprint>
+			<publisher>Curran Associates, Inc</publisher>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="1324" to="1332" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Detecting, localizing and grouping repeated scene elements from an image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">K</forename><surname>Leung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision -ECCV&apos;96, 4th European Conference on Computer Vision</title>
+		<meeting><address><addrLine>Cambridge, UK</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="1996" />
+			<biblScope unit="volume">I</biblScope>
+			<biblScope unit="page" from="546" to="555" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Human detection based on a probabilistic assembly of robust part detectors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Mikolajczyk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<publisher>Springer-Verlag</publisher>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">A neural network architecture for automatic segmentation of fluorescence micrographs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">W</forename><surname>Nattkemper</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Wersing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Schubert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Ritter</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neurocomputing</title>
+		<imprint>
+			<biblScope unit="volume">48</biblScope>
+			<biblScope unit="issue">14</biblScope>
+			<biblScope unit="page" from="357" to="367" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Nonlinear dimensionality reduction by locally linear embedding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">T</forename><surname>Roweis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">K</forename><surname>Saul</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Science</title>
+		<imprint>
+			<biblScope unit="volume">290</biblScope>
+			<biblScope unit="issue">5500</biblScope>
+			<biblScope unit="page" from="2323" to="2326" />
+			<date type="published" when="2000" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Software for quantification of labeled bacteria from digital microscope images by automated image analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Selinummi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Seppala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Yli-Harja</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">A</forename><surname>Puhakka</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Biotechniques</title>
+		<imprint>
+			<biblScope unit="volume">39</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page">859</biblScope>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Matching local self-similarities across images and videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shechtman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Irani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition, 2007. CVPR &apos;07. IEEE Conference on</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="page" from="1" to="8" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Ilastik: Interactive learning and segmentation toolkit. In Biomedical Imaging: From Nano to Macro</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sommer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Straehle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Kothe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Hamprecht</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Symposium on</title>
+		<imprint>
+			<date type="published" when="2011-03" />
+			<biblScope unit="page" from="230" to="233" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Visual place recognition with repetitive structures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torii</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pajdla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Okutomi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Segmentation of multiple, partially occluded objects by grouping, merging, assigning part detection responses</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Nevatia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2008-06" />
+			<biblScope unit="page" from="1" to="8" />
+		</imprint>
+	</monogr>
+	<note>CVPR 2008. IEEE Conference on</note>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Interactive object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gall</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Leistner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2012 IEEE Conference on</title>
+		<imprint>
+			<date type="published" when="2012-06" />
+			<biblScope unit="page" from="3242" to="3249" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">The multiransac algorithm and its application to detect planar homographies</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zuliani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Kenney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Manjunath</surname></persName>
+		</author>
+		<idno>III-153-6</idno>
+	</analytic>
+	<monogr>
+		<title level="m">Image Processing, 2005. ICIP 2005. IEEE International Conference on</title>
+		<imprint>
+			<date type="published" when="2005-09" />
+			<biblScope unit="volume">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

@@ -1,0 +1,1254 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Depth from Semi-Calibrated Stereo and Defocus</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ting-Chun</forename><surname>Wang</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">UC Berkeley</orgName>
+								<orgName type="institution" key="instit2">Nokia Technologies</orgName>
+								<address>
+									<settlement>San Diego</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Manohar</forename><surname>Srikanth</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">UC Berkeley</orgName>
+								<orgName type="institution" key="instit2">Nokia Technologies</orgName>
+								<address>
+									<settlement>San Diego</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ravi</forename><surname>Ramamoorthi</surname></persName>
+							<email>ravir@cs.ucsd.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">UC Berkeley</orgName>
+								<orgName type="institution" key="instit2">Nokia Technologies</orgName>
+								<address>
+									<settlement>San Diego</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Depth from Semi-Calibrated Stereo and Defocus</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:39+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>In this work, we propose a multi-camera system where we combine a main high-quality camera with two low-res auxiliary cameras. The auxiliary cameras are well calibrated and act as a passive depth sensor by generating disparity maps. The main camera has an interchangeable lens and can produce good quality images at high resolution. Our goal is, given the low-res depth map from the auxiliary cameras, generate a depth map from the viewpoint of the main camera. The advantage of our system, compared to other systems such as light-field cameras or RGBD sensors, is the ability to generate a high-resolution color image with a complete depth map, without sacrificing resolution and with minimal auxiliary hardware.</p><p>Since the main camera has an interchangeable lens, it cannot be calibrated beforehand, and directly applying stereo matching on it and either of the auxiliary cameras often leads to unsatisfactory results. Utilizing both the calibrated cameras at once, we propose a novel approach to better estimate the disparity map of the main camera. Then by combining the defocus cue of the main camera, the disparity map can be further improved. We demonstrate the performance of our algorithm on various scenes.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Multi-camera systems have their advantages over traditional cameras, and recent commercial developments (e.g., Lytro <ref type="bibr" target="#b0">[1]</ref> and Light <ref type="bibr" target="#b2">[3]</ref>) have proven the market interest. In this paper, we show that by combining a high quality interchangeable-lens camera with auxiliary cameras that can recover depth <ref type="figure" target="#fig_0">(Fig. 1a)</ref>, we can obtain many of the practical advantages of light field cameras <ref type="bibr" target="#b36">[37]</ref>. When the photographer captures an image with the main camera, we also synchronously capture images from the auxiliary cameras <ref type="figure" target="#fig_0">(Fig. 1b)</ref>. We then use these images to estimate the disparity map from the viewpoint of the main camera <ref type="figure" target="#fig_0">(Fig. 1c)</ref>. This disparity map, along with the high-resolution main camera image, then enables a number of applications such as refocus magnification <ref type="figure" target="#fig_0">(Fig. 10</ref>) and parallax view generation <ref type="figure" target="#fig_0">(Fig. 11)</ref>, while preserving image quality and resolution.</p><p>The reason we cannot just use two calibrated main cameras to recover depth is because the main camera has an The inputs contain the main camera image, the aux camera images, and the aux view disparity map. (c) Given these images, we generate the disparity map from the viewpoint of the main camera. We also show an example application of applying synthetic blur beyond the aperture baseline limit given the disparity map.</p><p>interchangeable lens, so it is impossible to calibrate them beforehand. Besides, two auxiliary cameras are usually still much cheaper than a main camera. Finally, the auxiliary cameras are only loosely attached to the main camera to increase flexibility (one can easily detach them if we don't need depth maps). Therefore, calibration between main and auxiliary cameras is not possible.</p><p>To address this challenge, we are required to use uncalibrated rectification. However, the state-of-the-art results are still far from those generated by calibrated cameras. Therefore, instead of using two uncalibrated cameras, we use the (uncalibrated) main camera in conjunction with a calibrated pair of auxiliary cameras, e.g. the Panasonic Lumix DMC-3D1K <ref type="bibr" target="#b1">[2]</ref>, forming a semi-calibrated system. Our system thus contains a pair of calibrated low-res stereo cameras, and a high-res uncalibrated main camera. This is also similar to RGBD systems combining a color sensor and an active depth sensor (e.g. Kinect), where we want to transfer the depth to the viewpoint of the color sensor. However, RGBD cameras fail to perform well outdoors in sunlight, while our method is applicable indoors and outdoors. Besides, we can gain more rectification information from the color images of the calibrated camera pair, as we show in Sec. 3. To our knowledge, this is the first work that deals with semi-calibrated systems.</p><p>We show that by decomposing the rectification into a 3step approach, we can take advantage of the information from both the calibrated cameras at once, thus rectifying all three images simultaneously and more accurately. Then, by establishing the relationship between the three cameras, disparity estimation can be done through an optimization framework that ensures their disparity consistency.</p><p>In addition, when the main camera has defocus in the image, we also take that cue into account. The auxiliary cameras have small apertures, and can be considered as pinhole cameras; the main camera, on the other hand, has a large aperture and thus can generate very defocused images. By combining stereo and defocus cues, we show that we can estimate a higher quality disparity map.</p><p>In summary, our contributions are: 1) A method for combining high-res images with low-res auxiliary cameras for depth capture that provides both high quality imagery and depth maps.</p><p>2) A rectification scheme suitable for semi-calibrated systems, and an optimization framework to determine the disparities accordingly.</p><p>3) A method to combine defocus cues with stereo to help improve the disparity estimation process.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related work</head><p>Related camera systems: Systems combining low and high resolution cameras have been proposed to perform depth map upsampling <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b30">31,</ref><ref type="bibr" target="#b38">39,</ref><ref type="bibr" target="#b47">48,</ref><ref type="bibr" target="#b49">50]</ref> or color image upsampling <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b41">42]</ref>. However, their goal is to increase the image resolution only, and the cameras in their system are usually assumed calibrated. In contrast, we are interested in generating a disparity map from the viewpoint of an uncalibrated camera, which is a very different and much harder problem, as we show in Sec. 5.</p><p>Some other work has been proposed to enable light-field capabilities to a consumer camera <ref type="bibr" target="#b34">[35,</ref><ref type="bibr" target="#b40">41]</ref>. However, for these methods the main camera image is deteriorated, which may not be acceptable. Moreover, the optical attachment proposed by Manakov et al. <ref type="bibr" target="#b34">[35]</ref> is extremely large and not practical for consumer photography. In the case of Reddy et al. <ref type="bibr" target="#b40">[41]</ref>, the effective aperture of the camera is significantly reduced, thus cutting down the light input.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Uncalibrated rectification:</head><p>Uncalibrated rectification dates back to Hartley et al. <ref type="bibr" target="#b22">[23]</ref>, where a linear and noniterative method is given to reconstruct stereo by uncalibrated cameras. Loop and Zhang <ref type="bibr" target="#b32">[33]</ref> decomposed each collineation into a specialized projective transform, a similarity transform and a shearing transform. Isgro and Trucco <ref type="bibr" target="#b25">[26]</ref> proposed a method that avoids computation of the fundamental matrix. Mallon et al. <ref type="bibr" target="#b33">[34]</ref> proposed a method that uniquely optimizes each transformation to minimize distortions. Fitzgibbon et al. <ref type="bibr" target="#b17">[18]</ref> tried to learn the priors for calibrating families of stereo cameras A quasi-Euclidean method proposed by Fusiello et al. <ref type="bibr" target="#b18">[19]</ref> aims at achieving a good approximation of the Euclidean epipolar rectification.</p><p>The previous methods all deal with two images. To rectify three images, Ayache et al. <ref type="bibr" target="#b5">[6]</ref> proposed a technique to rectify image triplets from calibrated cameras. An et al. <ref type="bibr" target="#b3">[4]</ref> proposed using the geometric camera model instead of the relative image orientation. For uncalibrated trinocular rectification, Sun <ref type="bibr" target="#b43">[44]</ref> tried to rectify image triplets using the trilinear tensor, the projective invariants or fundamental matrices. Based on Sun's method, Heinrichs and Rodehorst <ref type="bibr" target="#b24">[25]</ref> introduced a practical algorithm for various camera setups. Rectification methods extended to an arbitrary number of views with aligned camera centers have also been proposed <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b37">38]</ref>.</p><p>As can be seen, none of the previous methods tries to handle a system where only part of it is calibrated. Furthermore, all existing trinocular rectification methods either require the three camera centers to be collinear or to be noncollinear, and cannot handle both cases. In this work, we extend the quasi-Euclidean work proposed by Fusiello <ref type="bibr" target="#b18">[19]</ref> to deal with three images, which generates much less distortion compared to the methods mentioned above.</p><p>Combining defocus with stereo: Since the main camera has a large aperture, we can also integrate depth from defocus (DFD) into the depth estimation framework. Most DFD work requires two or more images of the same scene <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b29">30,</ref><ref type="bibr" target="#b39">40,</ref><ref type="bibr" target="#b44">45,</ref><ref type="bibr" target="#b45">46,</ref><ref type="bibr" target="#b46">47]</ref>. Although we can construct an image pair using the auxiliary pinhole image and the main view defocused image, the two images are not registered, which makes DFD not reliable. However, we can still gain information using merely the main view image by single image DFD. For single image DFD, the work by Elder and Zucker <ref type="bibr" target="#b14">[15]</ref> generated a sparse defocus map by applying first and second order derivatives to the input image. Bae et al. <ref type="bibr" target="#b6">[7]</ref> extended this work and obtained a dense defocus map using interpolation. The deconvolution-based approach proposed by Levin et al. <ref type="bibr" target="#b28">[29]</ref> can obtain both the depth map and the all-in-focus image, but relied on a coded aperture. Namboodiri and Chaudhuri <ref type="bibr" target="#b35">[36]</ref> reversed a heat diffusion equation to estimate the defocus blur at edge locations. Zhuo and Sim <ref type="bibr" target="#b50">[51]</ref> estimated the defocus map by re-blurring the input image using a known Gaussian blur kernel. Lin et al. <ref type="bibr" target="#b31">[32]</ref> designed a sequence of filters to obtain an absolute depth map. In contrast, our method can generate the depth ratio between two sides of edges, which substantially enhances the depth map quality around occlusion edges during the final optimization.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Algorithm</head><p>As stated previously, our system consists of a main camera and two auxiliary cameras. The main camera has higher image quality, better resolution, and its optical parameters can be changed on the fly. The auxiliary cameras shoot <ref type="figure">Figure 2</ref>: Block diagram for our algorithm without defocus refinement. After we estimate a disparity map from the calibrated cameras, we warp it to the main view. This warped disparity map, along with the color images from main and aux cameras rectified using our method, are input to an optimization framework to generate the final disparity map. The refinement steps for defocus will be described in Sec. 4.</p><p>smaller and lower quality images, and have fixed optical parameters. Our goal is to obtain the disparity map from the viewpoint of the main camera. To make statements easier, we will use the term side cameras to denote the auxiliary cameras, and use the terms left camera and right camera to differentiate between the two side cameras.</p><p>The overall algorithm, when the main camera has no defocus, can be divided into four steps. The refinement step for defocus will be described in Sec. 4. First, we calibrate the side cameras and estimate a disparity map from them (Sec. 3.1). Then this disparity map is warped to the main view to give us an initial disparity map (Sec. 3.2). Third, we perform uncalibrated rectification on the main image and the side images (Sec. 3.3), which is the main technical contribution of this section. Finally, the disparity map from the main view is estimated with the help of the warped side disparity map (Sec. 3.4). The block diagram of the overall algorithm is shown in <ref type="figure">Fig. 2</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Disparity estimation on side images</head><p>We first calibrate the two side cameras. To do this, we use the cameras to take multiple photos of a checkerboard at different orientations. After that, the Bouguet toolbox <ref type="bibr" target="#b11">[12]</ref> is used to calibrate the cameras, so we can rectify the images. After rectification, we compute the disparity map using the non-local method proposed by Yang <ref type="bibr" target="#b48">[49]</ref>. This is illustrated in <ref type="figure">Fig. 2a</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Side disparity map warping</head><p>Now we have the disparity map from the side point of view. To get a disparity map from the main point of view, one way is to warp the current side disparity map to the main view <ref type="figure">(Fig. 2b)</ref>. We describe how we perform this here, (a) Disparity from aux cameras (b) Warped disparity <ref type="figure">Figure 3</ref>: Side disparity map warping. After finding correspondences between the side view and the main view using NRDC, we estimate the projection matrix and warp the disparity map to the main view.</p><p>and show how we utilize the warped disparity map to help estimate the final disparity map in Sec. 3.4. First, we establish correspondences between the side view color image and the main view color image. Since the two views have very different color domains, direct feature matching will not lead to satisfactory results. Instead, we apply the non-rigid dense correspondence (NRDC) <ref type="bibr" target="#b21">[22]</ref> on the two views which takes color transformation into account. Then we apply the epipolar constraint to rule out inconsistent matches. Finally, using the side camera coordinate as the world coordinate, we compute the projection matrix of the main camera, and warp the side view disparity to the main view. An example is shown in <ref type="figure">Fig. 3</ref>.</p><p>Note that for the pixels that are behind some other pixels, although they are not visible in the main view, we still know their corresponding positions in the side view. Thus, we can construct a correspondence map between the two images, where each pixel in the side view can be mapped to a position in the main view even if it is not visible there. This can be useful for applications such as inpainting, as demonstrated in our application section. Finally, there will definitely be holes in the warped disparity map due to occlusions. But that is acceptable since we only want to exploit the information that we can acquire from the calibrated disparity map, and the holes simply mean we need to rely on other sources, e.g. direct disparity estimation on the main/side image pair, as introduced next.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Rectification on main/side image pairs</head><p>Since the main camera is not calibrated, we are required to adopt uncalibrated rectification. Below we first give a review on previous methods, then introduce our method.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.1">Background</head><p>Suppose we are given two images I l and I r to rectify. In other words, we want to find two homographies H l and H r such that when applied on the two images, their epipolar lines become entirely horizontal. After acquiring the corresponding feature points m l and m r in I l and I r , respectively, the estimation of the homographies can be formulated as</p><formula xml:id="formula_0">(H r m j r ) T [u 1 ] × (H l m j l ) = 0<label>(1)</label></formula><p>where m j r and m j l are the jth corresponding feature points of I r and I l , respectively, and [u 1 ] × is the skew-symmetric matrix associated with the cross-product by u 1 = (1, 0, 0).</p><p>We adopt the quasi-Euclidean method by Fusiello et al. <ref type="bibr" target="#b18">[19]</ref>, where the homographies are decomposed as</p><formula xml:id="formula_1">H = K n RK −1 o (2)</formula><p>where K n and K o are the intrinsic matrices of the new and old cameras respectively, and R is the rotation matrix. Assuming negligible lens distortion, no skew and principal point at the image center, an intrinsic matrix is only dependent on the focal length. Therefore, the only parameters for each camera are the focal length and three rotation angles. Since rotation of one camera around its x-axis is redundant, we can further eliminate one degree of freedom, leaving only 7 free parameters.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.2">Our method</head><p>The quasi-Euclidean method described above rectifies two images. To rectify three images, directly applying it will lead to solving 10 rotation angles and two focal lengths for the left-main and right-main image pairs (assuming common focal length between the left and the right cameras). In the following, we decompose the semi-calibrated rectification process into three steps, as summarized in <ref type="figure" target="#fig_1">Fig. 4</ref>. The general idea is to first bring the imaging planes of all the cameras to the same plane (step 1, 2), and then bring their x-axes to a common axis (step 3). By doing so, we show that we can reduce the rotation parameters to 6 angles.</p><p>Step 1 First, the calibrated side cameras are rotated by angles θ lx and θ rx respectively around the x-axis, so that their view direction is perpendicular to the plane the three cameras lie in <ref type="figure" target="#fig_1">(Fig. 4a)</ref>. Since the side cameras are already rectified, θ lx = θ rx and we will just use θ lx for both of them. This angle always exists since the rotation axis, which is the line joining the two side camera centers, lies on the plane.</p><p>Step 2 Second, the main camera is rotated around the xaxis by an angle θ mx and the y-axis by an angle θ my , to bring its view direction parallel to the view direction of the side cameras <ref type="figure" target="#fig_1">(Fig. 4b)</ref>.</p><p>Step 3 At this point, all three cameras have parallel view directions which are perpendicular to the plane they lie in, so we only need to rotate them around the z-axis to rectify them. We do this separately for the left-main and the rightmain camera pair.</p><p>Left-main pair For the left and main camera pair, we rotate them by angles θ lz and θ mz , respectively <ref type="figure" target="#fig_1">(Fig. 4c,4d)</ref>.</p><p>Right-main pair Since the left camera rotated by θ lz and the main camera rotated by θ mz are rectified, they have the same x-axis. Hence, when both are further rotated by −θ lz , they will still have parallel x-axes, which means the main camera rotated by θ mz − θ lz will have parallel x-axis to the original left and right cameras. Then, to bring the main and the right cameras into a rectified setup, they must be further rotated by a common angle θ rz . Therefore, for the right and main camera pair, we rotate them by angles θ rz and θ mz − θ lz + θ rz , respectively <ref type="figure" target="#fig_1">(Fig. 4e,4f)</ref>. Thus, we only have 6 rotation parameters, namely θ lx , θ mx , θ my , θ lz , θ mz , and θ rz . Adding the two parameters for focal length, this leaves us a total of 8 parameters. In implementation, we apply the standard Levenberg-Marquardt algorithm to solve for the parameters. This finishes our rectification process <ref type="figure">(Fig. 2c</ref>).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Final disparity map estimation</head><p>Now we have the warped disparity from the side view and the rectified main-side images, we formulate an optimization process to integrate them <ref type="figure">(Fig. 2d)</ref>. Let I l m and I l be the rectified main-left image pair, and I r m and I r be the rectified main-right image pair. Then let d ml be the disparity between I l m and I l , d mr be the disparity between I r m and I r , and d lr be the warped side view disparity as described in Sec. 3.2. Since the left, the right and the main camera are all in the same plane and have parallel viewing axes, d ml and d mr are proportional to each other (up to some known image rotation). It follows that d ml = C lr d lr = C mr d mr , where C lr and C mr are two constants (the rotation notation is dropped for simplicity). As a result, d ml can be estimated <ref type="figure">Figure 5</ref>: Defocus model. We consider a 1D case, where a depth discontinuity is present in the scene. Due to occlusion, a pixel on the imaging plane is modeled as the sum of two partial Gaussians (the blue and green regions).</p><formula xml:id="formula_2">as d ml = arg min d {λ s ∇d/∇I + λ lr d − C lr d lr 2 + λ ml I l m (x, y) − I l (x + d, y) 2 + λ mr I r m (x, y) − I r (x + d/C mr , y) 2 }<label>(3)</label></formula><p>where the first term applies the smoothness constraint, the second term ensures that d ml matches d lr , the third term is regular stereo matching between the main-left pair, and the final term ensures consistency to the main-right pair. All λ's are constant weights. In this way, we have a joint estimation incorporating all three disparities between the three cameras. Note that in practice, what we really want is the disparity map from the original view of the main camera; thus, the optimization is done in the following way: for each pixel in the original main image, we find its counterpart in the left/right images using the transformation we found in the rectification. We repeat this process for each disparity and compute their costs. This is similar to traditional stereo, only that we replace the horizontal shift by some other transformation function. To obtain C lr and C mr , we first estimate an initial d ml by computing the disparity between I l m and I l . Then we use iteratively reweighted least squares (IRLS) to find a robust ratio C lr that relates d ml to d lr . The same procedure is performed again to find C mr .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Combining defocus cues</head><p>When the main image has defocus, we combine that cue into the disparity estimation. We consider two cues: defocus cue from the main image alone and the defocus cue from the main-side image pair, which are described as follows.</p><p>Defocus cue from main image Classical shape-fromdefocus methods address the point spread function (PSF) as either a pillbox or a 2D Gaussian function <ref type="bibr" target="#b42">[43]</ref>. In this work, we model the defocus as a Gaussian kernel. As shown by Bhasin et al. <ref type="bibr" target="#b8">[9]</ref>, the PSF around occlusions will be truncated and is no longer symmetric. Below we derive a simple constraint on disparities around occlusion edges based on the image gradients.</p><p>Pixel formation We first derive the formation of a pixel at an occlusion edge. Consider a simple 1D case where a depth discontinuity between two planes is present, as shown in <ref type="figure">Fig. 5</ref>. Similar to Favaro et al. <ref type="bibr" target="#b15">[16]</ref> and Hasinoff et al. <ref type="bibr" target="#b23">[24]</ref>, we express the irradiance measured on the imaging plane using the reversed projection blurring model <ref type="bibr" target="#b4">[5]</ref>. However, we make an assumption that around the edges, the radiance of the two planes is nearly constant. This dramatically reduces the computation. As can be seen, the intensity of that pixel is then modeled as the sum of two partial Gaussians of the two planes. Let the discontinuity be at origin x = 0, and let the chief ray (red line) hit plane 1 at x = t and plane 2 at x = u. We first consider the case t &lt; 0. Let the ray which hits plane 1 at</p><formula xml:id="formula_3">x = 0 hit plane 2 at x = v. Due to similar triangles, v − u = d2−d f d1−d f (0 − t) = σ2 σ1 (−t),</formula><p>where σ 1 , σ 2 are the blur kernel sizes induced at plane 1 and 2, respectively. Let Φ be the cumulative Gaussian distribution. Then the sum of Gaussian on plane 1 is Φ 1 (0 − t) = Φ 1 (−t), and the sum of Gaussian on plane 2 is</p><formula xml:id="formula_4">Φ 2 (u − v) = Φ 2 ( σ2 σ1 t).</formula><p>The case when t &gt; 0 can be derived similarly. Finally, note that the world coordinate x and the image coordinate s are related by x = s · d/d f . Thus, the intensity of a pixel whose chief ray hits object plane at t is</p><formula xml:id="formula_5">I(s) ∼ = I 1 Φ 1 (− σ1 σ2 d2 d f s) + I 2 Φ 2 ( d2 d f s), s &gt; 0 I 1 Φ 1 (− d1 d f s) + I 2 Φ 2 ( σ2 σ1 d1 d f s), s &lt; 0<label>(4)</label></formula><p>where I 1 and I 2 are radiances at plane 1 and plane 2, respectively.</p><p>Blur kernel size Given the pixel formation, the blur kernel size can be obtained as follows. Let G denote the Gaussian function. Taking the derivative of I, and let s → 0, we get</p><formula xml:id="formula_6">I ′ (s) = − σ 1 σ 2 d 2 d f I1G1(− σ 1 σ 2 d 2 d f s) + d 2 d f I2G2( d 2 d f s), s &gt; 0 − d 1 d f I1G1(− d 1 d f s) + σ 2 σ 1 d 1 d f I2G2( σ 2 σ 1 d 1 d f s), s &lt; 0 (5) I ′ (s)| s→0 = d2 d f I2−I1 √ 2πσ2 , s → 0 + d1 d f I2−I1 √ 2πσ1 , s → 0 −<label>(6)</label></formula><formula xml:id="formula_7">I ′ (0 + ) I ′ (0 − ) = σ 1 /d 1 σ 2 /d 2<label>(7)</label></formula><p>Therefore, the blur kernel sizes around an edge are related to the gradients around the edge.</p><p>Disparity constraint Finally, given the blur kernel size σ at a point, we can obtain the disparity d by <ref type="bibr" target="#b44">[45]</ref> </p><formula xml:id="formula_8">σ = Cσ(d − d f ) (8)</formula><p>where C σ is a constant and d f is the disparity of the in-focus plane.</p><p>To use the above constraint, for the main image, we first apply the Canny edge detector to find the edges. Then we calculate d f by taking the average of the in-focus regions in the disparity map computed before. Finally, the constraints on the disparities around the edges are modeled as</p><formula xml:id="formula_9">R = (d1 − d f )/d1 (d2 − d f )/d2 = I ′ (0 + ) I ′ (0 − )<label>(9)</label></formula><p>where d 1 and d 2 are disparities on the two sides of the edge, and x = 0 is the edge position.</p><p>Defocus cue from the main-side image pair We assume that the defocus image is the original sharp image convolved with a spatially variant Gaussian kernel. In other words, the defocus main image I l m , I r m and the sharp side images I l , I r are related by</p><formula xml:id="formula_10">I l m = I l (x + d ml , y) * G(σ(d ml ))<label>(10)</label></formula><formula xml:id="formula_11">I r m = I r (x + d mr , y) * G(σ(d mr ))<label>(11)</label></formula><p>where G(σ) is a Gaussian with variance σ 2 , and σ is a spatially variant function of the disparity value.</p><p>Combining stereo and both defocus cues Given the relationships we have above, we make two modifications to the previous optimization framework (Eq. <ref type="formula" target="#formula_2">(3)</ref>). First, we exploit the defocus cue from main-side image pair by blurring the side images according to the disparity before doing stereo matching. This can help improve the stereo matching process since the blurred side image will be more similar to the main image. Second, we apply the constraints on the disparities around edges we found using the defocus cue from the main image. This is beneficial because it explicitly models depth discontinuity at an edge, which is not handled by the defocus inference from the main-side image pair. As a result, by combining both cues, we are able to generate more accurate results along occlusion boundaries, while still preserving the dense property from matching between the main-side image pair. We thus rewrite the optimization objective as</p><formula xml:id="formula_12">d ml = arg min d {λs∇d/∇I + λ lr d − C lr d lr 2 + λ ml I l m (x, y) − I l (x + d, y) * G(Cσ(d − d f )) 2 + λmr I r m (x, y) − Ir(x + d/Cmr, y) * G(Cσ(Cmrd − d f )) 2 + λr l i p 1 ,p 2 ∈N (l i ) d(p1) − d f d(p2) − d f − R(p) 2 }<label>(12)</label></formula><p>where l i is an edge found by the Canny edge detector, N is the 2 neighboring pixels lying on the normal of the edge, and R(p) is the gradient ratio we computed from Eq. <ref type="bibr" target="#b8">(9)</ref>. The λ's are constant weights and are chosen as 5, 1, 1, 1, 2 in our experiment, respectively.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Results</head><p>In this section, we evaluate our results of both the rectification and disparity map computation. We have captured data with a number of systems that have a main camera (Canon EOS 30D) and auxiliary cameras, such as the Panasonic Lumix DMC-3D1K Camera.</p><p>Rectification To perform a quantitative analysis, our rectification method is applied on 8 image sets and compared to the method by Fusiello et al. <ref type="bibr" target="#b18">[19]</ref>. Since Fusiello et al. explicitly minimizes the errors on the extracted matching feature points, it might generate results that overfit the points. Thus, to make the comparisons fair, we divide the matching points into two sets, one for training and one for testing. For each tested algorithm, it first uses the training points to explicitly minimize the error. After that, the obtained homographies are used to calculate the errors on the testing points. The average Sampson errors <ref type="bibr" target="#b18">[19]</ref> on the rectified images are summarized in <ref type="table">Table 1</ref>. It can be seen that in general, our algorithm generates more accurate results. Moreover, when the average errors are close, e.g. image 4, the error variance generated by our algorithm is still smaller due to its robustness. An example visual result is shown in <ref type="figure" target="#fig_2">Fig. 6</ref>. By visual experiment, we found that our algorithm performs the best where few feature points are available. This is reasonable, because <ref type="bibr" target="#b18">[19]</ref> explicitly minimizes the errors on the feature points, so it might overfit them while generating large errors on the less textured areas. On the other hand, our algorithm applies more constraints by ensuring consistency to both calibrated images, so the chances that it overfits the feature points are lower.</p><p>Disparity map We compare our disparity maps at different stages of the algorithm. We first show the results where defocus is not present in the main image in <ref type="figure" target="#fig_3">Fig. 7</ref>. It can be seen that for the warped disparity, the result is acceptable, but there will be many holes due to occlusions. For the result using our rectification, there will be no holes, but there will also be many errors due to incorrect rectification. By combining these two using the optimization in Sec. 3.4, the final disparity map can take advantage of both the warped disparity and the rectification. We also compare with results generated from direct depth upsampling <ref type="bibr" target="#b16">[17]</ref> and simple uncalibrated rectification <ref type="bibr" target="#b18">[19]</ref>. For <ref type="bibr" target="#b16">[17]</ref>, we use the warped side disparity maps as input. It can be seen that since conventional depth upsampling methods assume the depth image and the color image can be perfectly aligned, they will be misled by the errors in the disparity maps, e.g., the left side pillar in the first row. They also struggle to handle the large occlusions caused during the transfer; For instance, artifacts can be seen around the monitor in the first # Avg <ref type="bibr" target="#b18">[19]</ref>   row and around the bag in the second row. Finally, all results are much better than simply doing uncalibrated rectification <ref type="bibr" target="#b18">[19]</ref>. Next, we compare results where defocus is present in the main image, using methods with and without our defocus refinement. We also compare with the results obtained by depth upsampling <ref type="bibr" target="#b16">[17]</ref>, Lytro Illum and Kinect version 2. For each scene, we take pictures using our setup as well as using the Lytro camera and Kinect, as shown in <ref type="figure">Fig. 8</ref>. We can see that by utilizing the defocus cue, we are able to generate much sharper boundaries along occlusion edges. We also get more accurate results on the background since its blur is taken into account now. Again, our results are superior than simple depth upsampling, since the imperfect calibration registers wrong depths that <ref type="bibr" target="#b16">[17]</ref> uses as seeds. Moreover, we generate results which are much less noisy than the results of Lytro Illum. Using Kinect as ground truth, we can see that our results are very similar to its results, while we only use passive sensors. Besides, our disparity map has a higher resolution compared to the result of Kinect, so when zoomed in, there will be fewer artifacts, as shown in <ref type="figure" target="#fig_5">Fig. 9</ref>. For quantitative comparisons, we provide the depth RMSE using Kinect as ground truth in Table 2. We show the average RMSE of all indoor scenes, and compare with results by Ferstl et al. <ref type="bibr" target="#b16">[17]</ref>, Zhuo et al. <ref type="bibr" target="#b50">[51]</ref>, and Lytro Illum. We also provide results when only our stereo cue or defocus cue is used. The best result is achieved when combining both cues. Note that this comparison cannot capture the full benefit of incorporating defocus cues, <ref type="bibr">Ferstl</ref>   </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Applications</head><p>Defocus magnification Given the partially defocused main image and the disparity map, we can blur the defocus region even more to simulate the shallow depth-of-field of a larger aperture, as demonstrated by Bae et al. <ref type="bibr" target="#b6">[7]</ref>. The result compared to <ref type="bibr" target="#b6">[7]</ref> is shown in <ref type="figure" target="#fig_0">Fig. 10</ref>. Note that their result incorrectly blurs the cookie can in the foreground, while leaving most of the background (e.g. lights on the ceiling) unblurred. Our algorithm, by combining stereo and defocus cues, generates a more accurate depth map which then gives a more realistic result. Parallax view generation Given the high-quality disparity map, we are able to generate realistic parallax views of the main image. However, generating parallax using only the disparity map will result in holes due to occlusion. To resolve this, we take advantage of the correspondence map introduced in Sec. 3.2. Once we know which pixel the hole corresponds to in the side views (assuming it exists), we can "borrow" that pixel to fill in the hole. We also use Poisson blending to compensate for the color changes. This is illustrated in <ref type="figure" target="#fig_0">Fig. 11</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Conclusion</head><p>In this paper, we propose a multi-camera system that includes an uncalibrated main camera and two calibrated auxiliary cameras. Previous works consider either entirely calibrated or uncalibrated systems. However, by exploiting the information from the calibrated cameras, we show that we can improve the disparity estimation of the main camera in two-fold. First, by decomposing the rectification process into three steps, we can rectify all three images at once, thus ensuring their consistency. An optimization framework to determine the disparity is also developed. Second, when defocus is present in the main image, we also take that into account. Defocus from a single image helps resolve the disparity ambiguities around edges, while disparity from an image pair can lead to a dense defocus map. By combining cues from both stereo and defocus, the disparity map is further improved. Utilizing this disparity map, we show we are able to achieve many of the applications of light field cameras, while still preserving high image quality.   <ref type="bibr" target="#b16">[17]</ref> (f) Lytro Illum (g) Kinect <ref type="figure">Figure 8</ref>: Disparity map comparisons. (c)(d) By exploiting the defocus cues, our method generates more accurate results on the background (e.g. the sofa), and sharper boundaries around the foreground objects. (e) The disparity map obtained using depth upsampling <ref type="bibr" target="#b16">[17]</ref>. It can be seen that since the side view disparity map and the main camera calibrations are not perfect, some errors will be registered to the main view, e.g. the floor in the first row and around the table in the second row.</p><p>(f) The depth map from Lytro Illum. It can be seen that it is quite noisy, incorrectly labels some background as foreground, and does not produce as sharp edges as our method. (g) The depth map from Kinect. We can see that our result is very similar to Kinect, while we only use passive sensors.    <ref type="figure" target="#fig_0">Figure 11</ref>: Parallax view generation. Note that (d) realistically reproduces the view behind the monitor from the side view, which is accomplished from the correspondence map introduced in the text, which contains more information than the disparity map.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>System overview. (a) The system consists of a high-res uncalibrated main camera and two low-res calibrated auxiliary cameras. (b)</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 4 :</head><label>4</label><figDesc>Rectification on main/side image pair. The three boxes represent, from left to right, the left camera, the right camera, and the main camera. (a) The side cameras are rotated about their common x-axis to make their view axis perpendicular to the plane the three cameras lie in. (b) The main camera is rotated about the x-and y-axis to bring its view axis parallel to the view axes of side cameras. (c)-(d) The left camera and the main camera are rotated about their view axes to become rectified. (e)-(f) Similarly, the right and the main camera are rotated about their view axes.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 6 :</head><label>6</label><figDesc>An example rectification result on main/side image pairs. The cyan lines show where both algorithms perform well; the red lines show where the method by Fusiello et al. fails, while ours still generates reasonable results.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 7 :</head><label>7</label><figDesc>et al.<ref type="bibr" target="#b16">[17]</ref> (g)Fusiello et  al.<ref type="bibr" target="#b18">[19]</ref> Disparity map results. (c) The disparity map warped from side view. (d) The disparity map estimated on images using the rectification method in Sec. 3.3. (e) The disparity map obtained using the optimization process in Sec. 3.4. (f) The disparity map obtained using depth upsampling [17] on warped side view disparity map. Some artifacts can be seen, e.g., on the left side pillar and around the monitor in the first row, and around the bag in the second row. (g) The disparity map estimated on images rectified by Fusiello et al.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head></head><label></label><figDesc>a) Side view input (b) Main view input (c) Ours (w/o defocus) (d) Ours (w/ defocus) (e) Ferstl et al.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 9 :</head><label>9</label><figDesc>Close-up comparison between our result and Kinect. It can be seen that our result, due to the higher resolution, has fewer artifacts.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 10 :</head><label>10</label><figDesc>Defocus magnification applied onFig. 8b. Note that in (a), the cookie can in the foreground is blurred, while most of the background is not blurred.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>et al.</figDesc><table>Zhuo et al. 
+Lytro Illum 
+0.0605 
+0.0727 
+0.0655 
+Ours (w/o defocus) 
+Our defocus only 
+Our final 
+0.0568 
+0.0651 
+0.0558 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 2 :</head><label>2</label><figDesc>Depth RMSE using Kinect as ground truth. since the result of Kinect does not have sharp boundaries around depth discontinuities.</figDesc><table></table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgement</head><p>We thank Timo Ahonen for his helpful advice, the support and funding from Nokia, the UC San Diego Center for Visual Computing, and a Berkeley Fellowship.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+				<ptr target="http://www.lytro.com.1" />
+		<title level="m">Lytro redefines photography with light field cameras. Press release</title>
+		<imprint>
+			<date type="published" when="2011-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lumix Dmc-3d1k Digital</forename><surname>Panasonic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Camera</surname></persName>
+		</author>
+		<ptr target="http://shop.panasonic.com/support-only/DMC-3D1K.html/.1" />
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Your smartphone camera could be a 52-megapixel beast by next year. Press release</title>
+		<ptr target="https://light.co.1" />
+		<imprint>
+			<date type="published" when="2015-04" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">An efficient rectification method for trinocular stereovision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>An</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the International Conference on Pattern Recognition (ICPR)</title>
+		<meeting>the International Conference on Pattern Recognition (ICPR)</meeting>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Analysis of photometric properties of occluding edges by the reversed projection blurring model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Asada</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Fujiwara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Matsuyama</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Transactions on Pattern Analysis and Machine Intelligence (PAMI)</title>
+		<imprint>
+			<date type="published" when="1998" />
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="page" from="155" to="167" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Rectification of images for binocular and trinocular stereovision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Ayache</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Hansen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the International Conference on Pattern Recognition (ICPR)</title>
+		<meeting>the International Conference on Pattern Recognition (ICPR)</meeting>
+		<imprint>
+			<date type="published" when="1988" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Defocus magnification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bae</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Durand</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computer Graphics Forum</title>
+		<imprint>
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="571" to="579" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">A unified approach for registration and depth in depth from defocus</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ben-Ari</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Transactions on Pattern Analysis and Machine Intelligence (PAMI)</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="page" from="1041" to="1055" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Depth from defocus in presence of partial self occlusion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">S</forename><surname>Bhasin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chaudhuri</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE International Conference on Computer Vision (ICCV)</title>
+		<meeting>the IEEE International Conference on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Using photographs to enhance videos of a static scene</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Bhat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Agarwala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Agrawala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cohen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">B</forename><surname>Kang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Eurographics Conference on Rendering Techniques</title>
+		<meeting>the Eurographics Conference on Rendering Techniques</meeting>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Improving resolution and depth-of-field of light field cameras using a hybrid imaging system</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Boominathan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Mitra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Veeraraghavan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE International Conference on Computational Photography (ICCP)</title>
+		<meeting>the IEEE International Conference on Computational Photography (ICCP)</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Camera calibration toolbox for Matlab</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-Y</forename><surname>Bouguet</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013-12" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">An application of Markov random fields to range sensing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Diebel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Thrun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the International Conference on Neural Information Processing Systems (NIPS)</title>
+		<meeting>the International Conference on Neural Information Processing Systems (NIPS)</meeting>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Upsampling range data in dynamic environments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dolson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Baek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Plagemann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Thrun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Local scale control for edge detection and blur estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">H</forename><surname>Elder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">W</forename><surname>Zucker</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Transactions on Pattern Analysis and Machine Intelligence (PAMI)</title>
+		<imprint>
+			<date type="published" when="1998" />
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="page" from="699" to="716" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Seeing beyond occlusions (and other marvels of a finite lens aperture)</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Favaro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Soatto</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Image guided depth upsampling using anisotropic total generalized variation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ferstl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Reinbacher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ranftl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rüther</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE International Conference on Computer Vision (ICCV)</title>
+		<meeting>the IEEE International Conference on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Learning priors for calibrating families of stereo cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">W</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Robertson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Criminisi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ramalingam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Blake</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE International Conference on Computer Vision (ICCV)</title>
+		<meeting>the IEEE International Conference on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Quasi-euclidean epipolar rectification of uncalibrated images. Machine Vision and Applications</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fusiello</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Irsara</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="page" from="663" to="670" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Super resolution for multiview images using depth information</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">C</forename><surname>Garcia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Dorea</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">L</forename><surname>De Queiroz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Transactions on Circuits and Systems for Video Technology</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="page" from="1249" to="1256" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">A new approach for estimating depth by fusing stereo and defocus information</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Gheta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Frese</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Heizmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Beyerer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">GI Jahrestagung (1)</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="page" from="26" to="31" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Non-rigid dense correspondence with applications for image enhancement</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Hacohen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shechtman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">B</forename><surname>Goldman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lischinski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics (TOG)</title>
+		<imprint>
+			<biblScope unit="volume">30</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page">70</biblScope>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Stereo from uncalibrated cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Hartley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Chang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="1992" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">A layer-based restoration framework for variable-aperture photography</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">W</forename><surname>Hasinoff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">N</forename><surname>Kutulakos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE International Conference on Computer Vision (ICCV)</title>
+		<meeting>the IEEE International Conference on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Trinocular rectification for various camera setups</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Heinrichs</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Rodehorst</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Symposium of ISPRS Commission III-Photogrammetric Computer Vision (PCV)</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Projective rectification without epipolar geometry</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Isgro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Trucco</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="1999" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">An efficient rectification algorithm for multi-view images in parallel camera array</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-S</forename><surname>Kang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-S</forename><surname>Ho</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 3DTV Conference</title>
+		<meeting>the 3DTV Conference</meeting>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Multi-view image and ToF sensor fusion for dense 3D reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">M</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Theobalt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Diebel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kosecka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Miscusik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Thrun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE International Conference on Computer Vision Workshops</title>
+		<meeting>the IEEE International Conference on Computer Vision Workshops</meeting>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Image and depth from a conventional camera with a coded aperture</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Levin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Durand</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">T</forename><surname>Freeman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In ACM Transactions on Graphics</title>
+		<imprint>
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page">70</biblScope>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Bayesian depth-from-defocus with shading constraints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Matsushita</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">A hybrid camera for motion deblurring and depth map super-resolution</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Chai</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Absolute depth estimation from a single defocused image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Ji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Dai</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Image Processing</title>
+		<imprint>
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="4545" to="4550" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Computing rectifying homographies for stereo vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Loop</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="1999" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Projective rectification from the fundamental matrix</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Mallon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">F</forename><surname>Whelan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Image and Vision Computing</title>
+		<imprint>
+			<biblScope unit="volume">23</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<biblScope unit="page" from="643" to="650" />
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">A reconfigurable camera add-on for high dynamic range, multispectral, polarization, and light-field imaging</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Manakov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">F</forename><surname>Restrepo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Klehm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Hegedüs</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Eisemann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-P</forename><surname>Seidel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Ihrke</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics (TOG)</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page">47</biblScope>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Recovery of relative depth from a single observation using an uncalibrated (realaperture) camera</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">P</forename><surname>Namboodiri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chaudhuri</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<monogr>
+		<title level="m" type="main">Digital light field photography</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ng</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+		<respStmt>
+			<orgName>Stanford University</orgName>
+		</respStmt>
+	</monogr>
+	<note type="report_type">PhD thesis</note>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Multiple view image rectification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Nozick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Symposium on Access Spaces (ISAS)</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">High quality depth map upsampling for 3D-ToF cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-W</forename><surname>Tai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">S</forename><surname>Brown</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kweon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE International Conference on Computer Vision (ICCV)</title>
+		<meeting>the IEEE International Conference on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Depth estimation and image restoration using defocused stereo pairs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rajagopalan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chaudhuri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Mudenagudi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Transactions on Pattern Analysis and Machine Intelligence (PAMI)</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="page" from="1521" to="1525" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">External mask based depth and light field camera</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Reddy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ramamoorthi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE International Conference on Computer Vision Workshops (IC-CVW)</title>
+		<meeting>the IEEE International Conference on Computer Vision Workshops (IC-CVW)</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Hybrid stereo camera: an IBR approach for synthesis of very high resolution stereoscopic image sequences</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">S</forename><surname>Sawhney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Hanna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Adkins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of Siggraph</title>
+		<meeting>Siggraph</meeting>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Depth from defocus: a spatial domain approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Subbarao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Surya</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">13</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="271" to="294" />
+			<date type="published" when="1994" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Uncalibrated three-view image rectification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Image and Vision Computing</title>
+		<imprint>
+			<biblScope unit="volume">21</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="259" to="269" />
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Fusing depth from defocus and stereo with coded apertures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Takeda</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hiura</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Sato</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Depth from combining defocus and correspondence using lightfield cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">W</forename><surname>Tao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hadap</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ramamoorthi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE International Conference on Computer Vision (ICCV)</title>
+		<meeting>the IEEE International Conference on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Reconstructing occluded surfaces using synthetic apertures: Stereo, focus and robust measures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vaish</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Levoy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">B</forename><surname>Kang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Depth recovery using an adaptive color-guided auto-regressive model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Ye</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Hou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the European Conference on Computer Vision (ECCV)</title>
+		<meeting>the European Conference on Computer Vision (ECCV)</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">A non-local cost aggregation method for stereo matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Yang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">Spatial-depth super resolution for range images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Nistér</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">Defocus map estimation from a single image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhuo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Sim</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Pattern Recognition</title>
+		<imprint>
+			<biblScope unit="volume">44</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1852" to="1858" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

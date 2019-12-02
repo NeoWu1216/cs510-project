@@ -1,0 +1,753 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Rolling shutter absolute pose problem with known vertical direction</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Cenek</forename><surname>Albl</surname></persName>
+							<email>alblcene@cmp.felk.cvut.cz</email>
+							<affiliation key="aff0">
+								<orgName type="department">Faculty of Electrical engineering</orgName>
+								<orgName type="institution">Czech Technical University</orgName>
+								<address>
+									<addrLine>166 27 Praha 6, Technicka 2</addrLine>
+									<settlement>Prague</settlement>
+									<country key="CZ">Czech Republic</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zuzana</forename><surname>Kukelova</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="institution">Microsoft Research Ltd</orgName>
+								<address>
+									<addrLine>21 Station Road</addrLine>
+									<postCode>CB1 2FB</postCode>
+									<settlement>Cambridge</settlement>
+									<country key="GB">UK</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tomas</forename><surname>Pajdla</surname></persName>
+							<email>pajdla@cmp.felk.cvut.cz</email>
+							<affiliation key="aff0">
+								<orgName type="department">Faculty of Electrical engineering</orgName>
+								<orgName type="institution">Czech Technical University</orgName>
+								<address>
+									<addrLine>166 27 Praha 6, Technicka 2</addrLine>
+									<settlement>Prague</settlement>
+									<country key="CZ">Czech Republic</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Rolling shutter absolute pose problem with known vertical direction</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:45+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We present a solution to the rolling shutter (RS) absolute camera pose problem with known vertical direction. Our new solver, R5Pup, is an extension of the general minimal solution R6P, which uses a double linearized RS camera model initialized by the standard perspective P3P. Here, thanks to using known vertical directions, we avoid double linearization and can get the camera absolute pose directly from the RS model without the initialization by a standard P3P. Moreover, we need only five 2D-to-3D matches while R6P needed six such matches. We demonstrate in simulated and real experiments that our new R5Pup is robust, fast and a very practical method for absolute camera pose computation for modern cameras on mobile devices. We compare our R5Pup to the state of the art RS and perspective methods and demonstrate that it outperforms them when vertical direction is known in the range of accuracy available on modern mobile devices. We also demonstrate that when using R5Pup solver in structure from motion (SfM) pipelines, it is better to transform already reconstructed scenes into the standard position, rather than using hard constraints on the verticality of up vectors.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Computing camera pose from image points to 3D point correspondences, the Perspective-n-point problem (PnP) <ref type="bibr" target="#b4">[5]</ref>, is an important component of structure from motion, object localization, and visual odometry. PnP is one of the oldest camera calibration problems studied <ref type="bibr" target="#b7">[8]</ref>. It can be formulated as a system of algebraic equations and solved from three image to 3D point correspondences. Various formulations, numerical stability, computational efficiency and different approaches how to calculate the camera pose from three and more correspondences were studied <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b29">30,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b22">23,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b17">18]</ref> in the past.</p><p>All that previous work builds on the perspective projection, which is the right model for cameras with global shutter. In this work, we present a solution to the rolling shutter (RS) <ref type="bibr" target="#b20">[21]</ref> absolute camera pose problem with known vertical direction (R5Pup). It is an extension of the very recent work <ref type="bibr" target="#b1">[2]</ref>. We are providing much more practical absolute camera pose computation than <ref type="bibr" target="#b1">[2]</ref> for modern cameras on mobile devices.</p><p>Vast majority of contemporary cameras, including smartphones and DLSR's, uses the rolling shutter to capture images. Global shutter images are exposed to the light at once, whereas RS images are captured row (or column) by row at different times. When an RS camera moves while capturing an image, smear, skew or wobble distortion often appear. The most importantly, the perspective camera model is no longer valid and must be replaced by a new RS camera projection model.</p><p>It has been observed <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b9">10]</ref> that image distortions caused by a moving RS camera can break 3D reconstruction and camera pose estimation down. To alleviate this problem, image rectification has been proposed to remove RS distortions <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b23">24]</ref> and a structure from motion method for videos taken by rolling shutter cameras was developed <ref type="bibr" target="#b9">[10]</ref>. It has been demonstrated <ref type="bibr" target="#b18">[19]</ref> that using an RS model significantly improves the quality of mapping and tracking on mobile phones.</p><p>Authors of <ref type="bibr" target="#b0">[1]</ref> solved the problem of RS absolute pose using a non-linear optimization with the initial guess obtained by a linear method using 8 1 /2 points and assuming planar scenes. A globally optimal solution using polynomial equations and Gloptipoly <ref type="bibr" target="#b12">[13]</ref> solver to solve rolling shutter PnP was developed in <ref type="bibr" target="#b19">[20]</ref>. It has been shown that the method is capable of providing better results than <ref type="bibr" target="#b0">[1]</ref> if seven or more correspondences were used. In <ref type="bibr" target="#b1">[2]</ref>, the first minimal, non-iterative solution to the absolute pose problem for images from rolling shutter cameras has been presented. A double linearized rolling shutter camera model has been used to demonstrate a significant improvements in terms of camera pose accuracy and the number of inliers verified by RANSAC. However, with the camera orientation being linearized, the method <ref type="bibr" target="#b1">[2]</ref> requires a good initial estimate for camera orientation from, e.g., a P3P algorithm.</p><p>The availability of cheap and precise accelerometers and gyroscopes implies that almost every mobile phone is equipped with an inertial measurement unit (IMU). IMUs have also made their way into consumer cameras and allow for controlling and navigating robots as well as unmanned aerial vehicles (UAV). In general, IMUs provide the "up vector", which is the orientation of the gravitational acceleration in the device frame, from which one can calculate the device rotation around two axes, e.g., pitch and roll. The accuracy of the orientation angular measurements is about 0.5 • for the low-cost IMUs and under 0.02 • for the high end ones.</p><p>Using the IMU "up vector" information, we can eliminate some unknown parameters involved in the camera orientation estimation and thus make algorithms more efficient. Moreover the IMU "up vector" information reduces the number of correspondences needed. In <ref type="bibr" target="#b16">[17]</ref>, a solution to the absolute pose problem using the "up vector" and two correspondences for calibrated cameras, or three correspondences for cameras with unknown focal length and radial distortion, has been presented. Minimal solutions to the calibrated relative pose problem using three point correspondences for two known orientation angles were proposed in <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b14">15]</ref>. Relative pose for multi-camera systems with the aid of IMU has been presented in <ref type="bibr" target="#b11">[12]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.1.">Motivation</head><p>It has been established that it is important to incorporate a rolling shutter camera model for correct camera pose estimation and accurate Structure from Motion when the camera is moving during the image capture. Existing methods for absolute camera pose estimation have either special requirements on the type of data (e.g. video sequences <ref type="bibr" target="#b9">[10]</ref>, planar scenes <ref type="bibr" target="#b0">[1]</ref>), are computationally demanding <ref type="bibr" target="#b19">[20]</ref> or require a complete orientation estimate <ref type="bibr" target="#b1">[2]</ref>. With the wide availability of inertial measurement units in cellphones, cameras, cars and robots, we propose to simplify and improve the absolute pose algorithm of <ref type="bibr" target="#b1">[2]</ref> using the "up vector" information.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.2.">Contribution</head><p>In this paper, we present a new solution to the rolling shutter absolute pose problem with known vertical direction -the R5Pup solver. The proposed solution is based on the linearized rolling shutter camera model used in <ref type="bibr" target="#b19">[20]</ref>, but requires only five 2D ↔ 3D correspondences in contrast to seven in <ref type="bibr" target="#b19">[20]</ref> and six in <ref type="bibr" target="#b1">[2]</ref>. Unlike <ref type="bibr" target="#b0">[1]</ref>, it works for general scenes and does not require video sequences compared to <ref type="bibr" target="#b9">[10]</ref>. Using the vertical direction information we remove the requirement of prior initialization by P3P used in R6P algorithm <ref type="bibr" target="#b1">[2]</ref>. The solver is also much faster than R6P <ref type="bibr" target="#b1">[2]</ref> (140µs compared to more than 1ms of R6P).</p><p>We analyze different camera motions and the severity of induced image deformations pointing out where the proposed method brings the largest improvement. We show that R5Pup solver works with data from IMU present in common smartphones and we present an RS aware Structure from Motion pipeline that uses R5Pup and handles imprecise upvector measurements as well.</p><p>Section 2 contains the formulation of the absolute pose problem for rolling shutter cameras with known vertical direction. Section 3 describes how to solve the problem efficiently and for general scene configuration. The solver is verified experimentally and compared to P3P, <ref type="bibr" target="#b1">[2]</ref>, <ref type="bibr" target="#b16">[17]</ref>, <ref type="bibr" target="#b17">[18]</ref> and another relevant methods in section 4. Thorough experiments on real data including 3D reconstructions using RS aware SfM pipeline are presented in section 4 as well.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Problem Formulation</head><p>Let us now consider the problem of estimating absolute pose of a calibrated camera from n 2D ↔ 3D point correspondences, i.e. the PnP problem. For standard perspective camera model, the projection equation has the form</p><formula xml:id="formula_0">α i u i = R X i + C,<label>(1)</label></formula><p>where R ∈ SO(3) and C ∈ R 3 is the rotation and the translation transforming a 3D point X i ∈ R 3 from a world coordinate system to the camera coordinate system with u i = [x i , y i , 1] ⊤ , and α i ∈ R is a scalar.</p><p>In the rolling shutter model, when the camera is moving during the image capture, every image row or image column is captured at a different time and hence at different positions. Therefore, the rotation R and the translation C are functions of the image row y i or the image column x i . Here we assume that image is captured by-row, therefore we are getting the following rolling shutter projection equation</p><formula xml:id="formula_1">α i u i =   x i y i 1   = R(y i )X i + C(y i ).<label>(2)</label></formula><p>We used the model from <ref type="bibr" target="#b19">[20]</ref>, which assumes a linear approximation to the camera rotation during image capture. This model deviates from the reality with increasing rolling shutter effect. However, it has been observed <ref type="bibr" target="#b19">[20,</ref><ref type="bibr" target="#b1">2]</ref> that it is usually sufficient for the amount of rolling shutter rotation present in real situations.</p><p>Let R 0 and C 0 be the unknown rotation and translation of the camera at time τ = 0 which we choose to be the time when the middle row y 0 ∈ R is being captured. To get a linear approximation of the rotation during the capture, we linearize the rotation around this initial rotation R 0 using the first order Taylor expansion. The translation C(y i ), equation (2), is decomposed into initial translation C 0 and the translation dependent on the captured row y i . This gives the rolling shutter projection equation</p><formula xml:id="formula_2">α i   x i y i 1   = (I + (y i − y 0 )[w] x ) R 0 X i + C 0 + (y i − y 0 )t,<label>(3)</label></formula><p>where y 0 is the image row where our model equals to a perspective camera, C and t are unknown translation vectors and</p><formula xml:id="formula_3">[w] x =   0 −w 3 w 2 w 3 0 −w 1 −w 2 w 1 0   (4)</formula><p>is an unknown skew-symmetric matrix to be found.</p><p>In this paper we assume that we know the vertical direction of the camera, i.e. the coordinates of the world vector [0, 1, 0] ⊤ in the camera coordinate system. This "up vector" can be obtained from vanishing points, e.g. <ref type="bibr" target="#b3">[4]</ref>, or from IMUs of mobile devices. The "up vector" returned by the IMU gives us the rotation R v of the camera around two axes, in this case the x-axis and the z-axis. Note, that IMU sometimes returns directly two angles ψ x and ψ z of the rotation</p><formula xml:id="formula_4">R v =      cos(ψ z ) − sin(ψ z ) 0 sin(ψ z ) cos(ψ z ) 0 0 0 1           1 0 0 0 cos(ψ x ) − sin(ψ x ) 0 sin(ψ x ) cos(ψ x )     <label>(5)</label></formula><p>of the camera around x and z axes.</p><p>With the known rotation matrix R v around the x-axis and the z-axis, the only unknown parameter in the camera rotation matrix R 0 in <ref type="formula" target="#formula_2">(3)</ref> is the rotation angle ψ y around the vertical y-axis. Thus, we can write</p><formula xml:id="formula_5">R 0 = R 0 (ψ y ) = R v R y (ψ y ),<label>(6)</label></formula><p>where R v is the known rotation matrix <ref type="formula" target="#formula_4">(5)</ref> and</p><formula xml:id="formula_6">R y (ψ y ) =     cos(ψ y ) 0 − sin(ψ z ) 0 1 0 sin(ψ y ) 0 cos(ψ z )    <label>(7)</label></formula><p>is the unknown rotation matrix around the y. This parametrization of the rotation matrix R y contains trigonometric functions sin and cos. To eliminate sin and cos and to obtain polynomial equations, we use the substitution q = tan( ψy 2 ) for which there holds cos(ψ y ) = 1−q 2 1+q 2 and sin(ψ y ) = 2q 1+q 2 . We can write</p><formula xml:id="formula_7">R y (ψ y ) = 1 1 + q 2       1 − q 2 0 −2q 0 1 + q 2 0 2q 0 1 − q 2       =R y (q) 1 + q 2 . (8)</formula><p>With this parametrization of the rotation, we can write the projection equation <ref type="formula" target="#formula_2">(3)</ref> as</p><formula xml:id="formula_8">α i u i = (I + (y i − y 0 )[w] x ) R vR y(q) 1 + q 2 X i + C 0 + (y i − y 0 )t.</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">R5Pup solver</head><p>The R5Pup solver for absolute pose of a rolling shutter camera with known vertical direction from a minimal number of point correspondences starts with the projection equation <ref type="formula" target="#formula_2">(3)</ref> and the parametrization of the rotation (8). The scalar value α i can be eliminated from equation <ref type="formula" target="#formula_2">(3)</ref> by multiplying it from the left by the skew symmetric matrix</p><formula xml:id="formula_9">S i =   0 −1 x i 1 0 −y i −x i y i 0   .<label>(9)</label></formula><p>Moreover, to get rid of rational functions in the parametrization (8) we multiply projection equation <ref type="formula" target="#formula_2">(3)</ref> by the denominator 1 + q 2 to transform the equations into polynomials. To simplify the resulting system, we replace vector (1 + q 2 )C 0 by vectorĈ 0 of three new unknowns and the vector (1 + q 2 )t by vectort. This leads to the following matrix projection equation</p><formula xml:id="formula_10">S i (I + (y i − y 0 )[w] x ) R vR (q) X i +Ĉ 0 + (y i − y 0 )t = 0.<label>(10)</label></formula><p>This matrix equation results in three polynomial equations for each 2D ↔ 3D point correspondence. However, since the skew symmetric matrix S i has rank two, only two of these equations are linearly independent.</p><p>There are ten unknowns in equation <ref type="formula" target="#formula_0">(10)</ref>, six unknown translation parameters C 0 and t, three unknown parameters in w and unknown rotation parameter q. Therefore, the minimal number of 2D ↔ 3D point correspondences necessary to solve the absolute pose rolling shutter problem with known vertical direction is five.</p><p>For five point correspondences, the projection equation (10) results in 10 linearly independent equations in ten unknowns. These equations are linear in the unknown translation parametersĈ 0 andt. Therefore, these translation parameters can be easily eliminated from (10) by Gauss-Jordan (G-J) elimination of a matrix representing the input equations <ref type="bibr" target="#b9">(10)</ref>. Note that it is necessary to consider all 15 linearly dependent equations from <ref type="bibr" target="#b9">(10)</ref> in this G-J elimination because different equations are linearly independent in different scene configurations.</p><p>Since six of the ten linearly independent equations of (10) are used for the elimination ofĈ 0 andt, we are left with four equations in four unknowns w and q. Elements of the unknown vector w appear linearly in these four equations and thus the equations can be rewritten</p><formula xml:id="formula_11">        p [2]</formula><p>11 (q p <ref type="bibr" target="#b1">[2]</ref> 12 (q) p <ref type="bibr" target="#b1">[2]</ref> 13 (q) p <ref type="bibr" target="#b1">[2]</ref> 14 (q) p <ref type="bibr" target="#b1">[2]</ref> 21 (q) p <ref type="bibr" target="#b1">[2]</ref> 22 (q) p <ref type="bibr" target="#b1">[2]</ref> 23 (q) p <ref type="bibr" target="#b1">[2]</ref> 24 (q) p <ref type="bibr" target="#b1">[2]</ref> 31 (q) p <ref type="bibr" target="#b1">[2]</ref> 32 (q) p <ref type="bibr" target="#b1">[2]</ref> 33 (q) p <ref type="bibr" target="#b1">[2]</ref> 34 (q) p <ref type="bibr" target="#b1">[2]</ref> 41 (q) p <ref type="bibr" target="#b1">[2]</ref> 42 (q) p <ref type="bibr" target="#b1">[2]</ref> 43 (q) p <ref type="bibr" target="#b1">[2]</ref> 44 (q) <ref type="bibr" target="#b10">(11)</ref> where p ij (q) is a polynomial in q and the upper index [·] denotes its degree. We know that the matrix equation equation (11) has a non-trivial solution if and only if the determinant of the 4 × 4 polynomial coefficient matrix M(q) is equal to zero. This determinant directly leads to a degree 8 polynomial equation in unknown rotation parameter q. Its solutions can be efficiently found using the Sturm sequences method <ref type="bibr" target="#b28">[29]</ref>. After recovering up to eight real solutions for q, we can back-substitute them into equation <ref type="bibr" target="#b10">(11)</ref> to recover w linearly. Finally, we back-substitute q and w into (10) to linearly determine the translation vectorsĈ 0 = (1 + q 2 )C 0 andt = (1 + q 2 )t.</p><formula xml:id="formula_12">                w 1 w 2 w 3 1         = M(q)         w 1 w 2 w 3 1         = 0,</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>In this section we analyze the performance of R5Pup. The properties of the solver behavior under different conditions were thoroughly evaluated on synthetic data. On the real data, R5Pup was compared against P3P and P5P algorithms which are the plausible alternatives used for perspective cameras.</p><p>We compared R5Pup to the following relevant algorithms for camera absolute pose estimation:</p><p>• R6P -a rolling shutter absolute pose from six points presented in <ref type="bibr" target="#b1">[2]</ref>,</p><p>• P3P -standard implementation based on <ref type="bibr" target="#b8">[9]</ref>,</p><p>• P2Pup -two-point perspective absolute pose solver using "up-vectop" presented in <ref type="bibr" target="#b16">[17]</ref>,</p><p>• P5PLM -PnP on five correspondences using iterative Levenberg-Marquardt optimization implemented in OpenCV,</p><p>• EP5P -PnP on five correspondences using the EPnP method of <ref type="bibr" target="#b17">[18]</ref> implemented in OpenCV.</p><p>• UPNP -PnP on six correspondences using the UPnP method of <ref type="bibr" target="#b15">[16]</ref>.  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Synthetic data</head><p>Experiments using synthetic data were aimed at showing R5Pup performance under different camera motions, presence of noise and erroneous estimates of the gravity vector. The data consisted of randomly placed points in a cube with side length 2 centered at the origin. Cameras were then placed randomly in the distance of ⟨1; 3.3⟩ from the origin. Cameras were calibrated with their field of view of 45 degrees. Since the solver returns up to 8 solutions we selected the one closest to the ground truth, since it would most likely be the one selected by RANSAC. Errors were measured in the camera orientation and position for all tested methods. For R5Pup we also evaluated the error in estimated angular velocity and translational velocity.</p><p>First, the algorithm was tested in the presence of camera motion and zero noise. Three cases were considered: (1) rotational movement only, (2) translational movement only and (3) both together. The camera motion was simulated using constant translational velocity and the Cayley parametrization model shown in <ref type="bibr" target="#b1">[2]</ref>. For the case of rotational camera movement, the results in <ref type="figure" target="#fig_0">figure 1</ref> show that the solver is able to deliver camera poses with relative position error under 1% and camera orientation error well under 0.5 degrees even for rapid camera rotation with more than 30 degrees per frame capture. The same results were observed for both camera rotational and translational move-   ment, <ref type="figure" target="#fig_1">figure 2</ref>, showing that the camera translation movement does not have significant effect on the performance of R5Pup. The translation was varied up to 30% of the average distance of the camera from the 3D points. For pure translational movement in the absence of noise the solver produced exact results up to the machine precision which was expected since the model perfectly fits the data. This holds also for the case of zero camera rotation velocity in both figures 1 and 2. Next, the susceptibility of R5Pup to noise was analyzed. The results in <ref type="figure">figure 4</ref> show that noisy measurements in the presence of rolling shutter distortion do not significantly affect the performance of perspective camera methods and only slightly influence the result of R5Pup and R6P. We account this to the fact that the distortion caused by rolling shutter acts itself as noise of high magnitude for the perspective camera absolute pose algorithms and the noise added by imprecise feature detection or camera quantization is negligible compared to the RS effect.</p><p>The important question is, how does the error in the vertical direction estimation influence the results. Today even low cost IMU's can provide the gravity direction with accuracy under 0.5 degrees. However, during larger camera movements which cause significant RS image distortions we expect the gravity direction error to be higher. Therefore, we tested errors up to two degrees. The rotational velocity was set to 20 degrees per frame and relative translational velocity as 10%. It is clear that the precision of the IMU is critical for R5P. Results in <ref type="figure">figure 5</ref> show that R5Pup outperforms other methods in the camera orientation esti-  mation up to two degrees of angular gravity direction error and in the camera center estimation up to one degree angular gravity direction error.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Real data</head><p>We focused on two typical use cases of absolute pose algorithms in our real experiments. The camera pose estimation for augmented reality and 3D model reconstruction using Structure from motion. Data was collected using a   cellphone Samsung Galaxy S5 which recorded both images and the IMU measurements to provide upvectors.</p><p>For the first case, camera pose was estimated from data obtained by augmented reality library ArUco <ref type="bibr" target="#b6">[7]</ref>. A planar marker was detected in the image providing twelve 2D-3D correspondences. Such marker can be used to set-up a coordinate system and place objects in the scene as in <ref type="figure" target="#fig_5">figure 6</ref> From these twelve correspondences, five were chosen for camera pose computation using R5Pup, P5PLM and EP5P. Outer points were selected primarily in order to cover the most of the image area. For P3P and P2Pup three and two correspondences were selected respectively. In order to make the comparison fair, all possible pairs and triplets from the five points used by other algorithms were tested. R6P was not evaluated here, since we found that it does not work on planar scenes.</p><p>Experiments focused on different camera motions to observe and identify cases where R5Pup brings improvement over standard algorithms. Five experiments were conducted with camera rotating in either roll, pitch or yaw and translating in x or y image direction. Each motion creates different RS distortion effects.  <ref type="table">Table 1</ref>: Histograms of distances from the mean camera center for the second ArUco experiment. In the experiment the camera center was not moving, therefore smaller distances mean better result.</p><p>Results in <ref type="figure" target="#fig_8">figure 8</ref> show that R5Pup models the distortions caused by moving RS camera better than all other methods. It is clear that some motions induce more difficult distortions for perspective camera models to handle than the others. The most noticeable difference between perspective camera model and our model is during translation along the x image axis. As the rows are read out sequentially in the direction of y axis, this causes skew effect in the image. In contrast to that, translating in the y direction causes shrinking or inflating along the x direction in the image. From the rotational movements, most significant problems for P3P were caused by yaw rotation, i.e., around the y axis in the image. This also causes skew effects, whereas pitch, the rotation around x image axis, causes again shrinking and extending in the y image axis.</p><p>Next experiment was aimed at determining the precision of the computed camera pose. In the absence of precise ground truth camera position data, we developed an experiment that shows the accuracy of retrieved camera poses. ArUco marker of the size of 1m was printed and placed on a ground plane. To induce the RS effect in the measurement, we rotated the camera around its three axes as in the first experiment, but this time with no translation. The camera sensor motion is negligible compared to the distance of the camera from the pattern (around 1.5m) and we can consider the camera having constant projection centre.</p><p>Therefore, reconstructed camera centers should be approximately in one spot, which is their mean. The histograms of distances from the mean was measured and is shown in <ref type="figure" target="#fig_9">figure 9</ref>. Lower distance from the mean camera </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.1">Structure from Motion</head><p>A very interesting question is how will R5Pup perform when incorporated in a Structure from Motion pipeline working with real data. To investigate this, we developed a RS aware SfM pipeline which uses R5Pup to estimate absolute pose. A classic approach introduced in <ref type="bibr" target="#b24">[25]</ref> was used and its key parts (point triangulation, bundle adjustment) were adjusted to incorporate the same RS model as in the R5Pup solver. The initial geometry estimation is still global shutter, since there is no available RS relative pose algorithm. The initial cameras are, however, immediately optimized using BA with RS model. After that, new cameras are added to the model using R5Pup and the RS parameters w and t are used throughout the optimization.</p><p>Due to transformations and deformations occurring during the reconstruction, the upvector direction in the scene is not guaranteed to remain [0, 1, 0]. An obvious solution would be to fix the upvector directions measured by the IMU so that the y-axis of each camera is fixed and only the rotation around y is optimized.</p><p>Unfortunately, we found the measurements from the cellphone IMU not precise enough for the reconstruction, which was poor or failed completely when the upvectors were fixed in the bundle adjustment.</p><p>To solve this issue, we developed the following approach. We don't force the upvectors to stay fixed during bundle adjustment. The upvectors are used only for adding new cameras using R5Pup. As mentioned before, this does not guarantee that the orientation of the scene will remain such that the upvectors of cameras would point upwards. This eventually causes problems when adding a new camera and the reconstruction fails. We solve this by aligning the subset of points which are used to estimate the new cam-era's pose such that their downward direction is as close to [0, 1, 0] as possible. To do this, we find all the cameras which see the points from such subset, take the average of their upvector direction in the world coordinate frame represented by vector g avg and find a rotation R align such that R align g avg = [ 0 1 0 ] ⊤ and apply this rotation to the subset of points used for R5Pup. After obtaining the new camera's orientation with respect to the aligned points R local we can compute the actual camera orientation in the scene as R scene = R local R align .</p><p>With this approach we have been able to reconstruct the datasets using upvectors from the cellphone IMU.</p><p>We compared our RS pipeline (R5P) to the widely known SfM pipeline Visual SfM <ref type="bibr" target="#b26">[27]</ref> (VSFM) created by Changchang Wu. Data was obtained again using Samsung Galaxy S5 cellphone. We show only datasets where there was a observable qualitative difference between both methods. For the other datasets, the results were visually comparable. Results as well as sample pictures from the datasets are shown in <ref type="figure" target="#fig_0">figure 10</ref>.</p><p>Pictures from datasets House, Park and Street were captured while walking while holding the phone. Although there was some hand shaking, their camera trajectories should resemble a smooth line. Camera in dataset Tree was translating vertically and in dataset Bench horizontally. Dataset Door has the largest RS effect since the camera was moving and rotating quite rapidly with no specific pattern.</p><p>In dataset House, there is a noticeable scatter in the cameras reconstructed by VSFM whereas R5P gives a straight line ax expected. A noticeably larger portion of the building is reconstructed using R5P. Reconstruction of dataset Park failed completely using VSFM but was reconstructed well using R5P. In dataset Tree R5P reconstructed all 22 cameras, whereas VSFM only 11. Notice also the missing tree.</p><p>Dataset Street was reconstructed quite well using both methods but the trajectory of R5P cameras is again more smooth and also the house walls are more consistent. In dataset Door VSFM performed significantly worse presum- ably due to the large RS effect. Only the door was reconstructed using VSFM where R5P reconstructed much larger part of the visible scene. In dataset Bench it is difficult to evaluate the quality of the model, but the cameras reconstructed by VSFM are significantly more scattered and some of them are off by a large amount.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>In this paper, we presented a solution to the rolling shutter absolute camera pose with known vertical direction. Compared to the general minimal solution R6P, knowing the vertical direction allows us to avoid double-linearization and to solve for the camera orientation directly without using P3P as an initialization. It also reduces the number of required 2D-to-3D correspondences to five. We have shown how to construct an efficient solver based on hidden variable resultant method. The solver gives up to 8 solutions and our implementation runs in 140 µs which is much faster than R6P <ref type="bibr" target="#b1">[2]</ref>. We demonstrated the performance of the solver thoroughly on synthetic as well as real data. The synthetic experiments show great improvement in camera pose estimation precision on rolling shutter data. When the upvector is known precisely, the performance is at least the same or better than the performance of R6P. According to our experiments, we can expect improvements in camera pose estimation compare to the global shutter solvers up to the error of 1.5 degree in the vertical direction measurement. That is a value easily achievable using high quality IMU sensors, but we have demonstrated that even using a common smartphone IMU we can obtain precise enough vertical direction measurements for the solver to outperform others. Last but not least, we have developed a RS aware SfM pipeline using the new R5Pup solver to incrementally add cameras to the scene. We have presented an approach to handling imprecise vertical direction measurements in such pipeline which is necessary in order to get a good reconstruction. By comparing to the state-of-the-art SfM piepline Visual SfM we have demonstrated the strengths of the R5Pup solver and its practical use for 3D reconstruction.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Results for varying camera angular velocity only.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>Results for varying both camera angular velocity and translational velocity.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 3 :</head><label>3</label><figDesc>Comparing R5Pup pose estimates to other methods on data with varying camera angular velocity and translational velocity.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 4 :Figure 5 :</head><label>45</label><figDesc>Comparing R5Pup pose estimates to other methods on data with varying noise in the 2D measurements. Introducing different errors on the vertical direction information.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 6 :</head><label>6</label><figDesc>Using ArUco pattern to obtain 2D-3D correspondences. Camera pose estimation allows to place objects in the scene.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 7 :</head><label>7</label><figDesc>Visualization of the tested camera motions in real data experiments. Notice that the skew effect caused by translation along x axis as well as the shrink/extend effect caused by translation along y axis are different from the ones caused by yaw and pitch since they affect distant objects less and near objects more.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_8"><head>Figure 8 :</head><label>8</label><figDesc>Mean</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_9"><head>Figure 9 :</head><label>9</label><figDesc>Camera center distances from the mean camera position. In the experiment, camera was purely rotating with no translation, therefore lower numbers mean better position estimation.center means better result. The standard deviations of the distances are shown in table 1. R5Pup outperforms all the other algorithms which don't account for RS effect.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_10"><head>Figure 10 :</head><label>10</label><figDesc>Structure from motion results on real data.</figDesc></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgment</head><p>This research was supported by Czech Ministry of Education under Project RVO13000 and by Grant Agency of the CTU Prague project SGS13/202/OHK3/3T/13.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Simultaneous object pose and velocity computation using a single view from a rolling shutter camera</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Ait-Aider</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Andreff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Lavest</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Blaise</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">C</forename><surname>Ferr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">U</forename><surname>Cnrs</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="56" to="68" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">R6p -rolling shutter absolute pose problem</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Albl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Kukelova</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pajdla</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="2292" to="2300" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Camera pose revisited: New linear algorithms. In 14eme Congres Francophone de Reconnaissance des Formes et Intelligence Artificielle</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-A</forename><surname>Ameller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Triggs</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Quan</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page">2002</biblScope>
+		</imprint>
+	</monogr>
+	<note>Paper in French</note>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">3-line ransac for orthogonal vanishing point detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">C</forename><surname>Bazin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IROS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="4282" to="4287" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Random sample consensus: A paradigm for model fitting with applications to image analysis and automated cartography</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">A</forename><surname>Fischler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">C</forename><surname>Bolles</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Commun. ACM</title>
+		<imprint>
+			<biblScope unit="volume">24</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="381" to="395" />
+			<date type="published" when="1981" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">A minimal case solution to the calibrated relative pose problem for the case of two known orientation angles</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Fraundorfer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Tanskanen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="269" to="282" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Automatic generation and detection of highly reliable fiducial markers under occlusion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Garrido-Jurado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Muoz-Salinas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Madrid-Cuevas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Marn-Jimnez</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Pattern Recognition</title>
+		<imprint>
+			<biblScope unit="volume">47</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="2280" to="2292" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Das Pothenotische Problem in erweiterter Gestalt nebst ber seine Anwendungen in der Geodsie</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">A</forename><surname>Grunert</surname></persName>
+		</author>
+		<idno>1841. 1</idno>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Analysis and solutions of the three point perspective pose estimation problem</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Haralick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Ottenburg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nolle</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="1991" />
+			<biblScope unit="page" from="592" to="598" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Rolling shutter bundle adjustment</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hedborg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P.-E</forename><surname>Forssén</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Felsberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Ringaby</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="1434" to="1441" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Structure and motion estimation from rolling shutter video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hedborg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Ringaby</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P.-E</forename><surname>Forssen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Felsberg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV Workshops</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="17" to="23" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Relative pose estimation for a multi-camera system with known vertical direction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">Hee</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Fraundorfer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Gloptipoly 3: Moments, optimization and semidefinite programming</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Henrion</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-B</forename><surname>Lasserre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lofberg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Optimization Methods Software</title>
+		<imprint>
+			<biblScope unit="volume">24</biblScope>
+			<biblScope unit="issue">4-5</biblScope>
+			<biblScope unit="page" from="761" to="779" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Probabilistic 3-d motion estimation for rolling shutter video rectification from visual and inertial measurements</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">L</forename><surname>Evans</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">MMSP</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="203" to="208" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">A new solution to the relative orientation problem using only 3 points and the vertical direction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kalantari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Hashemi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Jung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-P</forename><surname>Gudon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Mathematical Imaging and Vision</title>
+		<imprint>
+			<biblScope unit="volume">39</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="259" to="268" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">UPnP: An Optimal O(n) Solution to the Absolute Pose Problem with Universal Applicability</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Kneip</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Seo</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="127" to="142" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Closed-form solutions to minimal absolute pose problems with known vertical direction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Kukelova</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bujnak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pajdla</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="volume">6493</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Epnp: An accurate o(n) solution to the pnp problem</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Moreno-Noguer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">81</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="155" to="166" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Real-time motion tracking on a cellphone using inertial sensing and a rolling-shutter camera</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">H</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mourikis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="4712" to="4719" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Global optimization of object pose and motion from a single rolling shutter image with automatic 2d-3d matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Magerand</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bartoli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Ait-Aider</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Pizarro</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="456" to="469" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">Geometric Models of Rolling-Shutter Cameras. Computing Research Repository</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Meingast</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Geyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sastry</surname></persName>
+		</author>
+		<idno>abs/cs/050</idno>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Linear n-point camera pose determination</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Quan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE PAMI</title>
+		<imprint>
+			<biblScope unit="volume">21</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="774" to="780" />
+			<date type="published" when="1999" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">A complete symbolic-numeric linear method for camera pose determination</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Reid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ISSAC, IS-SAC &apos;03</title>
+		<imprint>
+			<date type="published" when="2003" />
+			<biblScope unit="page" from="215" to="223" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Efficient video rectification and stabilisation for cell-phones</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Ringaby</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P.-E</forename><surname>Forssén</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">96</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="335" to="352" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Photo tourism: exploring photo collections in 3D</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACM SIGGRAPH</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Camera pose and calibration from 4 or 5 known 3d points</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Triggs</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="1999" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="278" to="284" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">Visualsfm: A visual structure from motion system</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wu</surname></persName>
+		</author>
+		<ptr target="http://ccwu.me/vsfm/.7" />
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Pnp problem revisited</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Hu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Mathematical Imaging and Vision</title>
+		<imprint>
+			<biblScope unit="volume">24</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="131" to="141" />
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">Fundamental problems of algorithmic algebra</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-K</forename><surname>Yap</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2000" />
+			<biblScope unit="volume">49</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title level="m" type="main">A complete linear 4-point algorithm for camera pose determination</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tang</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

@@ -1,0 +1,1917 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Detecting events and key actors in multi-person videos</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vignesh</forename><surname>Ramanathan</surname></persName>
+							<email>vigneshr@cs.stanford.edu*</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Stanford University</orgName>
+								<address>
+									<addrLine>2 Google</addrLine>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jonathan</forename><surname>Huang</surname></persName>
+							<email>jonathanhuang@google.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Stanford University</orgName>
+								<address>
+									<addrLine>2 Google</addrLine>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sami</forename><surname>Abu-El-Haija</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Stanford University</orgName>
+								<address>
+									<addrLine>2 Google</addrLine>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><surname>Gorban</surname></persName>
+							<email>gorban@google.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Stanford University</orgName>
+								<address>
+									<addrLine>2 Google</addrLine>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kevin</forename><surname>Murphy</surname></persName>
+							<email>kpmurphy@google.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Stanford University</orgName>
+								<address>
+									<addrLine>2 Google</addrLine>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Li</forename><surname>Fei-Fei</surname></persName>
+							<email>feifeili@cs.stanford.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Stanford University</orgName>
+								<address>
+									<addrLine>2 Google</addrLine>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Detecting events and key actors in multi-person videos</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:39+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Multi-person event recognition is a challenging task, often with many people active in the scene but only a small subset contributing to an actual event. In this paper, we propose a model which learns to detect events in such videos while automatically "attending" to the people responsible for the event. Our model does not use explicit annotations regarding who or where those people are during training and testing. In particular, we track people in videos and use a recurrent neural network (RNN) to represent the track features. We learn time-varying attention weights to combine these features at each time-instant. The attended features are then processed using another RNN for event detection/classification. Since most video datasets with multiple people are restricted to a small number of videos, we also collected a new basketball dataset comprising 257 basketball games with 14K event annotations corresponding to 11 event classes. Our model outperforms state-of-the-art methods for both event classification and detection on this new dataset. Additionally, we show that the attention mechanism is able to consistently localize the relevant players. * This work was done while Vignesh Ramanathan was an intern at Google Looking at the wrong people is uninformative Our odel atte ds to the key people at each ti e-step</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Event recognition and detection in videos has hugely benefited from the introduction of recent large-scale datasets <ref type="bibr" target="#b22">[22,</ref><ref type="bibr" target="#b55">55,</ref><ref type="bibr" target="#b23">23,</ref><ref type="bibr" target="#b41">41,</ref><ref type="bibr" target="#b13">14]</ref> and models. However, this is mainly confined to the domain of single-person actions where the videos contain one actor performing a primary activity. Another equally important problem is event recognition in videos with multiple people. In our work, we present a new model and dataset for this specific setting.</p><p>Videos captured in sports arenas, market places or other <ref type="bibr">Figure 1</ref>. Looking at the wrong people in a multi-person event can be very uninformative as seen in the basketball video in the first row. However, by observing the correct people in the same video, we can easily identify the event as a "2-pointer success" based on the shooter and the player throwing the ball into play. We use the same intuition to recognize the key players for event recognition.</p><p>outdoor areas typically contain multiple people interacting with each other. Most people are doing "something", but not all of them are involved in the main event. The main event is dominated by a smaller subset of people. For instance, a "shot" in basketball is determined by one or two people (see <ref type="figure">Figure 1</ref>). In addition to recognizing the event, it is also important to isolate these key actors. This is a significant challenge which differentiates multi-person videos from single-person videos. Identifying the people responsible for an event is thus an interesting task in its own right. However acquiring such annotations is expensive and it is therefore desirable to use models that do not require annotations for identifying these key actors during training. This can also be viewed as a problem of weakly supervised key person identification. In this paper, we propose a method to classify events by using a model that is able to "attend" to this subset of key actors. We do this without ever explicitly telling the model who or where the key actors are.</p><p>Recently, several papers have proposed to use "attention" models for aligning elements from a fixed input to a fixed output. For example, <ref type="bibr" target="#b2">[3]</ref> translate sentences in one language to another language, attending to different words in the input; <ref type="bibr" target="#b70">[70]</ref> generate an image-caption, attending to different regions in the image; and <ref type="bibr" target="#b72">[72]</ref> generate a video-caption, attending to different frames within the video.</p><p>In our work, we use attention to decide which of several people is most relevant to the action being performed; this attention mask can change over time. Thus we are combining spatial and temporal attention. Note that while the person detections vary from one frame to another, they can be associated across frames through tracking. We show how to use a recurrent neural network (RNN) to represent information from each track; the attention model is tasked with selecting the most relevant track in each frame. In addition to being able to isolate the key actors, we show that our attention model results in better event recognition.</p><p>In order to evaluate our method, we need a large number of videos illustrating events involving multiple people. Most prior activity and event recognition datasets focus on actions involving just one or two people. Multiperson datasets like <ref type="bibr" target="#b47">[47,</ref><ref type="bibr" target="#b39">39,</ref><ref type="bibr" target="#b6">7]</ref> are usually restricted to fewer videos. Therefore we collected our own dataset. In particular we propose a new dataset of basketball events with time-stamp annotations for all occurrences of 11 different events across 257 videos each 1.5 hours long in length. This dataset is comparable to the THUMOS <ref type="bibr" target="#b22">[22]</ref> detection dataset in terms of number of annotations, but contains longer videos in a multi-person setting.</p><p>In summary, the contributions of our paper are as follows. First, we introduce a new large-scale basketball event dataset with 14K dense temporal annotations for long video sequences. Second, we show that our method outperforms state-of-the-art methods for the standard tasks of classifying isolated clips and of temporally localizing events within longer, untrimmed videos. Third, we show that our method learns to attend to the relevant players, despite never being told which players are relevant in the training set.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>Action recognition in videos Traditionally, well engineered features have proved quite effective for video classification and retrieval tasks <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b17">18,</ref><ref type="bibr" target="#b21">21,</ref><ref type="bibr" target="#b30">30,</ref><ref type="bibr" target="#b37">37,</ref><ref type="bibr" target="#b38">38,</ref><ref type="bibr" target="#b31">31,</ref><ref type="bibr" target="#b40">40,</ref><ref type="bibr" target="#b42">42,</ref><ref type="bibr" target="#b49">49,</ref><ref type="bibr" target="#b50">50,</ref><ref type="bibr" target="#b65">65,</ref><ref type="bibr" target="#b66">66]</ref>. The improved dense trajectory (IDT) features <ref type="bibr" target="#b66">[66]</ref> achieve competitive results on standard video datasets. In the last few years, end-to-end trained deep network models <ref type="bibr" target="#b20">[20,</ref><ref type="bibr" target="#b23">23,</ref><ref type="bibr" target="#b54">54,</ref><ref type="bibr" target="#b53">53,</ref><ref type="bibr" target="#b62">62]</ref> were shown to be comparable and at times better than these features for various video tasks. Other works like <ref type="bibr" target="#b68">[68,</ref><ref type="bibr" target="#b71">71,</ref><ref type="bibr" target="#b74">74]</ref> explore methods for pooling such features for better performance. Recent works using RNN(s) have achieved state-of-the-art results for both event recognition and caption-generation tasks <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b36">36,</ref><ref type="bibr" target="#b56">56,</ref><ref type="bibr" target="#b72">72]</ref>. We follow this line of work with the addition of attention to attend to the event participants.</p><p>Another related line of work jointly identifies the region of interest in a video while recognizing the action. Gkioxari et al. <ref type="bibr" target="#b10">[11]</ref> and Raptis et al. <ref type="bibr" target="#b45">[45]</ref> automatically localize a spatio-temporal tube in a video. Jain et al. <ref type="bibr" target="#b18">[19]</ref> merge super-voxels for action localization. Other works like <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b44">44]</ref> learn to localize actors based on weak annotations from partially aligned movie scripts. While these methods perform weakly-supervised action localization, they target single actor videos in short clips where the action is centered around the actor. Methods like <ref type="bibr" target="#b28">[28,</ref><ref type="bibr" target="#b43">43,</ref><ref type="bibr" target="#b60">60,</ref><ref type="bibr" target="#b67">67]</ref> require annotations during training to localize the action. Multi-person video analysis Activity recognition models for events with well defined group structures such as parades have been presented in <ref type="bibr" target="#b63">[63,</ref><ref type="bibr" target="#b14">15,</ref><ref type="bibr" target="#b34">34,</ref><ref type="bibr" target="#b24">24]</ref>. These models utilize the structured layout of participants to identify group events. More recently, <ref type="bibr" target="#b29">[29,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b25">25]</ref> use context as a cue for recognizing interaction-based group activities. However, these methods are restricted to smaller datasets <ref type="bibr" target="#b48">[48,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b29">29]</ref>. Attention models Itti et al. <ref type="bibr" target="#b16">[17]</ref> explored the idea of saliency-based attention in images, with other works like <ref type="bibr" target="#b51">[51]</ref> using eye-gaze data as a means for learning attention. Mnih et al. <ref type="bibr" target="#b33">[33]</ref> attend to image regions of varying resolutions through an RNN. Attention has also been used for image classification <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b69">69]</ref> and detection <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b73">73]</ref>.</p><p>Bahdanau et al. <ref type="bibr" target="#b2">[3]</ref> showed that attention-based RNN models can effectively align input words to output words for machine translation. Following this, Xu et al. <ref type="bibr" target="#b70">[70]</ref> and Yao et al. <ref type="bibr" target="#b72">[72]</ref> used attention for image-captioning and videocaptioning respectively. In all these methods, attention aligns a sequence of input features with words of an output sentence. However, we use attention to identify the most relevant person during different phases of the event. Action recognition datasets Action recognition in videos has evolved with the introduction of more sophisticated datasets starting from smaller KTH <ref type="bibr" target="#b50">[50]</ref>, HMDB <ref type="bibr" target="#b27">[27]</ref> to larger , UCF101 <ref type="bibr" target="#b55">[55]</ref>, TRECVID-MED <ref type="bibr" target="#b41">[41]</ref> and Sports-1M <ref type="bibr" target="#b23">[23]</ref> datasets. More recently, THUMOS <ref type="bibr" target="#b22">[22]</ref> and Ac-tivityNet <ref type="bibr" target="#b13">[14]</ref> also provide a detection setting with temporal annotations for actions in untrimmed videos. There are also fine-grained datasets in specific domains such as MPII cooking <ref type="bibr" target="#b46">[46]</ref> and breakfast <ref type="bibr" target="#b26">[26]</ref>. However, most of these datasets focus on single-person activities with hardly any need for recognizing the people responsible for the event.</p><p>On the other hand, publicly available multi-person activity datasets like <ref type="bibr" target="#b48">[48,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b39">39]</ref> are restricted to a very small number of videos. One of the contributions of our work is a multi-player basketball dataset with dense temporal event annotations in long videos.</p><p>3-pointer failure layup success time <ref type="figure">Figure 2</ref>. We densely annotate every instance of 11 different basketball events in long basketball videos. As shown here, we collected both event time-stamps and event labels through an AMT task.</p><p>Person detection and tracking. There is a very large literature on person detection and tracking. There are also specific methods for tracking players in sports videos <ref type="bibr" target="#b52">[52]</ref>.</p><p>Here we just mention a few key methods. For person detection, we use the CNN-based multibox detector from <ref type="bibr" target="#b59">[59]</ref>. For person tracking, we use the KLT tracker from <ref type="bibr" target="#b64">[64]</ref>. There is also work on player identification (e.g., <ref type="bibr" target="#b32">[32]</ref>), but in this work, we do not attempt to distinguish players. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">NCAA Basketball Dataset</head><p>A natural choice for collecting multi-person action videos is team sports. In this paper, we focus on basketball games, although our techniques are general purpose. In particular, we use a subset of the 296 NCAA games available from YouTube. 1 These games are played in different venues over different periods of time. We only consider the most recent 257 games, since older games used slightly different rules than modern basketball. The videos are typically 1.5 hours long. We manually identified 11 key event types listed in Tab. 1. In particular, we considered 5 types of shots, each of which could be successful or failed, plus a steal event.</p><p>1 https://www.youtube.com/user/ncaaondemand Next we launched an Amazon Mechanical Turk task, where the annotators were asked to annotate the "end-point" of these events if and when they occur in the videos; endpoints are usually well-defined (e.g., the ball leaves the shooter's hands and lands somewhere else, such as in the basket). To determine the starting time, we assumed that each event was 4 seconds long, since it is hard to get raters to agree on when an event started. This gives us enough temporal context to classify each event, while still being fairly well localized in time.</p><p>The videos were randomly split into 212 training, 12 validation and 33 test videos. We split each of these videos into 4 second clips (using the annotation boundaries), and subsampled these to 6fps. We filter out clips which are not profile shots (such as those shown in <ref type="figure" target="#fig_0">Figure 3</ref>) using a separately trained classifier; this excludes close-up shots of players, as well as shots of the viewers and instant replays. This resulted in a total of 11436 training, 856 validation and 2256 test clips, each of which has one of 11 labels. Note that this is comparable in size to the THUMOS'15 detection challenge (150 trimmed training instances for each of the 20 classes and 6553 untrimmed validation instances). The distribution of annotations across all the different events is shown in Tab. 1. To the best of our knowledge, this is the first dataset with dense temporal annotations for such long video sequences.</p><p>In addition to annotating the event label and start/end time, we collected AMT annotations on 850 video clips in the test set, where the annotators were asked to mark the position of the ball on the frame where the shooter attempts a shot.</p><p>We also used AMT to annotate the bounding boxes of all the players in a subset of 9000 frames from the training videos. We then trained a Multibox detector <ref type="bibr" target="#b58">[58]</ref> with these annotations, and ran the trained detector on all the videos in our dataset. We retained all detections above a confidence of 0.5 per frame; this resulted in 6-8 person detections per clip, as listed in Tab. 1. The multibox model achieves an average overlap of 0.7 at a recall of 0.8 with ground-truth bounding boxes in the validation videos. The dataset is available at: http://basketballattention.appspot.com/. </p><formula xml:id="formula_0">P1-BLSTM P3-BLSTM P1-BLSTM P2-BLSTM P3-BLSTM P1-BLSTM P2-BLSTM P3-BLSTM φ frame BLSTM LSTM LSTM LSTM ∑ e t h 1  f t h t  p t h t a frame BLSTM f t h 1  φ ∑ 1  t  1  t a p t h 1  frame BLSTM f t h 1  ∑ 1  t a e t h P1 P3 P1 P3 P2 P2 P3 event state</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Our Method</head><p>All events in a team sport are performed in the same scene by the same set of players. The only basis for differentiating these events is the action performed by a small subset of people at a given time. For instance, a "steal" event in basketball is completely defined by the action of the player attempting to pass the ball and the player stealing from him. To understand such an event, it is sufficient to observe only the players participating in the event.</p><p>This motivates us to build a model (overview in <ref type="figure" target="#fig_0">Fig. 3</ref>) which can reason about an event by focusing on specific people during the different phases of the event. In this section, we describe our unified model for classifying events and simultaneously identifying the key players.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Feature extraction</head><p>Each video-frame is represented by a 1024 dimensional feature vector f t , which is the activation of the last fully connected layer of the Inception7 network <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b57">57]</ref>. In addition, we compute spatially localized features for each person in the frame. In particular, we compute a 2805 dimensional feature vector p ti which contains both appearance (1365 dimensional) and spatial information (1440 dimensional) for the i'th player bounding box in frame t. Similar to the RCNN object detector <ref type="bibr" target="#b9">[10]</ref>, the appearance features were extracted by feeding the cropped and resized player region from the frame through the Inception7 network and spatially pooling the response from a lower layer. The spatial feature corresponds to a 32×32 spatial histogram, combined with a spatial pyramid, to indicate the bounding box location at multiple scales. While we have only used static CNN representations in our work, these features can also be easily extended with flow information as suggested in <ref type="bibr" target="#b53">[53]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Event classification</head><p>Given f t and p ti for each frame t, our goal is to train the model to classify the clip into one of 11 categories. As a side effect of the way we construct our model, we will also be able to identify the key player in each frame.</p><p>First we compute a global context feature for each frame, h f t , derived from a bidirectional LSTM applied to the frame-level feature as shown by the blue boxes in <ref type="figure" target="#fig_0">Fig. 3</ref>. This is a concatenation of the hidden states from the forward and reverse LSTM components of a BLSTM and can be compactly represented as:</p><formula xml:id="formula_1">h f t = BLSTM f rame (h f t−1 , h f t+1 , f t ).</formula><p>(1)</p><p>Please refer to Graves et al. <ref type="bibr" target="#b11">[12]</ref>. Next we use a unidirectional LSTM to represent the state of the event at time t:</p><formula xml:id="formula_2">h e t = LSTM(h e t−1 , h f t , a t ),<label>(2)</label></formula><p>where a t is a feature vector derived from the players, as we describe below. From this, we can predict the class label for the clip using w ⊺ k h e t , where the weight vector corresponding to class k is denoted by w k . We measure the squared-hinge loss as follows:</p><formula xml:id="formula_3">L = 1 2 T t=1 K k=1 max(0, 1 − y k w ⊺ k h e t ) 2 ,<label>(3)</label></formula><p>where y k is 1 if the video belongs to class k, and is −1 otherwise.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Attention models</head><p>Unlike past attention models <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b70">70,</ref><ref type="bibr" target="#b72">72]</ref> we need to attend to a different set of features at each time-step. There are two key issues to address in this setting.</p><p>First, although we have different detections in each frame, they can be connected across the frames through an object tracking method. This could lead to better feature representation of the players.</p><p>Second, player attention depends on the state of the event and needs to evolve with the event. For instance, during the start of a "free-throw" it is important to attend to the player making the shot. However, towards the end of the event the success or failure of the shot can be judged by observing the person in possession of the ball.</p><p>With these issues in mind, we first present our model which uses player tracks and learns a BLSTM based representation for each player track. We then also present a simple tracking-free baseline model. Attention model with tracking. We first associate the detections belonging to the same player into tracks using a standard method. We use a KLT tracker combined with bipartite graph matching <ref type="bibr" target="#b35">[35]</ref> to perform the data association.</p><p>The player tracks can now be used to incorporate context from adjacent frames while computing their representation. We do this through a separate BLSTM which learns a latent representation for each player at a given time-step. The latent representation of player i in frame t is given by the hidden state h p ti of the BLSTM across the player-track:</p><formula xml:id="formula_4">h p ti = BLSTM track (h p t−1,i , h p t+1,i , p ti ).<label>(4)</label></formula><p>At every time-step we want the most relevant player at that instant to be chosen. We achieve this by computing a t as a convex combination of the player representations at that time-step:</p><formula xml:id="formula_5">a track t = Nt i=1 γ track ti h p ti ,<label>(5)</label></formula><formula xml:id="formula_6">γ track ti = softmax φ h f t , h p ti , h e t−1 ; τ ,</formula><p>where N t is the number of detections in frame t, and φ() is a multi layer perceptron, similar to <ref type="bibr" target="#b2">[3]</ref>. τ is the softmax temperature parameter. This attended player representation is input to the unidirectional event recognition LSTM in Eq. 2. This model is illustrated in <ref type="figure" target="#fig_0">Figure 3</ref>. Attention model without tracking. Often, tracking people in a crowded scene can be very difficult due to occlusions and fast movements. In such settings, it is beneficial to have a tracking-free model. This could also allow the model to be more flexible in switching attention between players as the event progresses. Motivated by this, we present a model where the detections in each frame are considered to be independent from other frames. We compute the (no track) attention based player feature as shown below:</p><formula xml:id="formula_7">a notrack t = Nt i=1 γ notrack ti p ti ,<label>(6)</label></formula><formula xml:id="formula_8">γ notrack ti = softmax φ h f t , p ti , h e t−1 ; τ ,</formula><p>Note that this is similar to the tracking based attention equations except for the direct use of the player detection feature p ti in place of the BLSTM representation h p ti .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experimental evaluation</head><p>In this section, we present three sets of experiments on the NCAA basketball dataset: 1. event classification, 2. event detection and 3. evaluation of attention.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Implementation details</head><p>We used a hidden state dimension of 256 for all the LSTM and BLSTM RNNs, an embedding layer with ReLU non-linearity and 256 dimensions for embedding the player features and frame features before feeding to the RNNs. We used 32×32 bins with spatial pyramid pooling for the player location feature. All the event video clips were four seconds long and subsampled to 6fps. The τ value was set to 0.25 for the attention softmax weighting. We used a batch size of 128, and a learning rate of 0.005 which was reduced by a factor of 0.1 every 10000 iterations with RMSProp <ref type="bibr" target="#b61">[61]</ref>. The models were trained on a cluster of 20 GPUs for 100k iterations over one day. The hyperparameters were chosen by cross-validating on the validation set.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Event classification</head><p>In this section, we compare the ability of methods to classify isolated video clips into 11 classes. We do not use any additional negatives from other parts of the basketball videos. We compare our results against different control settings and baseline models explained below:</p><p>• IDT <ref type="bibr" target="#b66">[66]</ref>: We use the publicly available implementation of dense trajectories with Fisher encoding.</p><p>• IDT <ref type="bibr" target="#b66">[66]</ref> player: We use IDT along with averaged features extracted from the player bounding boxes.</p><p>• C3D <ref type="bibr" target="#b62">[62]</ref>: We use the publicly available pre-trained model for feature extraction with an SVM classifier.</p><p>• LRCN <ref type="bibr" target="#b8">[9]</ref>: We use an LRCN model with frame-level features. However, we use a BLSTM in place of an LSTM. We found this to improve performance. Also, we do not back-propagate into the CNN extracting the frame-level features to be consistent with our model.</p><p>• MIL <ref type="bibr" target="#b0">[1]</ref>: We use a multi-instance learning method to learn bag (frame) labels from the set of player features.</p><p>• Only player: We only use our player features from Sec. 4.1 in our model without frame-level features.</p><p>• Avg. player: We combine the player features by simple averaging, without using attention.</p><p>• Attention no track: Our model without tracks (Eq. 6).</p><p>• Attention with track: Our model with tracking (Eq. 5).</p><p>The mean average precision (mAP) for each setting is shown in Tab. 2. We see that the method that uses both global information and local player information outperforms the model only using local player information ("Only player") and only using global information ("LRCN"). We also show that combining the player information using a weighted sum (i.e., an attention model) is better than uniform averaging ("Avg. player"), with the tracking based version of attention slightly better than the track-free version. Also, a standard weakly-supervised approach such as  <ref type="table">Table 3</ref>. Mean average precision for event detection given untrimmed videos.</p><p>MIL seems to be less effective than any of our modeling variants. The performance varies by class. In particular, performance is much poorer (for all methods) for classes such as "slam dunk fail" for which we have very little data. However, performance is better for shot-based events like "freethrow", "layups" and "3-pointers"where attending to the shot making person or defenders can be useful.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">Event detection</head><p>In this section, we evaluate the ability of methods to temporally localize events in untrimmed videos. We use a sliding window approach, where we slide a 4 second window through all the basketball videos and try to classify the window into a negative class or one of the 11 event classes. We use a stride length of 2 seconds. We treat all windows which do not overlap more than 1 second with any of the 11 annotated events as negatives. We use the same setting for training, test and validation. This leads to 90200 negative examples across all the videos. We compare with the same baselines as before. However, we were unable to train the MIL model due to computational limitations.</p><p>The detection results are presented in Tab. <ref type="bibr" target="#b2">3</ref>. We see that, as before, the attention models beat previous state-ofthe-art methods. Not surprisingly, all methods are slightly worse at temporal localization than for classifying isolated clips. We also note a significant difference in classification and detection performance for "steal" in all methods. This can be explained by the large number of negative instances introduced in the detection setting. These negatives often correspond to players passing the ball to each other. The "steal" event is quite similar to a "pass" except that the ball is passed to a player of the opposing team. This makes the "steal" detection task considerably more challenging.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.4.">Analyzing attention</head><p>We have seen above that attention can improve the performance of the model at tasks such as classification and detection. Now, we evaluate how accurate the attention models are at identifying the key players. (Note that the models were never explicitly trained to identify key players).</p><p>To evaluate the attention models, we labeled the player who was closest (in image space) to the ball as the "shooter". (The ball location is annotated in 850 test clips.)</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>3-pointer success</head><p>slam dunk success free-throw failure We used these annotations to evaluate if our "attention" scores were capable of classifying the "shooter" correctly. The mean AP for this "shooter" classification is listed in Tab. 4. The results show that the track-free attention model is quite consistent in picking the shooter for several classes like "free-throw succ./fail", "layup succ./fail." and "slam dunk succ.". This is a promising result which shows that attention on player detections is capable of localizing the player making the shot. This could be useful for providing more detailed descriptions including the shooter identity.</p><p>We also visualize the attention masks visually for sample videos in <ref type="figure" target="#fig_1">Figure 4</ref>. In order to make results comparable across frames, we annotated 5 points on the court and aligned all the attended boxes for an event to one canonical image. <ref type="figure">Fig. 5</ref> shows the resulting heatmap of spatial distributions of the attended players with respect to the court. It is interesting to note that our model consistently focuses under the basket for a layup, at the free-throw line for freethrows and outside the 3-point ring for 3-pointers.</p><p>Another interesting observation is that the attention for the tracking based model is less selective in focusing on the shooter. We observed that the tracking model is often reluctant to switch attention between frames and focuses on a single player throughout the event. This biases it towards players present throughout the video. For instance, in freethrows <ref type="figure">(Fig. 6</ref>) it attends to the defender at a specific position, who is visible throughout the event unlike the shooter.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Shot beginning</head><p>End of event (a) free-throw success (b) layup success (c) 3-pointer success <ref type="figure">Figure 5</ref>. We visualize the distribution of attention (from model without tracks) over different positions of a basketball court as the event progresses. This is shown for 3 different events. These heatmaps were obtained by first transforming all videos to a canonical view of the court (shown in the background of each heatmap). The top row shows the sample frames which contributed to the "free-throw" success heatmaps. The model focuses on the location of the shooter at the beginning of an event and later the attention disperses to other locations. <ref type="figure">Figure 6</ref>. The distribution of attention for our model with tracking, at the beginning of "free-throw success". Unlike <ref type="figure">Fig. 5</ref>, the attention is concentrated at a specific defender's position. Free-throws have a distinctive defense formation, and observing the defenders can be helpful as shown in the sample images in the top row.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>We have introduced a new attention based model for event classification and detection in multi-person videos. Apart from recognizing the event, our model can identify the key people responsible for the event without being explicitly trained with such annotations. Our method can generalize to any multi-person setting. However, for the purpose of this paper we introduced a new dataset of basketball videos with dense event annotations and compared our performance with state-of-the-art methods. We also evaluated our model's ability to recognize the "shooter" in the events and visualized the spatial locations attended by our model.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 3 .</head><label>3</label><figDesc>Our model, where each player track is first processed by the corresponding BLSTM network (shown in different colors). P i-BLSTM corresponds to the i'th player. The BLSTM hiddenstates are then used by an attention model to identify the "key" player at each instant. The thickness of the BLSTM boxes shows the attention weights, and the attended person can change with time. The variables in the model are explained in Sec. 4. BLSTM stands for "bidirectional long short term memory".</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 4 .</head><label>4</label><figDesc>We highlight (in cyan) the "attended" player at the beginning of different events. The position of the ball in each frame is shown in yellow. Each column shows a different event. In these videos, the model attends to the person making the shot at the start of the event.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Table 1. The number of videos per event in our dataset along with the average number of people per video corresponding to each of the events. The number of people is higher than existing datasets for multi-person event recognition.</figDesc><table>Event 
+# Videos Train (Test) Avg. # people 
+3-point succ. 
+895 (188) 
+8.35 
+3-point fail. 
+1934 (401) 
+8.42 
+free-throw succ. 
+552 (94) 
+7.21 
+free-throw fail. 
+344 (41) 
+7.85 
+layup succ. 
+1212 (233) 
+6.89 
+layup fail. 
+1286 (254) 
+6.97 
+2-point succ. 
+1039 (148) 
+7.74 
+2-point fail. 
+2014 (421) 
+7.97 
+slam dunk succ. 
+286 (54) 
+6.59 
+slam dunk fail. 
+47 (5) 
+6.35 
+steal 
+1827 (417) 
+7.05 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head></head><label></label><figDesc>Table 4. Mean average precision for attention evaluation.</figDesc><table>Event 
+Chance Attn. with track Attn. no track 
+3-point succ. 
+0.333 
+0.445 
+0.519 
+3-point fail. 
+0.334 
+0.391 
+0.545 
+free-throw succ. 
+0.376 
+0.416 
+0.772 
+free-throw fail. 
+0.346 
+0.387 
+0.685 
+layup succ. 
+0.386 
+0.605 
+0.627 
+layup fail. 
+0.382 
+0.508 
+0.605 
+2-point succ. 
+0.355 
+0.459 
+0.554 
+2-point fail. 
+0.346 
+0.475 
+0.542 
+slam dunk succ. 
+0.413 
+0.347 
+0.686 
+slam dunk fail. 
+0.499 
+0.349 
+0.645 
+Mean 
+0.377 
+0.438 
+0.618 
+
+</table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>We thank A. Korattikara, V. Rathod and K. Tang for useful comments. We also thank O. Camburu and N. Johnston for helping with the GPU implementation. This research is partly supported by ONR MURI and Intel ISTC-PC.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Support vector machines for multiple-instance learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Andrews</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Tsochantaridis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Hofmann</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Multiple object recognition with visual attention</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.7755</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Neural machine translation by jointly learning to align and translate</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Bahdanau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.0473</idno>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Finding actors and actions in movies</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Bojanowski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Bach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Laptev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ponce</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Active object localization with deep reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">C</forename><surname>Caicedo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">U K</forename><surname>Lorenz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICCV</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Look and think twice: Capturing top-down visual attention with feedback convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Cao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Xu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICCV</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">What are they doing?: Collective activity classification using spatio-temporal relationship among people</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Choi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Shahid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision Workshops (ICCV Workshops)</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="1282" to="1289" />
+		</imprint>
+	</monogr>
+	<note>IEEE 12th International Conference on</note>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Human detection using oriented histograms of flow and appearance</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Long-term recurrent convolutional networks for visual recognition and description</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">A</forename><surname>Hendricks</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Guadarrama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rohrbach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Venugopalan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Saenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1411.4389</idno>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Rich feature hierarchies for accurate object detection and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2014 IEEE Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="580" to="587" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Finding action tubes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Gkioxari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1411.6031</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Hybrid speech recognition with deep bidirectional lstm</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Jaitly</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A.-R</forename><surname>Mohamed</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Automatic Speech Recognition and Understanding (ASRU), 2013 IEEE Workshop on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="273" to="278" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Draw: A recurrent neural network for image generation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Gregor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Danihelka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wierstra</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.04623</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Activitynet: A large-scale video benchmark for human activity understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">C</forename><surname>Heilbron</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Escorcia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Ghanem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">C</forename><surname>Niebles</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Recognizing planned, multiperson action</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">S</forename><surname>Intille</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">F</forename><surname>Bobick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computer Vision and Image Understanding</title>
+		<imprint>
+			<biblScope unit="volume">81</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="414" to="445" />
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Batch normalization: Accelerating deep network training by reducing internal covariate shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.03167</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">A model of saliency-based visual attention for rapid scene analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Itti</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Koch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Niebur</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis &amp; Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="1254" to="1259" />
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Better exploiting motion for better action recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Bouthemy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Action localization with tubelets from motion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Van Gemert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Bouthemy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">G</forename><surname>Snoek</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+			</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="740" to="747" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yu</surname></persName>
+		</author>
+		<title level="m">3d convolutional neural networks for human action recognition. T-PAMI</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Trajectory-based modeling of human actions with motion reference points</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-G</forename><surname>Jiang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">THUMOS challenge: Action recognition with a large number of classes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-G</forename><surname>Jiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zamir</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Toderici</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Laptev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sukthankar</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Large-scale video classification with convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Detecting group activities using rigidity of formation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Khan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 13th annual ACM international conference on Multimedia</title>
+		<meeting>the 13th annual ACM international conference on Multimedia</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="403" to="406" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Khodabandeh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vahdat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G.-T</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hajimirsadeghi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Roshtkhari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Mori</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Se</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.03851</idno>
+		<title level="m">Discovering human interactions in videos with limited data labeling</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">The language of actions: Recovering the syntax and semantics of goal-directed human activities</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Kuehne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Arslan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Serre</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2014 IEEE Conference on</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="780" to="787" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Hmdb: a large video database for human motion recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Kuehne</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Discriminative figure-centric models for joint action localization and recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Mori</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision (ICCV), 2011 IEEE International Conference on</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="2003" to="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Discriminative latent models for recognizing contextual group activities. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">N</forename><surname>Robinovitch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Mori</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1549" to="1562" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Learning realistic human actions from movies</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Laptev</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Leveraging temporal, contextual and ordering constraints for recognizing complex activities in video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Laxton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kriegman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition, 2007. CVPR&apos;07. IEEE Conference on</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="page" from="1" to="8" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Learning to track and identify players from broadcast sports videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W.-L</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-A</forename><surname>Ting</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Little</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">P</forename><surname>Murphy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<biblScope unit="page" from="1704" to="1716" />
+			<date type="published" when="2013-07" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Recurrent models of visual attention</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Heess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="2204" to="2212" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Recognizing multitasked activities from video using stochastic context-free grammar</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Moore</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Essa</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI</title>
+		<imprint>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Algorithms for the assignment and transportation problems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Munkres</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of the Society of Industrial and Applied Mathematics</title>
+		<imprint>
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="32" to="38" />
+			<date type="published" when="1957-03" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<monogr>
+		<title level="m" type="main">Beyond short snippets: Deep networks for video classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hausknecht</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Vijayanarasimhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Monga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Toderici</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1503.08909</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Modeling temporal structure of decomposable motion segments for activity classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">C</forename><surname>Niebles</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-W</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">Multimedia event detection with multimodal feature fusion and temporal concept localization. Machine Vision and Applications</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Oh</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">25</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">A large-scale benchmark dataset for event recognition in surveillance video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Oh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Hoogs</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Perera</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Cuntoor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mukherjee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Aggarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Davis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2011 IEEE Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="3153" to="3160" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Action and event recognition with fisher vectors on a compact feature set</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Oneata</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Verbeek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">An overview of the goals, tasks, data, evaluation mechanisms and metrics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Over</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">TRECVID</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Action recognition with stacked fisher vectors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Peng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Qiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Peng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Explicit modeling of human-object interactions in realistic videos. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Prest</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ferrari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="835" to="848" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Linking people with &quot;their&quot; names using coreference resolution</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ramanathan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Joulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Discovering discriminative action parts from mid-level video representations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Raptis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kokkinos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Soatto</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2012 IEEE Conference on</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1242" to="1249" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">A database for fine grained activity detection of cooking activities</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rohrbach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Amin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andriluka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2012 IEEE Conference on</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1194" to="1201" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Spatio-temporal relationship match: Video structure comparison for recognition of complex human activities</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">S</forename><surname>Ryoo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">K</forename><surname>Aggarwal</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer vision, 2009 ieee 12th international conference on</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="1593" to="1600" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">UT-Interaction Dataset</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">S</forename><surname>Ryoo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">K</forename><surname>Aggarwal</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICPR contest on Semantic Description of Human Activities (SDHA)</title>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">Action bank: A high-level representation of activity in video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sadanand</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Corso</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">Recognizing human actions: a local svm approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schüldt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Laptev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Caputo</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 17th International Conference on</title>
+		<meeting>the 17th International Conference on</meeting>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page" from="32" to="36" />
+		</imprint>
+	</monogr>
+	<note>Pattern Recognition</note>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<analytic>
+		<title level="a" type="main">Action is in the eye of the beholder: eye-gaze driven model for spatiotemporal action localization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Shapovalova</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Raptis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Sigal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Mori</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="2409" to="2417" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b52">
+	<analytic>
+		<title level="a" type="main">Tracking Multiple People under Global Appearance Constraints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">B</forename><surname>Shitrit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Berclaz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Fleuret</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ternational Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b53">
+	<analytic>
+		<title level="a" type="main">Two-stream convolutional networks for action recognition in videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b54">
+	<monogr>
+		<title level="m" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.1556</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b55">
+	<monogr>
+		<title level="m" type="main">UCF101: A dataset of 101 human actions classes from videos in the wild</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Soomro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Roshan</forename><surname>Zamir</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+		<idno>CRCV-TR-12-01</idno>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b56">
+	<monogr>
+		<title level="m" type="main">Unsupervised learning of video representations using lstms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Mansimov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.04681</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b57">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<ptr target="http://lsun.cs.princeton.edu/slides/Christian.pdf" />
+		<title level="m">Scene classification with inception-7</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b58">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Scalable</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.1441</idno>
+		<title level="m">high-quality object detection</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b59">
+	<analytic>
+		<title level="a" type="main">Deep neural networks for object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Toshev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b60">
+	<analytic>
+		<title level="a" type="main">Spatiotemporal deformable part models for action detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sukthankar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2013 IEEE Conference on</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="2642" to="2649" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b61">
+	<monogr>
+		<title level="m" type="main">Lecture 6.5-rmsprop: Divide the gradient by a running average of its recent magnitude. coursera: Neural networks for machine learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tieleman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b62">
+	<monogr>
+		<title level="m" type="main">C3d: generic features for video analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bourdev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Torresani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Paluri</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1412.0767</idno>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b63">
+	<analytic>
+		<title level="a" type="main">Activity recognition using the dynamics of the configuration of interacting objects</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Vaswani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">R</forename><surname>Chowdhury</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Chellappa</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings. 2003 IEEE Computer Society Conference on</title>
+		<meeting>2003 IEEE Computer Society Conference on</meeting>
+		<imprint>
+			<date type="published" when="2003" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">633</biblScope>
+		</imprint>
+	</monogr>
+	<note>Computer Vision and Pattern Recognition</note>
+</biblStruct>
+
+<biblStruct xml:id="b64">
+	<analytic>
+		<title level="a" type="main">Resolving motion correspondence for densely moving points. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">J</forename><surname>Veenman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Reinders</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Backer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">23</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="54" to="72" />
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b65">
+	<analytic>
+		<title level="a" type="main">Evaluation of local spatio-temporal features for action recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b66">
+	<analytic>
+		<title level="a" type="main">Action Recognition by Dense Trajectories</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b67">
+	<analytic>
+		<title level="a" type="main">Video action detection with relational dynamic-poselets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Qiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision-ECCV 2014</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="565" to="580" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b68">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Cao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">T</forename><surname>Shen</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1503.01224</idno>
+		<title level="m">Temporal pyramid pooling based convolutional neural networks for action recognition</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b69">
+	<monogr>
+		<title level="m" type="main">The application of two-level attention models in deep convolutional neural network for fine-grained image classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Peng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1411.6447</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b70">
+	<monogr>
+		<title level="m" type="main">Show, attend and tell: Neural image caption generation with visual attention</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kiros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zemel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.03044</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b71">
+	<monogr>
+		<title level="m" type="main">A discriminative cnn video representation for event detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Hauptmann</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1411.4006v1</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b72">
+	<analytic>
+		<title level="a" type="main">Describing videos by exploiting temporal structure</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Yao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torabi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Ballas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Pal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Larochelle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Courville</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">stat</title>
+		<imprint>
+			<biblScope unit="volume">1050</biblScope>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b73">
+	<monogr>
+		<title level="m" type="main">Attentionnet: Aggregating weak directions for accurate object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Yoo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-Y</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Paek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><forename type="middle">S</forename><surname>Kweon</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1506.07704</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b74">
+	<monogr>
+		<title level="m" type="main">Exploiting image-trained cnn architectures for unconstrained video classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Luisier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Andrews</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1503.04144v2</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

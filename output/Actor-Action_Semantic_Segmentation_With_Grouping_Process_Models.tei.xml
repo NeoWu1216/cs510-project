@@ -1,0 +1,1221 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Actor-Action Semantic Segmentation with Grouping Process Models</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chenliang</forename><surname>Xu</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Electrical Engineering and Computer Science</orgName>
+								<orgName type="institution">University of Michigan</orgName>
+								<address>
+									<settlement>Ann Arbor</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jason</forename><forename type="middle">J</forename><surname>Corso</surname></persName>
+							<email>jjcorso@umich.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">Electrical Engineering and Computer Science</orgName>
+								<orgName type="institution">University of Michigan</orgName>
+								<address>
+									<settlement>Ann Arbor</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Actor-Action Semantic Segmentation with Grouping Process Models</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:37+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Actor-action semantic segmentation made an important step toward advanced video understanding: what action is happening; who is performing the action; and where is the action happening in space-time. Current methods based on layered CRFs for this problem are local and unable to capture the long-ranging interactions of video parts. We propose a new model that combines the labeling CRF with a supervoxel hierarchy, where supervoxels at various scales provide cues for possible groupings of nodes in the CRF to encourage adaptive and long-ranging interactions. The new model defines a dynamic and continuous process of information exchange: the CRF influences what supervoxels in the hierarchy are active, and these active supervoxels, in turn, affect the connectivities in the CRF; we hence call it a grouping process model. By further incorporating the video-level recognition, the proposed method achieves a large margin of 60% relative improvement over the state of the art on the recent A2D large-scale video labeling dataset, which demonstrates the effectiveness of our modeling.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Advances in modern high-level computer vision have helped usher in a new era of capable, perceptive physical platforms, such as automated vehicles. As the performance of these systems improves, the expectations of their capabilities and tasks will also increase, commensurately, with platforms moving from the highways into our homes, for example. The need for these platforms to understand not only what action is happening, but also who is doing the action and where is the action happening in space-time, will be increasingly critical to extracting semantics from videos and, ultimately, to interacting with humans in our complex world. For example, a home kitchen robot must distinguish and locate adult-eating, dog-eating and baby-crying in order to decide how to prepare and when to serve food.</p><p>Despite the recent successes in many aspects of this problem, such as action recognition <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b14">15,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b29">30,</ref><ref type="bibr" target="#b32">33,</ref><ref type="bibr" target="#b36">37,</ref><ref type="bibr" target="#b37">38]</ref>, action segmentation <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b21">22]</ref> and video object segmentation <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b45">46]</ref>, the collective problem had not been codified until <ref type="bibr" target="#b39">[40]</ref>, which posed a new actor-action semantic segmentation task on a large-scale YouTube video dataset called A2D. This dataset contains seven classes of actors including both articulated (e.g. baby, cat and dog) and rigid (e.g. car and ball) ones, and eight classes of actions (e.g. flying, walking and running). The task is to label each pixel in a video with a pair of actor and action labels or a null actor/action; one third of the A2D videos contain multiple actors and actions.</p><p>This task is challenging-the benchmarked leading method, the trilayer model, only achieves a 26.46% perclass accuracy for the joint actor-action video labeling <ref type="bibr" target="#b39">[40]</ref>. The method builds a large three-layer CRF on video supervoxels, where random variables are defined for sets of actor, actor-action, and action labels, respectively. It connects layers with potential functions that capture conditional probabilities (e.g. conditional distribution of actions given a specific actor class). Although the model accounts for the interplay of actors and actions, the interactions are restricted to the local CRF neighborhoods, which, based on the low absolute performance, is insufficient to solve this unique actor-action problem for three reasons.</p><p>First, we believe the pixel-level model must be married to a secondary process that captures instance-level or video-level global information in order to properly model the actors performing actions. Lessons learned from images strongly supports this argument-the performance of semantic image segmentation on the MSRC dataset seems to hit a plateau <ref type="bibr" target="#b30">[31]</ref> until information from secondary processes, such as context <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b24">25]</ref>, object detectors <ref type="bibr" target="#b16">[17]</ref> and a holistic scene model <ref type="bibr" target="#b42">[43]</ref>, are added. However, to the best of our knowledge, there is no method in video semantic segmentation that directly leverages the recent successes in action recognition.</p><p>Second, the two sets of labels, actors and actions, exist at different granularities. For example, we want to label adult-clapping in a video. The actor, adult, can probably be recognized by looking only at the lower human body, e.g. legs. However, in order to recognize the clapping action, we have to either locate the acting parts of the human body or simply look at the whole actor body. Third, actors and actions have different emphases on space and time in a video. Actors are more spaceoriented-they can be fairly well labeled using only still images, as in semantic image segmentation <ref type="bibr" target="#b31">[32,</ref><ref type="bibr" target="#b42">43]</ref>, whereas actions are space-and time-oriented. Although one can possibly identify actions by still images alone <ref type="bibr" target="#b41">[42]</ref>, there are strong distinctions between actions in time. For example running is faster and thus may results more repeated motion patterns than walking for a common time duration; and walking performed by a baby is very different compared to an adult, despite the two actor classes may easily confuse a spatially trained detector.</p><p>Our method overcomes the above limitations in two ways: (1) we propose a novel grouping process model (GPM) that adaptively adds long-ranging interactions to the labeling CRF; and (2) we incorporate the video-level recognition into segment-level labeling by the means of global labeling cost and the GPM. The GPM models a dynamic and continuous process of information exchange of a labeling CRF and a supervoxel hierarchy. The supervoxel hierarchy provides a rich multi-scale decomposition of video content, where object parts, identities, deformations and actions are retained in space-time supervoxels across various levels in the hierarchy <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b40">41]</ref>. Rather than using object and action proposals as separate processes, we directly locate the actor and action groupings in the supervoxel hierarchy by the labeling CRF. During inference, the labeling CRF influences what supervoxels in a hierarchy are active, and these active supervoxels, in turn, influence the connectivities in the CRF, thus refining the labeling.</p><p>Directly solving the joint energy function of GPM is hard. However, it can be efficiently solved by decomposing it into two subproblems, a video labeling problem and a tree slice problem <ref type="bibr" target="#b40">[41]</ref>, where the former one can be solved by graph cuts and the latter one can be rewritten into a bi-nary linear program. Therefore, the inference of GPM is dynamic and iterative as shown in <ref type="figure" target="#fig_0">Fig. 1</ref>. Throughout the entire process, information is being exchanged at various levels in the supervoxel hierarchy, thus the multi-scale spacetime representation is explicitly explored in our model.</p><p>We conduct thorough experiments on the large-scale actor-action video dataset (A2D) <ref type="bibr" target="#b39">[40]</ref>. We compare the proposed method to the previous benchmarked leading method, the trilayer model, as well as two leading semantic segmentation methods <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b15">16]</ref> that we have extended to the actor-action problem. The experimental results show that our proposed method outperforms the second best method by a large margin of 17% per-class accuracy (60% relative improvement) and over 10% global pixel accuracy, which demonstrates the effectiveness of our modeling.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>The actor-action semantic segmentation problem is first proposed in <ref type="bibr" target="#b39">[40]</ref>, where the paper demonstrates that inference jointly over actors and actions outperforms inference independently over them. The best performance in <ref type="bibr" target="#b39">[40]</ref> is due to the trilayer model; although it does consider the interplay of actor and action variables, it only models interactions in local CRF pairwise neighborhoods. In contrary, the method in this paper considers the interplays at various granularities in space and time introduced by a supervoxel hierarchy.</p><p>Supervoxels are shown to capture object boundaries and follow object motions <ref type="bibr" target="#b38">[39]</ref>, and have the ability to locate objects and actions <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b26">27]</ref>. They have been used as higherorder potentials for human action segmentation <ref type="bibr" target="#b21">[22]</ref> and video object segmentation <ref type="bibr" target="#b11">[12]</ref>. Here, we use supervoxel hierarchies for video labeling of actors and actions. We use the tree slice constraint to select supervoxels in a hierarchy as in <ref type="bibr" target="#b40">[41]</ref>, but the difference is that the tree slices here are drawn in an iterative fashion, where each time the slice also modifies the underlying labeling graph.</p><p>Our work also differs from the emerging works in action localization, action detection, and video object segmentation for two reasons. First, our segmentation contains clear semantic meanings of actors and actions, whereas most existing works in action localization and detection do not <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b17">18,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b35">36]</ref>. Second, we consider multiple actors performing actions in a video and explicitly model the types of actors, whereas existing works assume one human actor <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b22">23,</ref><ref type="bibr" target="#b33">34,</ref><ref type="bibr" target="#b43">44,</ref><ref type="bibr" target="#b44">45]</ref> or do not model the types of actors at all <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b45">46,</ref><ref type="bibr" target="#b46">47]</ref>. Although there have been some works on action detection <ref type="bibr" target="#b33">[34]</ref>, this remains an open challenge.</p><p>We relate our work to AHRF <ref type="bibr" target="#b15">[16]</ref> and FCRF <ref type="bibr" target="#b13">[14]</ref> in Section 4 after presenting the new model.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Grouping Process Model</head><p>In this section, we give the general form of GPM, and <ref type="figure" target="#fig_0">Fig. 1</ref> shows an overview. We define the detailed potentials adapted to the actor-action problem in Sec. 5. Segment-Level. Without loss of generality, we define V = {q 1 , q 2 , . . . , q N } as a video with N voxels or a video segmentation with N segments. A graph G = (V, E) is defined over the entire video, where the neighborhood structure E(·) is induced by the connectivities in the voxel lattice Λ 3 or the segmentation graph over space-time in a video. We define a set of random variables L = {l 1 , l 2 , . . . , l N } where the subscript corresponds to a certain node in V and each l i takes some label from a label set L. The GPM is inherently a labeling CRF, but it leverages a supervoxel hierarchy to dynamically adjust its non-local grouping structure. Supervoxel Hierarchy. Given a supervoxel hierarchy generated by a hierarchical video segmentation method, such as GBH <ref type="bibr" target="#b8">[9]</ref>, we extract a supervoxel tree 1 , denoted as T = {T 1 , T 2 , . . . , T S } with S total supervoxels in the tree, by ensuring that each supervoxel at a finer level segmentation has one and only one parent at its coarser level (Sec. 6 details the tree extraction process in the general case). We define a set of random variables s = {s 1 , s 2 , . . . , s S } on the tree supervoxels, where s t ∈ {0, 1} takes a binary label to indicate whether the tth supervoxel is active or not. Each supervoxel in the hierarchy connects to a set of nodes in the segment-level according to their overlap in voxel lattice Λ 3 . Thus we have s t , which is connected to a set of random variables at the segment-level CRF, denoted as L t ⊂ L. Intuitively, when s t is active, the fully-connected clique containing all nodes in L t is considered in the labeling CRF; otherwise, when s t is inactive, that fully-connected clique is not evaluated.</p><p>Supervoxel hierarchies, such as <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b8">9]</ref>, are built by iteratively recomputing and merging finer supervoxels into coarser ones based on appearance and motion features, where the body parts of an actor and its local motion are contained at the finer levels and the identity of the actor and its long-ranging action are contained at the coarser levels. However, choosing an arbitrary level in a hierarchy can be risky-going too coarse will cause overmerging and going too fine will lose the meaningful actions. It is challenging to locate the supervoxels in a hierarchy that best describe the actor and its action. Here, the GPM uses the evidence directly from the segment-level CRF to locate supervoxels across various scales that are best supported by the labeling L. Once the supervoxels s are selected, they provide strong labeling cues to the segment-level CRF-the CRF nodes connected to the same supervoxel are encouraged to have the same label.</p><p>The objective of GPM is to find the best labeling L * and the best selection s * that minimize the following energy:</p><formula xml:id="formula_0">(L * , s * ) = arg min L,s E(L, s|V, T ) E(L, s|V, T ) = E v (L|V) + E h (s|T ) (1) + t∈T (E h (L t |s t ) + E h (s t |L t )) ,</formula><p>where E v (L|V) and E h (s|T ) encode the energies at the segment-level and in the supervoxel hierarchy, respectively; E h (L t |s t ) and E h (s t |L t ) are conditional energy functions defined as directional edges in <ref type="figure" target="#fig_0">Fig. 1</ref>. To keep the discussion general, we do not define the specific form of E v (L|V) here-it can be any labeling CRF, such as <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b30">31]</ref>. We define the other terms next.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Labeling Cues from Supervoxel Hierarchy</head><p>Given an active node s t in the supervoxel hierarchy, we use it as a cue to refine the segment-level labeling L t and we define the energy of this process as:</p><formula xml:id="formula_1">E h (L t |s t ) = i∈Lt j =i,j∈Lt ψ h ij (l i , l j ) if s t = 1 0 otherwise.<label>(2)</label></formula><p>Here, ψ h ij (·) has the form:</p><formula xml:id="formula_2">ψ h ij (l i , l j ) = θ t if l i = l j 0 otherwise,<label>(3)</label></formula><p>where θ t is a parameter to be tuned. ψ h ij (l i , l j ) penalizes any two nodes in the field L t that contain different labels. Eq. 2 changes the graph structure in L t by fully connecting the nodes inside, and has clear semantic meaning--this set of nodes in L t at the segment-level are linked to the same supervoxel node s t and hence expected to be from the same object, taking evidences from the appearance and motion features used in a typical supervoxel segmentation method.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Grouping Cues from Segment Labeling</head><p>If the selected supervoxels are too fine, they are subject to losing object identity and long-ranging actions; if they are too coarse, they are subject to overmerging with the background. Therefore, we set the selected supervoxels to best reflect the segment-level labeling while also respecting a selection prior. Given a video labeling L at the segment-level, we select the nodes in the supervoxel hierarchy that best correspond to the current labeling:</p><formula xml:id="formula_3">E h (s t |L t ) = (H(L t )|L t | + θ h )s t ,<label>(4)</label></formula><p>where | · | denotes the number of video voxels and θ h is a parameter to be tuned that encodes a prior of the node selection in the hierarchy. H(·) is defined as the entropy of the labeling field connected to</p><formula xml:id="formula_4">s t : H(L t ) = − γ∈L P (γ; L t ) log P (γ; L t ) , where P (γ; L t ) = i∈L t δ(li=γ) |Lt|</formula><p>and δ(·) is an indicator function. Intuitively, the first term in Eq. 4 pushes down the selection of nodes in the hierarchy such that they only include the labeling field that has the most consistent labels, and the second term pulls up the node selection, giving penalties for going down the hierarchy.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Tree Slice Constraint</head><p>The active nodes in s define what groups of segments the GPM will enforce during labeling; hence the name grouping process model. However, not all instances of s are permissible: since we seek a single labeling over the video, we enforce that each segment in V is associated with one and only one active node in s. This notion was introduced in [41] by a way of tree slice: for every root-to-leaf path in T , there is one and only one node being active.</p><p>We follow <ref type="bibr" target="#b40">[41]</ref> to define a matrix P that encodes all rootto-leaf paths in T . P p is one row in P, and it encodes the path from the root to pth leaf with 1s for nodes on the path and 0s otherwise. We define the energy to regulate s as:</p><formula xml:id="formula_5">E h (s|T ) = P p=1 δ(P T p s = 1)θ τ ,<label>(5)</label></formula><p>where P is the total number of leaves (also the number of such root-to-leaf paths) and θ τ is a large constant to penalize an invalid tree slice. The tree slice selects supervoxel nodes to form a new video representation that has a one-to-one mapping to the 3D video lattice Λ 3 .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Iterative Inference for GPM</head><p>Directly solving the objective function defined in Eq. 1 is hard. Here, we show that we can use an iterative inference schema to efficiently solve it-given the segment-level labeling, we find the best supervoxels in the hierarchy; and given the selected supervoxels in the hierarchy, we refine the segment-level labeling. The Video Labeling Problem. Given a tree slice s, we would like to find the best L * such that:</p><formula xml:id="formula_6">L * = arg min L E(L|s, V, T ) (6) = arg min L E v (L|V) + t∈T E h (L t |s t ) .</formula><p>The above can have a standard CRF form depending on how</p><formula xml:id="formula_7">E v (L|V) is defined. The second energy term E h (L t |s t )</formula><p>can be decomposed to a locally fully connected CRF, and its range is constrained by s t such that the inference is feasible even without Gaussian kernels <ref type="bibr" target="#b13">[14]</ref>.</p><p>The Tree Slice Problem. Given the current labeling L, we would like to find the best s * such that:</p><formula xml:id="formula_8">s * = arg min s E(s|L, V, T ) (7) = arg min s E h (s|T ) + t∈T E h (s t |L t ) .</formula><p>The above equation can be rewritten as a binary linear program of the following form:</p><formula xml:id="formula_9">min t∈T α t s t s.t. Ps = 1 P and s ∈ {0, 1} S ,<label>(8)</label></formula><p>where α t = H(L t )|L t | + θ h . Note that this optimization is different than that proposed by the original tree slice paper <ref type="bibr" target="#b40">[41]</ref>, which incorporated quadratic terms in a binary quadratic program. We use a standard solver (IBM CPLEX) to solve the binary linear programming problem. Iterative Inference. The inference of the above two subproblems is iteratively carried out, as depicted in <ref type="figure" target="#fig_0">Fig. 1</ref>.</p><p>To be specific, we initialize a coarse labeling L by solving Eq. 6 without the second term, then we solve Eq. 8 and 6 in an iterative fashion. Each round of the tree slice problem enacts an updated set of grouped segments, which are then encouraged to be assigned the same label during the subsequent labeling process. Although we do not include a proof of convergence in this paper, we notice that the solution converges after a few rounds. Relation to AHRF. The associative hierarchical random field (AHRF) <ref type="bibr" target="#b15">[16]</ref> performs inference exhaustively from finer levels to coarser levels in the segmentation tree T , whereas the GPM explicitly models the best set of active supervoxels by the means of a tree slice. AHRF defines a full multi-label random field on the hierarchy; our model leverages the hierarchy to adaptively modify the labeling field. Our model is hence more scalable to videos. Furthermore, the GPM assumes that the best representations of the video content exist in a tree slice rather than enforcing the agreement across different levels as in AHRF. For example, a video of long jumping often contains running in the beginning. The running action exists and has a strong classifier signal at a fine-level in a supervoxel hierarchy, but it quickly diminishes when one goes to higher levels in the hierarchy where supervoxels capture longer range in the video and would then favor the jumping action.</p><p>Relation to FCRF. The fully-connected CRF (FCRF) in <ref type="bibr" target="#b13">[14]</ref> imposes Gaussian mixture kernels to regularize the pairwise interactions. Although our model fully connects the nodes in each L t for a given iteration of inference, we explicitly take the evidence from the supervoxel groupings. Equation 4 restricts the selected supervoxels to avoid overmerging. Although a more complex process, in practice, our inference is efficient (see Sec. 6 for running time).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">The Actor-Action Problem Modeling</head><p>Following semantic segmentation systems <ref type="bibr" target="#b34">[35,</ref><ref type="bibr" target="#b39">40]</ref>, we train segment-level classifiers to capture the local appearance and motion of the actors' body parts. They have some ability to localize the actor-action, but the predictions are noisy; they use no context, for example. In contrary, video-level recognition, as a secondary process, captures the global information of actors performing actions and have good prediction performance at the video-level. However, it is not able to tell where the action is happening. These two streams of information are captured at the segment-level and at the video-level, and hence are complementary to each other. In this section, we fuse them together in a single model, leveraging the grouping process model as a means of marrying the two. Let us first define notation, extending that from Sec. 3 where possible. We use X to denote the set of actor labels (e.g. adult, baby and dog) and Y to denote the set of action labels (e.g. eating, walking and running). The segmentlevel random field L now takes two sets of labels-for the ith segment, l X i ∈ X takes a label from the actors and l Y i ∈ Y from the actions. We denote Z = X × Y as the joint product space of the actor-action labels. We define a set of binary random variables v = {v 1 , v 2 , . . . , v |Z| } on the video-level, where v z = 1 denotes the zth actor-action label is active at the video-level. They represent the videolevel multi-label recognition problem. Again, we have the set of binary random variables s defined on the supervoxel hierarchy as in Sec. 3. Therefore, we have the total energy function of the actoraction semantic segmentation defined as:</p><formula xml:id="formula_10">(L * , s * , v * ) = arg min L,s,v E(L, s, v|V, T ) E(L, s, v|V, T ) = E v (L|V) + z∈Z E V (v z |V) + E V (L, v) + E h (s|T ) + t∈T (E h (L t , v|s t ) + E h (s t |L t )) ,<label>(9)</label></formula><p>where the term E h (L t , v|s t ) now models the joint potentials of the segment-level labeling field L t and the videolevel label v, which is slightly different from its form in Eq. 2. We have two new terms, E V (v z |V) and E V (L, v), from the video-level, where v z is the zth coordinate in v.</p><p>We explain these new terms next.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Segment-Level CRF E v</head><p>At the segment-level, we use the same bilayer actoraction CRF model from <ref type="bibr" target="#b39">[40]</ref> to capture the local pairwise interactions of the two sets of labels:</p><formula xml:id="formula_11">E v (L|V) = i∈V ψ v i (l X i ) + i∈V j∈E(i) ψ v ij (l X i , l X j )<label>(10)</label></formula><formula xml:id="formula_12">+ i∈V φ v i (l Y i ) + i∈V j∈E(i) φ v ij (l Y i , l Y j ) + i∈V ϕ v i (l X i , l Y i ) ,</formula><p>where ψ v i and φ v i encode separate potentials for random variables l X i and l Y i to take the actor and action labels, respectively. ϕ v i is a potential to measure the compatibility of the actor-action tuples on segment i, and ψ v ij and φ v ij capture the pairwise interactions between segments, which have the form of a contrast sensitive Potts model <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b30">31]</ref>. We use the code from <ref type="bibr" target="#b39">[40]</ref> to capture the local pairwise interactions of the two sets of labels.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Video-Level Potentials E V</head><p>Rather than a uniform penalty over all labels <ref type="bibr" target="#b5">[6]</ref>, we use the video-level recognition signals as global multi-label labeling costs to impact the segment-level labeling. We define the unary energy at the video-level as:</p><formula xml:id="formula_13">E V (v z |V) = −(ξ V (z) − θ T )θ B v z ,<label>(11)</label></formula><p>where ξ V (·) is the video-level classification response for a particular actor-action label, and Sec. 6 describes its training process. Here, θ T is a parameter to control response threshold, and θ B is a large constant parameter. In other words, to minimize Eq. 11, the label v z = 1 only when the classifier response ξ V (z) &gt; θ T . We define the interactions between the video-level and the segment-level:</p><formula xml:id="formula_14">E V (L, v) = x∈X δ x (L)h x (v)θ V + y∈Y δ y (L)h y (v)θ V ,<label>(12)</label></formula><p>where δ x (·) is an indicator function to determine whether the current labeling L at the segment-level contains a particular label x ∈ X or not:</p><formula xml:id="formula_15">δ x (L) = 1 if ∃i ∈ V : l X i = x 0 otherwise.<label>(13)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Ground-Truth</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Coarse-To-Fine Supervoxel Hierarchy</head><p>Tree Slice Selection Similarly, h x (·) is another indicator function to determine whether a particular label x is supported at the video-level or not:</p><formula xml:id="formula_16">E v + E V E v + E V + E h</formula><formula xml:id="formula_17">h x (v) = 0 if ∃z ∈ Z : v z = 1 ∧ g(z) = x 1 otherwise,<label>(14)</label></formula><p>where g(·) maps a label in the joint actor-action space to the actor space. θ V is a constant cost for any label that exists in L but not supported at the video-level. We define δ y (·) and h y (·) similarly. To make the cost meaningful, we set θ B &gt; 2θ V . In practice, we observe that these labeling costs from video-level recognition help the segment-level labeling to achieve a more parsimonious-in-labels result that enforces more global information than using local segments alone (see results in <ref type="table">Table 1</ref>).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">The GPM Potentials E h</head><p>The energy terms E h (s|T ) and E h (s t |L t ) involved in the tree slice problem are defined the same as in Sec. 3. Now, we define the new labeling term:</p><formula xml:id="formula_18">E h (L t , v|s t ) = (15)    i∈Lt j =i,j∈Lt ψ h ij (l X i , l X j , v) + i∈Lt j =i,j∈Lt φ h ij (l Y i , l Y j , v) if s t = 1 0 otherwise.</formula><p>Here, ψ h ij (·) has the form:</p><formula xml:id="formula_19">ψ h ij (l X i , l X j , v) = (16) θ t if l X i = l X j , ∃z ∈ Z : v z = 1 ∧ g(z) = f (s t ) 0 otherwise,</formula><p>where f (·) denotes the dominant actor label in the segmentlevel labeling field L t that connected to s t , and we define</p><formula xml:id="formula_20">ψ h ij (l Y i , l Y j , v)</formula><p>similarly. This new term selectively refines the segmentation where the majority of the segment-level labelings agree with the video-level multi-label labeling. <ref type="figure">Figure 3</ref>. Visualization of two nodes of the bilayer model in our efficient inference.</p><formula xml:id="formula_21">l X i l Y i l X j l Y j l j l i ϕ v i ϕ v j ψ v ij φ v ij ξ v ij</formula><p>We show in <ref type="figure" target="#fig_1">Fig. 2</ref> how this GPM process helps to refine the actor's shape (the car) in the labeling process. The initial labelings from E v + E V propose a rough region of interest, but they do not capture the accurate boundaries or shape. After two iterations of inference, the tree slice selects the best set of supervoxels in the GBH hierarchy that represents the actor (the car), and they regroup the segmentlevel labelings such that the labelings can better capture the actor shape. Notice that the car body in the third column merges with the background, but our full model (fourth column) overcomes the limitation by selecting different parts from the hierarchy to yield the final labeling.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.4.">Inference</head><p>The inference of the actor-action problem defined in Eq. 9 follows the iterative inference described in Sec. 4. The tree slice problem is efficiently solved by binary linear programming. Although we could solve the video labeling problem with loopy belief propagation, it would be expensive due to the two sets of labels over which the CRF is defined. Here, we derive a way to solve it efficiently using graph cuts inference with label costs <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b1">2,</ref><ref type="bibr" target="#b5">6]</ref>. We show this conceptually in <ref type="figure">Fig. 3</ref> and rewrite Eq. 10 as:</p><formula xml:id="formula_22">E v (L|V) = i∈V ξ v i (l i ) + i∈V j∈E(i) ξ v ij (l i , l j ) ,<label>(17)</label></formula><p>where we define the new unary as:</p><formula xml:id="formula_23">ξ v i (l i ) = ψ v i (l X i ) + φ v i (l Y i ) + ϕ v i (l X i , l Y j ) ,<label>(18)</label></formula><p>and the pairwise interactions as:</p><formula xml:id="formula_24">ξ v ij (l i , l j ) =<label>(19)</label></formula><formula xml:id="formula_25">       ψ v ij (l X i , l X j ) if l X i = l X j ∧ l Y i = l Y j φ v ij (l Y i , l Y j ) if l X i = l X j ∧ l Y i = l Y j ψ v ij (l X i , l X j ) + φ v ij (l Y i , l Y j ) if l X i = l X j ∧ l Y i = l Y j 0 if l X i = l X j ∧ l Y i = l Y j .</formula><p>We can rewrite Eq. 15 in a similar way, and they satisfy the submodular property according to the triangle inequality <ref type="bibr" target="#b12">[13]</ref>. The label costs can be solved as in <ref type="bibr" target="#b5">[6]</ref>. Parameters. We manually explore the parameter space based on the pixel-level accuracy in a heuristic fashion. We first tune the parameters involved in the video-level recognition, then those involved in the segment-level labeling, and finally, those involved in GPM by running the iterative inference as in Sec. 4.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Experiments</head><p>We evaluate our method on the recently released A2D dataset <ref type="bibr" target="#b39">[40]</ref> and use the same benchmark to evaluate the performance; this is the only dataset we are aware of that incorporates actors and actions together. We compare with the top-performing trilayer model, and two strong semantic image segmentation methods, AHRF <ref type="bibr" target="#b15">[16]</ref> and FCRF <ref type="bibr" target="#b13">[14]</ref>. For AHRF, we use the publicly available code from <ref type="bibr" target="#b15">[16]</ref> as it contains a complete pipeline from training classifiers to learning and inference. For FCRF, we extend it to use the same features as our method. Data Processing. We experiment with two distinct supervoxel trees: one is extracted from the hierarchical supervoxel segmentations generated by GBH <ref type="bibr" target="#b8">[9]</ref>, where supervoxels across multiple levels natively form a tree structure hierarchy, and the other one is extracted from multiple runs of a generic non-hierarchical supervoxel segmentation by TSP <ref type="bibr" target="#b3">[4]</ref>. To extract a tree structure from the nonhierarchical video segmentations, we first sort the segmentations by the number of supervoxels they contain. Then we enforce the supervoxels in the finer level segmentation to have one and only one parent supervoxel in the coarser level segmentation, such that the two supervoxels have the maximal overlap of the video pixels. We use four levels from a GBH hierarchy, where the number of supervoxels varies from a few hundred to less than one hundred. We also use four different runs of TSP to construct another segmentation tree where the final number of nodes contained in the tree varies from 500 to 1500 at the fine level, and from 50 to 150 at the coarse level.</p><p>We also use TSP to generate the segments for the base labeling CRF. We extract the same set of appearance and motion features as in <ref type="bibr" target="#b39">[40]</ref> and train one-versus-all linear SVM classifiers on the segments for three sets of labels: actor, action, and actor-action pair, separately. At the video-level, we extract improved dense trajectories <ref type="bibr" target="#b37">[38]</ref>, and use Fisher vectors <ref type="bibr" target="#b28">[29]</ref> to train linear SVM classifiers at the video-level for the actor-action pair. We use the inference schema described in Sec. 4 and Sec. 5.4, and follow the train/test splits used in <ref type="bibr" target="#b39">[40]</ref>. The output of our system is a full video pixel labeling. We evaluate the performance on sampled frames where the ground-truth is labeled. Results and Comparisons. We follow the benchmark evaluation in <ref type="bibr" target="#b39">[40]</ref> and evaluate performance for joint actoraction and separate individual tasks. <ref type="table">Table 1</ref> shows the overall results of all methods in three different calculations: when all test videos are used; when only videos containing single-label actor-action are used; and when only videos containing multiple actor-action labels are used. Roughly one-third of the videos in the A2D dataset have multiple actor-action labels. Overall, we observe that our methods (both GPM-TSP and GPM-GBH) outperform the next best one, the trilayer method, by a large margin of 17% average  per-class accuracy and more than 10% global pixel accuracy over all test videos. The improvement of global pixel accuracy is consistent over the two sub-divisions of test videos, and the improvement of average per-class accuracy is larger on videos that only contain single-label actor-action. We suspect that videos containing multiple-label actor-action are more likely to confuse the video-level classifiers. We also observe that the added grouping process in GPM-TSP and GPM-GBH consistently improves the average per-class accuracy over the intermediate result (E v + E V ) on both single-label and multiple-label actor-action videos. There is a slight decrease on the global pixel accuracy. We suspect the decrease mainly comes from the background class, which contributes a large portion of the total pixels in evaluation. To verify that, we also show the individual actor-action class performance in Tab. 2 when all test videos are used. We observe that GPM-GBH has the best performance on majority classes and improves E v + E V on all classes except dog-crawling, which further shows the effectiveness of the grouping process. The performance of our method using the GBH hierarchy is slightly better than our method using the TSP hierarchy. We suspect that this is due to the GBH method's greedy merging process that complements the Gaussian process in TSP, such that the resulting segmentation complements the segment-level TSP segmentation we used. <ref type="figure" target="#fig_2">Figure 4</ref> shows the visual comparison of video labelings for all methods, where (a)-(c) show cases where methods output correct labels and (d)-(g) show cases where our proposed method outperforms other methods. We also show     failure cases in (h) and (i) where videos contain complex actors and actions. For example, our method correctly labels the ball-rolling but confuses the label adult-running as adult-walking in (h); we correctly label adult-crawling but miss the label adult-none in (i). Inference Speed. We empirically set the stopping criteria by observing a balance between the performance gain and the running time. We set two iterations for all experiments. For all the test videos, GPM-GBH has an average inference speed of 8.6 seconds-per-video (spv) faster than 26.7 spv of GPM-TSP. Both of them are faster than 142 spv of the trilayer model in <ref type="bibr" target="#b39">[40]</ref>. The experiments are conducted with a Linux server with AMD Opteron 6380 2.5GHz CPU.</p><formula xml:id="formula_26">E v + E V E v Model</formula><formula xml:id="formula_27">E v + E V E v E v + E V E v Model BK</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Conclusion</head><p>Our thorough experiments on the A2D dataset show that when the segment-level labeling is combined with secondary processes, such as our grouping process models and video-level recognition signals, the semantic segmentation performance increases dramatically. For example, GPM-GBH improves almost every class of actor-action labels compared to the intermediate result without the supervoxel hierarchy, i.e., without the dynamic grouping of CRF labeling variables. This finding strongly supports our motivating argument that the two sets of labels, actors and actions, are best modeled at different levels of granularities and that they have different emphases on space and time in a video.</p><p>In summary, our paper makes the following contributions to the actor-action semantic segmentation problem:</p><p>1. A novel model that dynamically combines segment-level labeling with a hierarchical grouping process that influences connectivities of the labeling variables. 2. An efficient inference method that iteratively solves the two conditional tasks by graph cuts for labeling and binary linear programming for grouping allowing for continuous exchange of information. 3. A new framework that uses video-level recognition signals as cues for segment-level labeling thru global labeling costs and the grouping process model. 4. Our proposed method significantly improves performance (60% relative improvement over the next best method) on the recently released large-scale actor-action semantic video dataset <ref type="bibr" target="#b39">[40]</ref>.</p><p>Our implementations as well as the extended baselines are available on authors' website.</p><p>Future Work. We set two directions for our future work. First, although our model is able to improve the labeling performance dramatically, the opportunity of this joint modeling to improve video-level recognition is yet to be explored. Second, our grouping process does not incorporate semantics in the supervoxel hierarchy; we believe this would further improve results.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>An overview of the grouping process model. The left side shows an input video and its segment-level segmentation. The right side shows the same video being segmented into a supervoxel hierarchy. During inference, the CRF defined on the segment-level starts with a coarse video labeling. It influences what supervoxels are active in the hierarchy. The active supervoxels, in turn, affect the connectivities in the CRF. This process is dynamic and continuous, where the video labeling is being iteratively refined.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .</head><label>2</label><figDesc>The video labeling of actor-action is refined by GPM. First row shows a test video car-jumping with its labelings. The second row shows a supervoxel hierarchy and the third row shows the active nodes in the hierarchy with their dominant labels.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 4 .</head><label>4</label><figDesc>Visual example of the actor-action video labelings for all methods. (a) -(c) are videos where most methods get correct labelings; (d) -(g) are videos where only GPM models get the correct labelings; (h) -(g) are difficult videos in the dataset where the GPM models get partially correct labelings. Colors used are from the A2D benchmark.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head></head><label></label><figDesc>climb crawl eat jump roll run walk none climb eat jump roll run walk none crawl eat jump roll run walk none 81.Model climb crawl roll walk none fly jump roll none climb eat fly jump roll walk none fly jump roll run none Ave. Glo.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>Ave. Glo. Ave. Glo. Ave. Glo. Ave. Glo. Ave. Glo. Ave. Glo. Ave. Glo. Ave. Glo. Ave. Glo. AHRF 38.0 64.9 29.0 63.9 13.9 63.0 38.1 66.6 29.7 65.8 16.6 64.8 37.0 60.6 28.3 59.3 11.3 58.5 FCRF 44.8 77.9 45.5 77.6 25.4 76.2 45.9 77.6 47.4 77.7 32.1 76.1 40.2 78.8 42.2 77.5 19.4 76.5 Trilayer 45.7 74.6 47.0 74.6 26.5 72.9 47.0 74.1 50.3 74.6 33.9 72.7 41.0 75.6 42.3 74.5 20.4 73.4 GPM (TSP) 58.3 85.2 60.5 85.3 43.3 84.2 61.5 85.4 68.2 86.0 56.5 84.8 51.7 84.5 56.2 83.8 33.9 83.0 GPM (GBH) 61.2 84.9 59.4 84.8 43.9 83.8 63.1 85.1 69.3 85.7 57.6 84.5 51.7 84.1 56.3 83.3 33.9 82.5Table 1. The overall performance on the A2D dataset. The top two rows are intermediate results of the full model. The middle three rows are comparison methods. The bottom two rows are our full models with different supervoxel hierarchies for the grouping process.</figDesc><table>45.9 76.9 47.2 76.8 24.8 75.0 46.7 76.5 50.0 76.9 31.5 74.8 41.7 77.7 42.1 76.5 18.2 75.4 
+57.3 85.7 59.4 85.9 42.4 84.8 60.4 86.0 67.0 86.5 55.4 85.4 50.6 85.1 55.1 84.4 33.3 83.6 
+Actor 
+Action 
+&lt;A, A&gt; 
+
+All Test Videos 
+Single Actor-Action Videos 
+Multiple Actor-Action Videos 
+Actor 
+Action 
+&lt;A, A&gt; 
+Actor 
+Action 
+&lt;A, A&gt; 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 2 .</head><label>2</label><figDesc>The performance on individual actor-action labels using all test videos. The leading scores for each label are in bold font.</figDesc><table></table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">We add one virtual node as root to make it a tree if the segmentation at the coarsest level contains more than one supervoxel.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgments</head><p>This work has been supported in part by Google, Samsung, DARPA W32P4Q-15-C-0070 and ARO W911NF-15-1-0354.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">An experimental comparison of min-cut/max-flow algorithms for energy minimization in vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Boykov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Kolmogorov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1124" to="1137" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Fast approximate energy minimization via graph cuts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Boykov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Veksler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zabih</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">23</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="1222" to="1239" />
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Interactive graph cuts for optimal boundary region segmentation of objects in nd images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">Y</forename><surname>Boykov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-P</forename><surname>Jolly</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">A video representation using temporal superpixels</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">W F</forename><surname>Iii</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Efficient multilevel brain tumor segmentation with integrated bayesian model classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Corso</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Sharon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Dube</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>El-Saden</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Sinha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yuille</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">27</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="629" to="640" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+	<note>Medical Imaging</note>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Fast approximate energy minimization with label costs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Delong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Osokin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">N</forename><surname>Isack</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Boykov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">96</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page">6</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Superpixel-based video object segmentation using perceptual organization and location prior</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Giordano</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Murabito</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Palazzo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Spampinato</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Actions as space-time shapes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Gorelick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Blank</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shechtman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Irani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Basri</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">29</biblScope>
+			<biblScope unit="issue">12</biblScope>
+			<biblScope unit="page" from="2247" to="2253" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Efficient hierarchical graph-based video segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Grundmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Kwatra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Essa</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Observing humanobject interactions: Using spatial and functional compatibility for recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kembhavi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">S</forename><surname>Davis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">31</biblScope>
+			<biblScope unit="issue">10</biblScope>
+			<biblScope unit="page" from="1775" to="1789" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Action localization with tubelets from motion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Van Gemert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Bouthemy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">G</forename><surname>Snoek</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Supervoxel-consistent foreground propagation in video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">D</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Grauman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">What energy functions can be minimized via graph cuts?</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Kolmogorov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zabin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="page" from="147" to="159" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Efficient inference in fully connected crfs with gaussian edge potentials</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krähenbühl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Hmdb: a large video database for human motion recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Kuehne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jhuang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Garrote</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Poggio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Serre</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Associative hierarchical random fields</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ladicky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="1056" to="1077" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">What, where and how many? combining object detectors and crfs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ladickỳ</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sturgess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Alahari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Discriminative figure-centric models for joint action localization and recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Mori</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">On space-time interest points</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Laptev</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">64</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="107" to="123" />
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Key-segments for video object segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">J</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Grauman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Video segmentation by tracking many figure-ground segments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Humayun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tsai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Rehg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Human action segmentation with hierarchical supervoxel consistency</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Corso</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Space-time tree ensemble for action recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Sigal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sclaroff</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Action recognition and localization by hierarchical space-time segments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Ikizler-Cinbis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sclaroff</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">The role of context for object detection and semantic segmentation in the wild</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Mottaghi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N.-G</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-W</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yuille</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Segmentation of moving objects by long term video analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Ochs</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="1187" to="1200" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Spatiotemporal object detection proposals</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Oneata</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Revaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Verbeek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Fast object segmentation in unconstrained video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Papazoglou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ferrari</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Action recognition with stacked fisher vectors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Peng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Qiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Peng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Recognizing human actions: a local svm approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schuldt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Laptev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Caputo</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Textonboost: Joint appearance, shape and context modeling for multi-class object recognition and segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Criminisi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Textonboost for image understanding: Multi-class object recognition and segmentation by jointly modeling texture, layout, and context</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Criminisi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">81</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="2" to="23" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+		<title level="m" type="main">Ucf101: A dataset of 101 human actions classes from videos in the wild</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Soomro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">R</forename><surname>Zamir</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+		<idno>CRCV- TR-12-01</idno>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Spatiotemporal deformable part models for action detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sukthankar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Superparsing: scalable nonparametric image parsing with superpixels</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tighe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="issue">5</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Max-margin structured output regression for spatio-temporal action localization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yuan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Dense trajectories and motion boundary descriptors for action recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kläser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-L</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="issue">1</biblScope>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Action recognition with improved trajectories</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Evaluation of super-voxel methods for early video processing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Corso</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Can humans fly? action understanding with multiple classes of actors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-H</forename><surname>Hsieh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Xiong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Corso</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Flattening supervoxel hierarchies by the uniform entropy slice</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Whitt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Corso</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Human action recognition by learning bases of action attributes and parts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Yao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Jiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Guibas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Describing the scene as a whole: Joint object detection, scene classification and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Fast action proposals for human action detection and search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yuan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Discriminative subvolume search for efficient action detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yuan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Video object cosegmentation by regulated maximum weight cliques</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Javed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Semantic object segmentation via detection in weakly labeled video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Xia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

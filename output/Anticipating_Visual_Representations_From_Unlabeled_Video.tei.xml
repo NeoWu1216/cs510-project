@@ -1,0 +1,890 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Anticipating Visual Representations from Unlabeled Video</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Carl</forename><surname>Vondrick</surname></persName>
+							<email>vondrick@mit.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Massachusetts Institute of Technology †University of Maryland</orgName>
+								<address>
+									<settlement>Baltimore County</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hamed</forename><surname>Pirsiavash</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Massachusetts Institute of Technology †University of Maryland</orgName>
+								<address>
+									<settlement>Baltimore County</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Antonio</forename><surname>Torralba</surname></persName>
+							<email>torralba@mit.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Massachusetts Institute of Technology †University of Maryland</orgName>
+								<address>
+									<settlement>Baltimore County</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Anticipating Visual Representations from Unlabeled Video</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:37+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Anticipating actions and objects before they start or appear is a difficult problem in computer vision with several real-world applications. This task is challenging partly because it requires leveraging extensive knowledge of the world that is difficult to write down. We believe that a promising resource for efficiently learning this knowledge is through readily available unlabeled video. We present a framework that capitalizes on temporal structure in unlabeled video to learn to anticipate human actions and objects. The key idea behind our approach is that we can train deep networks to predict the visual representation of images in the future. Visual representations are a promising prediction target because they encode images at a higher semantic level than pixels yet are automatic to compute. We then apply recognition algorithms on our predicted representation to anticipate objects and actions. We experimentally validate this idea on two datasets, anticipating actions one second in the future and objects five seconds in the future.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>What action will the man do next in <ref type="figure">Figure 1</ref> (left)? A key problem in computer vision is to create machines that anticipate actions and objects in the future, before they appear or start. This predictive capability would enable several real-world applications. For example, robots can use predictions of human actions to make better plans and interactions <ref type="bibr" target="#b17">[18]</ref>. Recommendation systems can suggest products or services based on what they anticipate a person will do. Predictive models can also find abnormal situations in surveillance videos, and alert emergency responders.</p><p>Unfortunately, developing an algorithm to anticipate the future is challenging. Humans can rely on extensive knowledge accumulated over their lifetime to infer that the man will soon shake hands in <ref type="figure">Figure 1</ref>. How do we give machines access to this knowledge?</p><p>We believe that a promising resource to train predictive models are abundantly available unlabeled videos. Although lacking ground truth annotations, they are attractive</p><formula xml:id="formula_0">b) Feature Space (d dim) a) Unlabeled Video φ(x t ) φ(x t+1 ) Time x t x t+1</formula><p>Figure 1: Predicting Representations: In this paper, we explore how to anticipate human actions and objects by learning from unlabeled video. We propose to anticipate the visual representation of frames in the future. We can apply recognition algorithms on the predicted representation to forecast actions and objects.</p><p>for prediction because they are economical to obtain at massive scales yet still contain rich signals. Videos come with the temporal ordering of frames "for free", which is a valuable asset for forecasting. However, how to leverage unlabeled video to anticipate high-level concepts is unclear. Pioneering work in computer vision has capitalized on unlabeled videos before to visualize the future <ref type="bibr" target="#b30">[31,</ref><ref type="bibr" target="#b35">36,</ref><ref type="bibr" target="#b38">39]</ref> and predict motions <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b39">40,</ref><ref type="bibr" target="#b42">43]</ref>. Unfortunately, these self-supervised approaches are not straightforward to apply for anticipating semantics because, unlike pixels or motions, concepts are not readily accessible in unlabeled video. Methods that anticipate concepts have typically required supervision <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b11">12]</ref>, which is expensive to scale.</p><p>In this paper, we propose a method to anticipate concepts in the future by learning from unlabeled video. Recent progress in computer vision has built rich visual representations <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b31">32,</ref><ref type="bibr" target="#b43">44]</ref>. Rather than predict pixels or depend on supervision, our main idea is to forecast visual representations of future frames. Since these representations contain signals sufficient to recognize concepts in the present, we then use recognition algorithms on the forecasted representation to anticipate a future concept. Representations have the advantage that they both a) capture the semantic information that we want to forecast and b) scale to unlabeled videos because they are automatic to compute. Moreover, representations may be easier to predict than pixels because distance metrics in this space empirically tend to be more robust <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b18">19]</ref>.</p><p>Since we can economically acquire a large amounts of unlabeled video, we create our prediction models with deep networks, which are attractive for this problem because their capacity can grow with the size of data available and are trained efficiently with large-scale optimization algorithms. In our experiments, we downloaded 600 hours of unlabeled video from the web and trained our network to forecast representations 1 to 5 seconds in the future. We then forecast both actions and objects by applying recognition algorithms on top of our predicted representations. We evaluate this idea on two datasets of human actions in television shows <ref type="bibr" target="#b24">[25]</ref> and egocentric videos for activities of daily living <ref type="bibr" target="#b28">[29]</ref>. Although we are still far from human performance on these tasks, our experiments suggest that learning to forecast representations with unlabeled videos may help machines anticipate some objects and actions.</p><p>The primary contribution of this paper is developing a method to leverage unlabeled video for forecasting highlevel concepts. In section 2, we first review related work. In section 3, we then present our deep network to predict visual representations in the future. Since the future can be uncertain, we extend our network architecture to produce multiple predictions. In section 4, we show experiments to forecast both actions and objects. We plan to make our trained models and code publicly available.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>The problem of predicting the future in images and videos has received growing interest in the computer vision community, which our work builds upon:</p><p>Prediction with Unlabeled Videos: Perhaps the ideas most similar to this paper are the ones that capitalize on the wide availability of big video collections. In early work, Yuen and Torralba <ref type="bibr" target="#b42">[43]</ref> propose to predict motion in a single image by transferring motion cues from visually similar videos in a large database. Building on the rich potential of large video collections, Walker et al. <ref type="bibr" target="#b38">[39]</ref> demonstrate a compelling data-driven approach that animates the trajectory of objects from a single frame. Ranzato et al. <ref type="bibr" target="#b30">[31]</ref> and Srivastava et al. <ref type="bibr" target="#b35">[36]</ref> also learn predictive models from large unlabeled video datasets to predict pixels in the future. In this paper, we also use large video collections. However, unlike previous work that predicts low-level pixels or motions, we develop a system to predict high-level concepts such as objects and actions by learning from unlabeled video.</p><p>Predicting Actions: There have been some promising works on predicting future action categories. Lan et al. <ref type="bibr" target="#b20">[21]</ref> propose a hierarchical representation to predict future actions in the wild. Ryoo <ref type="bibr" target="#b32">[33]</ref> and Hoai and De la Torre <ref type="bibr" target="#b10">[11]</ref> propose models to predict actions in early stages. Vu et al. in <ref type="bibr" target="#b37">[38]</ref> learn scene affordance to predict what actions can happen in a static scene. Pei et al. <ref type="bibr" target="#b25">[26]</ref> and Xie et al. <ref type="bibr" target="#b41">[42]</ref> infer people's intention in performing actions which is a good clue for predicting future actions. We are different from these approaches because we use large-scale unlabeled data to predict a rich visual representation in the future, and apply it towards anticipating both actions and objects.</p><p>Predicting Human Paths: There have been several works that predict the future by reasoning about scene semantics with encouraging success. Kitani et al. <ref type="bibr" target="#b15">[16]</ref> use concept detectors to predict the possible trajectories a person may take in surveillance applications. Lezema et al. <ref type="bibr" target="#b22">[23]</ref>, Gong et al. <ref type="bibr" target="#b7">[8]</ref> and Kooij et al. <ref type="bibr" target="#b16">[17]</ref> also predict the possible future path for people in the scene. Koppula and Saxena <ref type="bibr" target="#b17">[18]</ref> anticipate the action movements a person may take in a human robot interaction scenario using RGB-D sensors. Our approach extends these efforts by predicting human actions and objects.</p><p>Predicting Motions: One fundamental component of prediction is predicting short motions, and there have been some investigations towards this. Pickup et al. in <ref type="bibr" target="#b26">[27]</ref> implicitly model causality to understand what should happen before what in a video. Fouhey and Zitnick <ref type="bibr" target="#b6">[7]</ref> learn from abstract scenes to predict what objects may move together. Lampert <ref type="bibr" target="#b19">[20]</ref> predicts the future state of a probability distribution, and applies it towards predicting classifiers adapted to future domains. Pintea et al. <ref type="bibr" target="#b27">[28]</ref> predict the optical flow from single images by predicting how pixels are going to move in future. We are hoping that our model learns to extrapolate these motions automatically in the visual representation, which is helpful if we want to perform recognition in the future rather than rendering it in pixel space.</p><p>Big Visual Data: We build upon work that leverages a large amount of visual data readily available online. Torralba et al. <ref type="bibr" target="#b36">[37]</ref> use millions of Internet images to build object and scene recognition systems. Chen et al. <ref type="bibr" target="#b1">[2]</ref> and Divvala et al. <ref type="bibr" target="#b2">[3]</ref> build object recognition systems that have access to common sense by mining visual data from the web. Doersch et al. <ref type="bibr" target="#b4">[5]</ref> use large repositories of images from the web to tease apart visually distinctive elements of places. Kim and Xing <ref type="bibr" target="#b14">[15]</ref> learn to reconstruct story lines in personal photos, and recommend future photos. Zhou et al. <ref type="bibr" target="#b44">[45]</ref> train convolutional neural networks on a massive number of scene images to improve scene recognition accuracy. In our work, we also propose to mine information from visual media on the web, however we do it for videos with the We visualize the network architecture we use in our experiments. During training, the network uses videos to learn to predict the representation of frames in the future. Since predicting the future is a multi-modal problem, our network predicts K future representations. Blue layers are the same for each output while green layers are separate for the K outputs. During inference, we only input the current frame, and the network estimates K representations for the future. Please see section 3 for full details.</p><p>goal of learning a model to anticipate semantic concepts. Unsupervised Learning in Vision: To handle largescale data, there have been some efforts to create unsupervised learning systems for vision. Ramanan et al. <ref type="bibr" target="#b29">[30]</ref> uses temporal relationships in videos to build datasets of human faces. Ikizler-Cinbis et al. <ref type="bibr" target="#b12">[13]</ref> propose to use images from the web to learn and annotate actions in videos without supervision. Le et al. <ref type="bibr" target="#b21">[22]</ref> show that machines can learn to recognize both human and cat faces by watching an enormous amount of YouTube videos. Chen and Grauman <ref type="bibr" target="#b0">[1]</ref> propose a method to discover new human actions by only analyzing unlabeled videos, and Mobahi et al. <ref type="bibr" target="#b23">[24]</ref> similarly discover objects. This paper also proposes to use unlabeled data, but we use unlabeled video to learn to predict visual representations.</p><p>Representation Learning: Recent work has explored how to learn visual representations, for example with images <ref type="bibr" target="#b3">[4]</ref> or videos <ref type="bibr" target="#b40">[41]</ref>. Our work is different because we do not seek to learn a visual representation. Rather, our goal is to anticipate the visual representation in the future. Moreover, our approach is general, and in principle could predict any representation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Anticipating Visual Representations</head><p>Rather than predicting pixels (which may be more difficult) or anticipating labeled categories (which requires supervision), our idea is to use unlabeled video to learn to predict the visual representation in the future. We can then apply recognition algorithms (such as object or action classifiers) on the predicted future representation to anticipate a high-level concept. In this section, we explain our approach.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Self-supervised Learning</head><p>Given a video frame x i t at time t from video i, our goal is to predict the visual representation for the future frame</p><formula xml:id="formula_1">x i t+∆ . Let φ(x i t+∆ )</formula><p>be the representation in the future. Using videos as training data, we wish to estimate a function g(x i t ) that closely predicts φ(x i t+∆ ):</p><formula xml:id="formula_2">ω * = argmin ω i,t g x i t ; ω − φ x i t+∆ 2 2<label>(1)</label></formula><p>where our prediction function g(·) is parameterized by ω.</p><p>Our method is general to most visual representations, however we focus on predicting the last hidden layer (fc7) of AlexNet <ref type="bibr" target="#b18">[19]</ref>. We chose this layer because it empirically obtains state-of-the-art performance on several image <ref type="bibr" target="#b31">[32,</ref><ref type="bibr" target="#b5">6]</ref> and video <ref type="bibr" target="#b43">[44]</ref> recognition tasks.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Deep Regression Network</head><p>Since we do not require data to be labeled for learning, we can collect large amounts of training data. We propose to use deep regression networks for predicting representations because their model complexity can expand to harness the amount of data available and can be trained with large scale data efficiently with stochastic gradient descent.</p><p>Our network architecture is five convolutional layers followed by five fully connected layers. The last layer is the output vector, which makes the prediction for the future representation. In training, we use a Euclidean loss to minimize the distance between our predictions g(x t ) and the representation of the future frame φ(x t+∆ ).</p><p>Our choice of architecture is motivated by the successes of the AlexNet architecture for visual recognition <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b44">45]</ref>. However, our architecture differs by having a regression loss function and three more fully connected layers.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Multi-Modal Outputs</head><p>Given an image, there can be multiple plausible futures, illustrated in <ref type="figure" target="#fig_1">Figure 3</ref>. We wish to handle the multi-modal nature of this problem for two reasons. Firstly, when there are multi-modal outputs, the optimal least squares solution for regression is to produce the mean of the modes. This is undesirable because the mean may either be unlikely or off the manifold of representations. Secondly, reasoning about uncertain outcomes can be important for some applications of future prediction.</p><p>We therefore extend deep regression networks to produce multiple outputs. Suppose that there are K possible output vectors for one input frame. We can support multiple outputs by training a mixture of K networks, where each mixture is trained to predict one of the modes in the future. Given input x i t , network k will produce one of the outputs g k (x i t ).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Learning</head><p>To train multiple regression networks, we must address two challenges. Firstly, videos only show one of the possible futures (videos like <ref type="figure" target="#fig_1">Figure 3</ref> are rare). Secondly, we do not know to which of the K mixtures each frame belongs. We overcome both problems by treating the mixture assignment for a frame as latent.</p><p>Let z i t ∈ {1, . . . , K} be a latent variable indicating this assignment for frame t in video i. We first initialize z uniformly at random. Then, we alternate between two steps. First, we solve for the network weights w end-to-end using backpropagation assuming z is fixed:</p><formula xml:id="formula_3">ω * = argmin ω i,t g z i t x i t ; ω − φ x i t+∆ 2 2<label>(2)</label></formula><p>Then, we re-estimate z using the new network weights:</p><formula xml:id="formula_4">z i t = argmin k∈{1,...,K} g k x i t ; ω − φ x i t+∆ 2 2<label>(3)</label></formula><p>We alternate between these two steps several times, a process that typically takes two days. We learn w with warm starting, and let it train for a fixed number of iterations before updating z. We illustrate this network in <ref type="figure" target="#fig_0">Figure 2</ref>.</p><p>Although we train our network offline in our experiments, we note our network can be also be trained online with streaming videos. Online learning is attractive because the network can continuously learn how to anticipate the future without storing frames. Additionally, the model can adapt in real time to the environment, which may be useful in some applications.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.5.">Predicting Categories</head><p>Since our network uses unlabeled videos to predict a representation in the future, we need a way to attach semantic category labels to it. To do this, we use a relatively small set of labeled examples from the target task to indicate the category of interest. As the representation that we predict is the same that is used by state-of-the-art recognition systems, we can apply standard recognition algorithms to the predicted representation in order to forecast a category.</p><p>We explore two strategies for using recognition algorithms on the predicted representations. The first strategy uses a visual classifier trained on the standard features (we use fc7) from frames containing the category of interest, but applies it on a predicted representation. The second strategy trains the visual classifier on the predicted representations as well. The second strategy has the advantage that it can adapt to structured errors in the regression.</p><p>During inference, our model will predict multiple representations of the future. By applying category classifiers to each predicted representation, we will obtain a distribution for how likely categories are to happen in each future representation. We marginalize over these distributions to obtain the most likely category in the future.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.6.">Implementation</head><p>Our network architecture consists of 5 convolutional layers followed by 5 fully connected layers. We use ReLU nonlinear activations throughout the network. The convolutional part follows the AlexNet architecture, and we refer readers to <ref type="bibr" target="#b18">[19]</ref> for complete details. After the convolutional layers, we have 5 fully connected layers each with 4096 hidden units.</p><p>The K networks (for each output) can either be disjoint or share parameters between them. In our experiments, we opted to use the following sharing strategy in order to reduce the number of free parameters. For the five convolutional layers and first two hidden layers, we tie them across each mixture. For the last three fully connected layers, we interleave hidden units: we randomly commit each hidden unit to a network with probability p = 1 2 , which controls the amount of sharing between networks. We do this assignment once, and do not change it during learning.</p><p>We trained the networks jointly with stochastic gradient descent. We used a Tesla K40 GPU and implemented the network in Caffe <ref type="bibr" target="#b13">[14]</ref>. We modified the learning procedure to handle latent variables. We initialized the first seven layers of the network with the Places-CNN network weights <ref type="bibr" target="#b44">[45]</ref>, and the remaining layers with Gaussian white noise and the biases to a constant. During learning, we also used dropout <ref type="bibr" target="#b34">[35]</ref> with a dropout ratio of 1 2 on every fully con- <ref type="figure">Figure 4</ref>: Unlabeled Videos: We collected more than 600 hours of unlabeled video from YouTube. We show a sample of the frames above. We use this data to train deep networks that predict visual representations in the future.</p><p>nected layer. We used a fixed learning rate of .001 and momentum term of 0.9.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>In this section, we experiment with how well actions and objects can be forecasted using the predicted representations. We show results for forecasting basic human actions one second before they start, and anticipating household objects five seconds before they appear.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Unlabeled Repository</head><p>In order to train our network to predict features, we leverage a large amount of unlabeled video. We experimented with two sources of unlabeled videos:</p><p>Television Shows: We downloaded over 600 hours of publicly available television shows from YouTube. To pick the set of television shows, we used the top shows according to Google. The videos we downloaded generally consist of people performing a large variety of everyday actions, such as eating or driving, as well as interactions with objects and other people. We show a few example frames of these videos in <ref type="figure">Figure 4</ref>. We use this repository in most of our experiments. Since we test on different datasets, one concern is that there may be videos in the repository that also appear in a testing set. To check this, we queried for nearest neighbors between this repository and all testing sets, and found no overlap.</p><p>THUMOS: We also experimented with using videos from the THUMOS challenge <ref type="bibr" target="#b8">[9]</ref>, which consists of 400 hours of video from the web. These videos tend to be tutorials and sports, which has a different distribution from television shows. We only use THUMOS as a diagnostic dataset to quantify the performance of our method when the training distribution is very different from the testing set.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Baselines</head><p>Our goal in this paper is to learn from unlabeled video to anticipate high-level concepts (specifically actions and objects) in the future. Since our method uses minimal supervision to attach semantic meaning to the predicted repre-sentation, we compare our model against baselines that use a similar level of supervision. See <ref type="table">Table 1</ref> for an overview of the methods we compare.</p><p>SVM: One reasonable approach is to train a classifier on the frames before the action starts to anticipate the category label in the future. This baseline is able to adapt to contextual signals that may suggest the onset of an action. However, since this method requires annotated videos, it does not capitalize on unlabeled video.</p><p>MMED: We can also extend the SVM to handle sequential data in order to make early predictions. We use the code out-of-the-box provided by <ref type="bibr" target="#b10">[11]</ref> for this baseline.</p><p>Nearest Neighbor: Since we have a large unlabeled repository, one reasonable approach is to search for the nearest neighbor, and use the neighbor's future frame as the predicted representation, similar to <ref type="bibr" target="#b42">[43]</ref>.</p><p>Linear: Rather than training a deep network, we can also train a linear regression on our unlabeled repository to predict fc7 in the future.</p><p>Adaptation: We also examine two strategies for training the final classifier. One way is to train the classifier on the ground truth regression targets, and test it on the inferred output of the regression. The second way is to adapt to the predictions by also training the classifier on the inferred output of the regression. The latter can adapt to the errors in the regression.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Forecasting Actions</head><p>Dataset: In order to evaluate our method for action forecasting, we require a labeled testing set where a) actions are temporally annotated, b) we have access to frames before the actions begin, and c) consist of everyday human actions (not sports). We use the TV Human Interactions dataset <ref type="bibr" target="#b24">[25]</ref> because it satisfies these requirements. The dataset consists of people performing four different actions (hand shake, high five, hug, and kissing), with a total of 300 videos.</p><p>Setup: We run our predictor on the frames before the annotated action begins. We use the provided train-test splits with 25-fold cross validation. We evaluate classification accuracy (averaged across cross validation folds) on making predictions one second before the action has started. To attach semantic meaning to our predicted representation, we use the labeled examples from the training set in <ref type="bibr" target="#b24">[25]</ref>. As we make multiple predictions, for evaluation purposes we consider a prediction to be correct only if the ground truth action is the most likely prediction under our model.</p><p>Results: <ref type="table">Table 2</ref> shows the classification accuracy of different models for predicting the future action one second into the future given only a single frame. Our results suggest that training deep models to predict future representations with unlabeled videos may help machines forecast actions, obtaining a relative gain of 19% over baselines.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Regression</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Classifier Method</head><p>Feature <ref type="table">Train Data Method  Output  K  Frame  Data  Method  SVM Static  fc7  ---1 During  RO  SVM  SVM  fc7  ---1  Before  RO  SVM  MMED  fc7  ---1</ref>  To train the regression (if any), we specify which source of unlabeled videos we use (UV for our repository, or THUMOS), the method, the regression target output, and the number of outputs K. This is then fed into the classifier, which uses labeled data. To train the classifier, we specify which frame to train the classifier on (during action, or before action), the regression input (RI) or output (RO), and the classifier. During testing, the procedure is the same for all models.  <ref type="table">Table 2</ref>: Action Prediction: Classification accuracy for predicting actions one second before they begin given only a single frame. The standard deviation across cross-validation splits is next to the accuracy.</p><p>We conjecture our network may obtain the stronger performance partly because it can better predict the future fc7.</p><p>The mean Euclidean distance between our model's regres-sions and the actual future is about 1789, while regressing the identity transformation is about 1907 and a linear regression is worse, around 2328. Human Performance: To establish an upper expectation for the performance on this task, we also had 12 human volunteers study the training sets and make predictions on our testing set. Human accuracy is good (an average human correctly predicts 71% of the time), but not perfect due to the uncertain nature of the task. We believe humans are not perfect because the future has inherent uncertainty, which motivates the need for models to make multiple predictions. Interestingly, we can use the "wisdom of the crowds" to ensemble the human predictions and evaluate the majority vote, which obtains accuracy (85%).</p><p>We also performed several experiments to breakdown the performance our method. Different Representations:</p><p>We also tried to train a deep network to forecast Action-Bank <ref type="bibr" target="#b33">[34]</ref> in the future instead of fc7, which performed worse. Representations are richer than action labels, which may provide more constraints during learning that can help build more robust models <ref type="bibr" target="#b9">[10]</ref>. Different Training Sets: We also evaluated our network trained on videos that are not television shows, such as sports and tutorials. When we train our network with videos from THUMOS <ref type="bibr" target="#b8">[9]</ref> instead of our repository, we still obtain competitive performance, suggesting our method may be robust to some dataset biases. However, adaptation becomes more important for THUMOS, likely because the classifier must adapt to the dataset bias. Different Intervals: We also evaluated our <ref type="figure">Figure 5</ref>: Example Action Forecasts: We show some examples of our forecasts of actions one second before they begin. The left most column shows the frame before the action begins, and our forecast is below it. The right columns show the ground truth action. Note that our model does not observe the action frames during inference. model varying the time before the action starts in <ref type="figure" target="#fig_2">Figure 6</ref>. The relative gain of our method is often better as the predic- tion time frame increases. Multiple Predictions: Since we learn a mixture of networks, our model can make diverse predictions when the future is uncertain. To analyze this, <ref type="figure">Figure 7</ref> shows a scene and a distribution of possible future actions. For example, consider the first row where the man and woman are about to embrace, however whether they will kiss or hug is ambiguous. In our model, two of the networks predict a representation where kissing is the most likely future action, but one network predicts a representation where the most  Qualitative Results: We qualitatively show some of our predictions in <ref type="figure">Figure 5</ref>. For example, in some cases our model correctly predicts that a man and woman are about to kiss or hug or that men in a bar will high five. The second to last row shows a comic scene where one man is about to handshake and the other is about to high five, which our model confuses. In the last row of <ref type="figure">Figure 5</ref>, our model incorrectly forecasts a hug because a third person unexpectedly enters the scene.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Forecasting Objects</head><p>Dataset: Since our method predicts a visual representation in the future, we wish to understand how well we can anticipate concepts other than actions. We experimented with forecasting objects in egocentric videos five seconds before the object appears. We use the videos from Activities of the Daily Living dataset <ref type="bibr" target="#b28">[29]</ref>, which is one of the largest datasets of egocentric videos from multiple people. Anticipating objects in this dataset is challenging because even recognizing objects in these videos is difficult <ref type="bibr" target="#b28">[29]</ref>.</p><p>Setup: In order to train our deep network on egocentric videos, we reserved three fourths of the dataset as our repository for self-supervised learning. We evaluate on the remaining one fourth videos, performing leave-one-out to learn future object category labels. Since multiple objects can appear in a frame, we evaluate the average precision for forecasting the occurrence of objects five seconds before they appear, averaged over leave-one-out splits.</p><p>Baselines: We compare against baselines that are similar to our action forecasting experiments. However, we add an additional baseline that uses scene features <ref type="bibr" target="#b44">[45]</ref> to anticipate objects. One hypothesis is that, since most objects are correlated with their scene, recognizing the scene may be a good cue for predicting the onset of objects. We use an SVM trained on state-of-the-art scene features <ref type="bibr" target="#b44">[45]</ref>.</p><p>Results: <ref type="table" target="#tab_3">Table 3</ref> shows average precision for our method versus the baselines on forecasting objects five seconds into the future. For the many of the object categories, our model outperforms the baselines at anticipating objects, with a mean relative gain of 30% over baselines. Moreover, our model with multiple outputs improves over a single output network, suggesting that handling uncertainty in learning is helpful for objects too. The adapted and off-the-shelf networks perform similarly to each other in the average. Finally, we also qualitatively show some high scoring object predictions in <ref type="figure">Figure 8</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>The capability for machines to anticipate future concepts before they begin is a key problem in computer vision that will enable many real-world applications. We believe abundantly available unlabeled videos are an effective resource we can use to acquire knowledge about the world, which we can use to learn to anticipate future.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 2 :</head><label>2</label><figDesc>Network Diagram:</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 3 :</head><label>3</label><figDesc>Multiple Futures: Since the future can be uncertain, our model anticipates multiple possibilities.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 6 :</head><label>6</label><figDesc>Performance vs ∆: We plot performance on forecasting actions versus number of frames before the action starts. Our model (red) performs better when the time range is longer (left of plot). Note that, since our model takes days to train, we evaluate our model trained for one second, but evaluate on different time intervals. The baselines are trained for each time interval.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 7 :Figure 8 :</head><label>78</label><figDesc>Multiple Predictions: Given an input frame (left), our model predicts multiple representations in the future that can each be classified into actions (middle). When the future is uncertain, each network can predict a different representation, allowing for multiple action forecasts. To obtain the most likely future action, we can marginalize the distributions from each network (right). Example Object Forecasts: We show examples of high scoring forecasts for objects. The left most frame is five seconds before the object appears.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head></head><label></label><figDesc>MethodMean dish door utensil cup oven person soap tap tbrush tpaste towel trashc tv remote</figDesc><table>Random 
+1.2 1.2 2.8 1.1 2.4 1.6 0.8 1.5 2.1 0.2 
+0.3 0.6 1.1 0.5 0.3 
+SVM Static 
+6.4 2.6 15.4 2.9 5.0 9.4 6.9 11.5 17.6 1.6 
+1.0 1.5 6.0 2.0 5.9 
+SVM 
+5.3 3.0 8.2 5.2 3.6 8.3 12.0 6.7 11.7 3.5 
+1.5 4.9 1.3 0.9 4.1 
+Scene 
+8.2 3.3 18.5 5.6 3.6 18.2 10.8 9.2 6.8 8.0 
+8.1 5.1 5.7 2.0 10.3 
+Scene, Adapted 
+7.5 4.6 9.1 6.1 5.7 15.4 13.9 5.0 15.7 13.6 
+3.7 6.5 2.4 1.8 1.7 
+Linear 
+6.3 7.5 9.3 7.2 5.9 2.8 1.6 13.6 15.2 3.9 
+5.6 2.2 2.9 2.3 7.8 
+Linear, Adapted 
+5.3 2.8 13.5 3.8 3.6 11.5 11.2 5.8 4.9 5.4 
+3.3 3.4 1.6 2.1 1.0 
+Deep K=1 
+9.1 4.4 17.9 3.0 14.8 11.9 9.6 17.7 15.1 6.3 
+6.9 5.0 5.0 1.3 8.8 
+Deep K=1, Adapted 
+8.7 3.5 11.0 9.0 6.5 16.7 16.4 8.4 22.2 12.4 
+7.4 5.0 1.9 1.6 0.5 
+Deep K=3 
+10.7 4.1 22.2 5.7 16.4 17.5 8.4 19.5 20.6 9.2 
+5.3 5.6 4.2 8.0 2.6 
+Deep K=3, Adapted 10.1 3.5 14.7 14.2 6.7 14.9 15.8 8.6 29.7 12.6 
+4.6 10.9 1.8 1.4 1.9 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 3 :</head><label>3</label><figDesc>Object Prediction: We show average precision for forecasting objects five seconds before they appear in egocentric videos. For most categories, our method improves prediction performance. The last column is the mean across all categories.likely action is hugging. The other rows show similar scenarios. Since performance drops when K = 1, modeling multiple outputs may be important both during learning and inference.</figDesc><table></table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements: We thank members of the MIT vision group for predicting the future on our test set. We thank TIG for managing our computer cluster, especially Garrett Wollman for troubleshooting many data storage issues. We gratefully acknowledge the support of NVIDIA Corporation with the donation of the Tesla K40 GPU used for this research. This work was supported by NSF grant IIS-1524817, and by a Google faculty research award to AT, and a Google PhD fellowship to CV.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Watching unlabeled video helps learn new human actions from very few labeled snapshots</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-Y</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Grauman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Shrivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Neil</surname></persName>
+		</author>
+		<title level="m">Extracting visual knowledge from web data. ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Learning everything about anything: Webly-supervised visual concept learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">K</forename><surname>Divvala</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Unsupervised visual representation learning by context prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Doersch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>ICCV</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">What makes paris look like paris?</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Doersch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Singh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Graph</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title level="m" type="main">Decaf: A deep convolutional activation feature for generic visual recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv</note>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Predicting object dynamics in scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">F</forename><surname>Fouhey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Multi-hypothesis motion planning for visual object tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Gong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Likhachev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shi</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">THUMOS challenge: Action recognition with a large number of classes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gorban</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Distilling the knowledge in a neural network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Max-margin early event detectors. IJCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hoai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>De La</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Torre</forename></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Action-reaction: Forecasting the dynamics of human interaction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D.-A</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">M</forename><surname>Kitani</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>ECCV</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Learning actions from the web. ICCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Ikizler-Cinbis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">G</forename><surname>Cinbis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sclaroff</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<title level="m">Convolutional architecture for fast feature embedding. arXiv</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Reconstructing storyline graphs for image recommendation from web community photos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">P</forename><surname>Xing</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">M</forename><surname>Kitani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">D</forename><surname>Ziebart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">A</forename><surname>Bagnell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+		<title level="m">Activity forecasting. ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Context-based pedestrian path prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">F P</forename><surname>Kooij</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Schneider</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Flohr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">M</forename><surname>Gavrila</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>ECCV</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Anticipating human activities using object affordances for reactive robotic response</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Koppula</surname></persName>
+			<affiliation>
+				<orgName type="collaboration">RSS</orgName>
+			</affiliation>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Saxena</surname></persName>
+			<affiliation>
+				<orgName type="collaboration">RSS</orgName>
+			</affiliation>
+		</author>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Predicting the future behavior of a timevarying probability distribution</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">H</forename><surname>Lampert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">A hierarchical representation for future action prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>ECCV</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Building high-level features using large scale unsupervised learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><forename type="middle">V</forename><surname>Le</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICML</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Track to the future: Spatio-temporal video segmentation with long-range motion cues</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lezama</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Deep learning from temporal coherence in video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Mobahi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Collobert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Weston</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Patron-Perez</surname></persName>
+		</author>
+		<title level="m">High five: Recognising human interactions in tv shows. BMVC</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Parsing video events with goal inference and intent prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-C</forename><surname>Zhu</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+			<publisher>ICCV</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">Seeing the arrow of time</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">C</forename><surname>Pickup</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">L</forename><surname>Pintea</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note>Déjà vu. ECCV</note>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">Detecting activities of daily living in first-person camera views</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Pirsiavash</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title level="m" type="main">Leveraging archival video for building face datasets. ICCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Baker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kakade</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+		<title level="m" type="main">Video (language) modeling: a baseline for generative models of natural videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ranzato</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv</note>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+		<title level="m" type="main">Cnn features off-the-shelf: an astounding baseline for recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">S</forename><surname>Razavian</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv</note>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+		<title level="m" type="main">Human activity prediction: Early recognition of ongoing activities from streaming videos. ICCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ryoo</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+		<title level="m" type="main">Action bank: A high-level representation of activity in video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sadanand</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Corso</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+		<title level="m" type="main">Dropout: A simple way to prevent neural networks from overfitting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>JMLR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+		<title level="m" type="main">Unsupervised learning of video representations using lstm</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv</note>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<monogr>
+		<title level="m" type="main">80 million tiny images: A large data set for nonparametric object and scene recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+			<publisher>PAMI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title level="m" type="main">Predicting actions from static scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-H</forename><surname>Vu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Olsson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Laptev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>ECCV</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">Patch to the future: Unsupervised visual prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Walker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<monogr>
+		<title level="m" type="main">Dense optical flow prediction from a static image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Walker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv</note>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<monogr>
+		<title level="m" type="main">Unsupervised learning of visual representations using videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv</note>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<monogr>
+		<title level="m" type="main">Inferring&quot; dark matter&quot; and&quot; dark energy&quot; from videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Todorovic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-C</forename><surname>Zhu</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<publisher>ICCV</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<monogr>
+		<title level="m" type="main">A data-driven approach for event prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yuen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+			<publisher>ECCV</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<monogr>
+		<title level="m" type="main">Exploiting image-trained cnn architectures for unconstrained video classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zha</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv</note>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Learning deep features for scene recognition using places database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zhou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

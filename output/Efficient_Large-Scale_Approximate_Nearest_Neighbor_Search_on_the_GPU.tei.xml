@@ -1,0 +1,532 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Efficient Large-scale Approximate Nearest Neighbor Search on the GPU</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Patrick</forename><surname>Wieschollek</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">University of Tübingen</orgName>
+							</affiliation>
+							<affiliation key="aff3">
+								<orgName type="department">Max Planck Institute for Intelligent Systems</orgName>
+								<address>
+									<settlement>Tübingen</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Oliver</forename><surname>Wang</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="institution">Adobe Systems Inc</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><surname>Sorkine-Hornung</surname></persName>
+							<affiliation key="aff2">
+								<orgName type="department">Disney Research</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hendrik</forename><forename type="middle">P A</forename><surname>Lensch</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">University of Tübingen</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Efficient Large-scale Approximate Nearest Neighbor Search on the GPU</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:40+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We present a new approach for efficient approximate nearest neighbor (ANN) search in high dimensional spaces, extending the idea of Product Quantization. We propose a two level product and vector quantization tree that reduces the number of vector comparisons required during tree traversal. Our approach also includes a novel highly parallelizable re-ranking method for candidate vectors by efficiently reusing already computed intermediate values.</p><p>Due to its small memory footprint during traversal the method lends itself to an efficient, parallel GPU implementation. This Product Quantization Tree (PQT) approach significantly outperforms recent state of the art methods for high dimensional nearest neighbor queries on standard reference datasets. Ours is the first work that demonstrates GPU performance superior to CPU performance on high dimensional, large scale ANN problems in time-critical real-world applications, like loop-closing in videos.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Finding the nearest neighbors (NN) of a query vector in a high dimensional space is a fundamental task in computer vision. For a given query vector y ∈ R D , the nearest neighbor problem consists of finding an element N (y) ∈ X from a predefined fixed set X ⊂ R D , which minimizes a distance metric, most commonly the Euclidean distance d(·) := · 2 . This NN-problem can be written as N (y) = arg min x∈X d(y, x).</p><p>In many computer vision tasks these query vectors represent visual descriptors, meaning both D as well as X are often large, leading to NN searches being a significant computational bottleneck in many applications. This is due to the necessity of computing exact distances in a high dimensional space between many pairs of vectors, a problem ex-acerbated by the phenomenon known as the curse of dimensionality. More precisely, consider a D-dimensional hyper unit-cube enclosing X . To explore a ν fraction of the volume, we need to visit a ν 1/D percent of each hyper-cube edge. This means that to explore 10% of a set of SIFTvectors (D = 128) in a hypercube, one has to search an interval covering ≈ 98% of the possible values per coordinate. Due to this computational complexity, most applications rely on approximate nearest-neighbor (ANN) search techniques, which try to find the nearest neighbor with a high probability. There exists many CPU-approaches for computing ANN in the literature, the most common of which are KD-trees <ref type="bibr" target="#b5">[6]</ref>, which hierarchically subdivide the vector space. While these methods are widely used in graphics and vision, it has been shown that KD-trees are no more efficient than brute force searches when D is large <ref type="bibr" target="#b8">[9]</ref>. The FLANN software package <ref type="bibr" target="#b15">[16]</ref> proposes randomized KDforests and K-Means trees, which prune the overall search space by identifying small regions around the query vectors, yielding better performance with higher dimensional vectors.</p><p>Another family of approaches are based on Locality Sensitive Hashing (LSH) <ref type="bibr" target="#b4">[5]</ref>. These methods hash database vectors with a number of random projections, and perform nearest distance checks only on vectors that are hashed to the same bin. The speed and accuracy of such methods depends on the hashing function used. Andoni and Indyk <ref type="bibr" target="#b0">[1]</ref> describe a family of hashing functions which are near-optimal. These ideas have since been extended into the image domain for patch-based nearest neighbor computation <ref type="bibr" target="#b12">[13]</ref>. While these methods work well, they have not yet achieved the same performance as space partitioning methods <ref type="bibr" target="#b15">[16]</ref>.</p><p>While leveraging GPU parallelism seems obvious, in practice accelerating ANN search techniques using GPU parallelism is notoriously difficult, largely due to the memory restrictions of GPUs when compared to the amount of RAM available to CPUs. As a result, existing GPUbased methods often implement brute force approaches, are limited to small datasets of up to 225 candidate neighbors <ref type="bibr" target="#b17">[18]</ref> or can handle only 3-dimensional vectors <ref type="bibr" target="#b15">[16]</ref>, making these approaches unsuited for many vision problems. Our method is designed to be highly parallel, and can be easily implemented on a GPU for significant improvements in query time, while even a CPU version is competitive to previous methods.</p><p>In general, ANN searches are composed of an offline phase, containing all query-independent computations like building an indexing structure of the dataset; and an online phase which comprises all query-dependent computations. However, reported results from previous state-of-the-art methods <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b1">2]</ref> excluded expensive query-dependent pre-computations from the timing of their online-phase. This does not give a reasonable expectation of running time, as in nearly all applications, the query vector y is unknown until the query request, and cannot be precomputed in an offline phase. Therefore, we include all query-dependent computation steps in our timing results, in order to give a better indication as to running times achievable for real applications.</p><p>Vector Quantization (VQ) <ref type="bibr" target="#b13">[14]</ref> is a simple method that clusters the search space into a number of bins based on the distance to the cluster centroid. If a query vector is quantized to a bin, all other vectors in that bin are likely to be good candidates for being the nearest neighbor. Unfortunately, if a query lies at the edge of a bin, one has to consider all neighboring bins as well, and the number of neighbors to each Voronoi cell increases exponentially w.r.t to the dimension D of the space.</p><p>The concept of Product Quantization (PQ) was introduced in <ref type="bibr" target="#b11">[12]</ref> and made popular in the computer vision community by Jegou et al. <ref type="bibr" target="#b8">[9]</ref>. Several state-of-the-art ANN approaches extend these ideas, such as locally optimized product quantization <ref type="bibr" target="#b10">[11]</ref> and the inverted multi-index <ref type="bibr" target="#b3">[4]</ref>. These methods currently provide the most efficient techniques for ANN search for high dimensional data, in terms of speed, accuracy, and memory requirements. In general, PQ based approaches consist of the following three main steps: (1) a robust proposal mechanism is used to identify a list of nearest neighbor candidates in the database (similar to the vectors from a bin in the VQ example), (2) a re-ranking step then sorts these candidates according to their ascending approximate distances to the query vector. Finally, the approximated k-nearest vectors after re-ranking are further sorted using (3) an exact distance calculation.</p><p>We present an extension to the family of PQ methods called the Product Quantization Tree (PQT). The main contributions of our approach are: a two level product and quantization tree that requires significantly fewer exact distance tests than prior work; a relaxation of the Dijkstra-Algorithm for an effective bin traversal order; a fast, reranking step to approximate exact distances between query and database points in constant time O(P ), where a query vector is split into P parts; and a highly optimized GPU based open-source implementation.</p><p>In this work, we compare our method using a common benchmark, BigANN <ref type="bibr" target="#b8">[9]</ref>, which consists of 1 billion 128dimensional SIFT-vectors and 10000 query vectors. This dataset is challenging due to the infeasibility of an exhaustive search, as well as the sheer size of the data (just storing the database vectors requires 132 GB of memory). At comparable approximation quality the GPU implementation achieves significant speed-up over prior work. We provide source code of our approach to encourage the development of new applications that require high-performance ANN queries.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Background</head><p>Our approach builds on PQ <ref type="bibr" target="#b8">[9]</ref>, which we describe here, followed by a description of the most related work to ours. Let X = {x 1 , . . . , x n } be a finite set of database vectors x i ∈ R D . Without loss of generality we consider the Euclidean space (X, d), however our approach can be used with any arbitrary metric d.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Vector and Product Quantization</head><p>In vector quantization (VQ), each vector x ∈ R D is encoded by a codebook C = {c 1 , . . . , c k } of k centroids with the mapping: c : X → C, x → c(x) := arg min c∈C d(x, c), In other words, each vector is represented by its closest centroid in the codebook. The set C k = {x ∈ R D |c(x) = c k } is called the cluster or bin for centroid c k . This quantization of vectors introduces an approximation error, but allows for quick retrieval of a similar set of vectors C k , i.e., all those that are quantized to the same bin as the query. Classical Lloyd iterations <ref type="bibr" target="#b14">[15]</ref> can be used on a subset of the original data to efficiently find a good codebook C.</p><p>In PQ, the high dimensional vector space is transformed into a product space, whose subspaces are then quantized using VQ. Under the assumption that D = P · m for some P, m ∈ N we can write x ∈ R P ·m as the concatenation of P vector parts</p><formula xml:id="formula_1">x = ([x] 1 , [x] 2 , . . . , [x] P ) T with [x] i ∈ R m .</formula><p>This allows for exponentially large codebook generation by encoding x ∈ R D into a Cartesian product of subspaces C = C 1 × C 2 × · · · × C P , with k P bins, while only requiring space for k · P centroids (see <ref type="figure" target="#fig_1">Figure 1d</ref>) . Increasing the number of bins enables a much finer granularity for the query process, and so the vectors in each single bin have a significant higher correlation. The canonical projection is a mapping of each part  Our method use the hierarchy of two quantization levels, first using PQ with a low number of centroids, and then a second-layer of PQ within these bins (d). Points drawn as are PQ centroids, and each corresponding cluster is split again into finer 4 clusters (2 on each axis) with centroids illustrated as .</p><p>to its nearest part-centroid. The nearest centroid c(x) ∈ C for x ∈ R D is the concatenation of the sub-centroids</p><formula xml:id="formula_2">c(x) = (c 1 (x), c 2 (x), . . . , c p (x)) T .<label>(3)</label></formula><p>Finding a good quantizer c(·) for X is distributed into finding P codebooks C 1 , C 1 , . . . , C P independently, which can also be done using Lloyd iterations. Note that when setting P = 1, Product Quantization becomes Vector Quantization. While it is indeed easy to produce exponentially many (in terms of P ) clusters using PQ, most will be empty because of the dataset distribution (see supplementary material). However, if we assume that the set of query vectors has a similar distribution as the set of database vectors, we can expect that most queries will also correspond to nonempty clusters. Nonetheless, we still must be able to deal with clusters of highly diverse cardinality as illustrated in <ref type="figure" target="#fig_1">Figure 1</ref>.</p><p>For a better quantization, the authors of <ref type="bibr" target="#b6">[7]</ref> proposed to augment PQ using the mapping</p><formula xml:id="formula_3">c : X → C, x → c(x) := arg min c∈C d(Rx, c),<label>(4)</label></formula><p>where R ∈ R D×D is a rotation matrix. However, this re-quires a high dimensional matrix multiplication for rotating the query for each visited cluster, which is expensive even for a GPU implementation. We note that the authors of <ref type="bibr" target="#b10">[11]</ref> pre-compute all possible projections Ry i of the query vectors in the offline phase, but this approach is only practical when query vectors are known beforehand.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Inverted file system</head><p>For a query vector y ∈ R D , the approach of <ref type="bibr" target="#b8">[9]</ref> proposes an inverted index system with an asymmetric distance computation. This consists of an initial VQ step that acts as a coarse quantizer with a codebook of k centroids to extract a set of candidates vectors (k = 8192 clusters are used <ref type="bibr" target="#b8">[9]</ref>). The number of candidates is empirically set to 0.05% of the database size to achieve a recall ≥ 0.9 by visiting 64 clusters. This corresponds to 524288 candidate vectors for each query in the BigANN database. This approach requires k exact D-dimensional distance calculations for each query vector y to identify reasonable clusters. The centroids are then sorted based on distances, and the w-best clusters are chosen, giving a list of database vectors L c ⊂ X which have a high chance of containing the nearest neighbor.</p><p>These vectors are again sorted in a re-ranking step based on PQ of the expensive residual-computation r w = y − c w to the identified cluster c w , which is precomputed in <ref type="bibr" target="#b8">[9]</ref>, <ref type="bibr" target="#b10">[11]</ref> and stored in a distance lookup-table. Again, this precomputation is only possible when query vectors are known in advance.</p><p>The distance between the query vector y ∈ R D and each nearest neighbor candidate x ∈ L c can be approximated by quantizing the residual using a second PQ codebook with k 2 words. Re-ordering the list L c → L s and considering the first few vectors L ′ s ⊂ L s , an exhaustive search in L ′ s becomes feasible. The lookup and re-ranking steps when visiting w clusters requires k 1 + w · k 2 exact distance calculations during query time. With typical values of k 1 = 8192, w = 64, k 2 = 256, this implies 24576 distance calculations.</p><p>Our hierarchical approach reduces the total number of exact distance calculations to less than 200. On a modern NVIDIA Titan X computing 16k exact distances is 62 times slower (0.13 ms) than 256 exact distance computations (0.0021 ms). Hence, the number of exact vector comparison would become a bottleneck. A complete query in our algorithm only takes about 0.02 ms due to an efficient index structure and the parallel nature of our approach.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.">Inverted multi-index (IMI)</head><p>The inverted multi-index <ref type="bibr" target="#b3">[4]</ref> exploits PQ rather than VQ for an indexing structure over all database vectors, which reduces the number of centroid-distance calculation for cluster proposals or vise-versa increases the number bins: Given part distances to k codebook vectors, for each part [y] p of the query vector this approach sorts the corresponding k centroids w.r.t. to the ascending distances</p><formula xml:id="formula_4">[y] 1 → {i 10 , i 11 , i 12 , . . . , i 1k−1 } = I 1 [y] 2 → {i 20 , i 21 , i 22 , . . . , i 2k−1 } = I 2 . . . . . . . . . . . . . . . [y] P → {i P 0 , i P 1 , i P 2 , . . . , i P k−1 } = I P ,</formula><p>where i 23 is the ID of the 3rd nearest cluster for part 2. The combined cluster IDs of all parts encoded a bin ID via a multi-index</p><formula xml:id="formula_5">i ∈ I 1 × I 2 × · · · × I P .<label>(5)</label></formula><p>For NN-search, starting with bin B i , i = (i 10 , i 20 , . . . , i P 0 ) a heuristic is needed to traverse all bins B i in the vicinity. The authors of <ref type="bibr" target="#b3">[4]</ref> make use of a priority queue to dynamically select the next closest not yet visited bin until sufficiently many bins/vectors are proposed. All vectors stored in each visited bin B i are then examined in an exhaustive search using PQ-based re-ranking of the residual to each bin centroid.</p><p>Both methods <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b3">4]</ref> achieve state-of-the-art precision but have efficiency issues when making a query. VQ-based indexing requires a very large number of full dimensionality codebook vector comparisons, and even for PQ-based indexing the number is still large. PQ-based indexing is hindered by a slow enumeration of the next best bin <ref type="bibr" target="#b3">[4]</ref>. Additionally, both methods require quantizing the residual within each bin for re-ranking; this is accelerated by precomputing the residual quantization for each part in <ref type="bibr" target="#b3">[4]</ref>, however with unknown query vectors, this optimization can not be made.</p><p>We address these issues by introducing a Product Quantization Tree (Sec. 3). Our approach presents an efficient heuristic for proposing bins (Sec. 3.2), as well as a novel reranking method based on projections to quantized lines for re-ranking (Sec. 3.3). Our re-ranking step is especially efficient as it can simply reuse distance calculations computed during the tree traversal. Finally, we demonstrate that our approach can be efficiently implemented on a GPU using CUDA (Sec. 4).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Product Quantization Tree</head><p>The Product Quantization Tree (PQT) is built upon a combination of the inverted multi-index and hierarchical PQ. The main idea is that product quantization is performed using a hierarchical VQ-tree <ref type="bibr" target="#b15">[16]</ref> for each part rather than a flat codebook. The tree structure on the centroids speeds up the query (online), sorting into the database (offline), and indexes considerably more bins in contrast to the inverted multi-index. Additionally, it is designed to enable the reuse of computed values for fast re-ranking. </p><formula xml:id="formula_6">[c 0 ] 1 VQ [c 1 ] 1 VQ [c 2 ] 1 VQ [c 3 ] 1 VQ [c 0 ] 2 VQ [c 1 ] 2 VQ [c 2 ] 2 VQ [c 3 ] 2 VQ PQ k1 = 4 refinement k2 = 5 refinement k2 = 5 search space x [x] 1 [x] 2</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Tree structure -offline phase</head><p>Sorting each database vector x ∈ X into a bin B ℓ gives disjoint sets, X = · K k=1 B k . We describe how to effectively map a vector into a bin, m : X → I 1 × I 2 × · · · × I P .</p><p>The indexing structure is a tree which consists of two levels of quantizers. The first level is a traditional P -parts product quantizer with k 1 centroids for each part. Each resulting part cluster is then independently refined by one additional vector quantizer with k 2 centroids as illustrated in <ref type="figure" target="#fig_2">Figure 2</ref>. The bins are addressed by any combination of the per-part child node centroids. This gives K = (k 1 · k 2 ) P bins in total.</p><p>Training the codebook. Constructing the VQ-trees is done independently for each part, first by constructing a VQ codebook (level 1) using Lloyd iteration in the fashion of the Linde-Buzo-Gray algorithm <ref type="bibr" target="#b13">[14]</ref> and then quantizing all sub-vectors (level 2) assigned to a first level cluster.</p><p>While the inverted multi-index approach <ref type="bibr" target="#b3">[4]</ref> also uses two levels of product quantization, the second is exclusively used for re-ranking. As opposed to this, we use two levels for indexing. While additional tree levels are possible, we empirically found this configuration to be optimal in terms of balancing the number of bins to check with the reduction of candidate vectors.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Query -online phase</head><p>A query now consist of four steps: tree traversal, bin proposal, vector proposal, and re-ranking.</p><p>The tree traversal is carried out as described above producing an ordered list of (i, d) 2 p for the best subset of level 2 clusters. Tree Traversal. The tree reduces the number of exact distance computations required during traversal by pruning. After comparing to all k 1 first-level codebook vectors, the distances are sorted, and only the w best clusters are refined for further distance calculations for the level 2 codebook. Let y ∈ R D be the query vector, distances d([y] p , c 1 p ) to the k 1 first-level . in the first level are computed separately for each part. This step returns a set of IDs and distance pairs</p><formula xml:id="formula_7">{(i, d ′ ) 1 p | d ′ = d([y] p , c 1 i p )}<label>(6)</label></formula><p>for each part p and each level 1 centroid. From these possible per-part clusters, we only use the closest w centroids for further processing, i.e. computing the distances d([y] p , c 2 p ) only to those level 2 centroids whose corresponding c 1 are in the best set. The level 2 distances are ordered to find the best cluster indices for each part. Finally, combining the best indices of the individual parts identifies the best bin as in <ref type="bibr">Equation 5</ref>.</p><p>A typical configuration might consist of four parts (P = 4, k 1 = 16, k 2 = 16, w = 4), amounting to only 16 + 4 · 16 = 80 full vector distance calculations to address (16 · 16) 4 ≈ 4 trillion bins. For practical purposes we applied modulo-hashing by using unsigned integers representing the index.</p><p>Bin Proposal Heuristic. Given the best bin as determined by the index i = (i 11 , i 21 , . . . , i P 1 ), one has to find a sequence of neighbor bins to check such that a sufficient number of vectors for re-ranking is generated. The priority queue used in Babenko and Lemptsky <ref type="bibr" target="#b3">[4]</ref> would yield the optimal sequence but it requires a resorting operation for each proposed bin, which is expensive and is sequential by nature.</p><p>Instead, we propose to choose a fixed traversal heuristic. The most simple order would be to compute all id-vectors v ∈ {1, r} P and sort them according their distance from the origin v 2 . However, this returns an isotropic bin traversal heuristic as depicted in <ref type="figure">Figure 3</ref> (blue line) compared to the optimal sequence from [4] (green line) and our proposed anisotropic traversal heuristic (red line). The anisotropic version with flexible slope produced a better approximation of the Dijkstra ordering. Hereby, we pre-compute bin orderings for 10 slopes 1.08 k with k = −5, −4, . . . , 4. Each slope describes the progress balance on one part-pair. A slope of 1 would equally handle both parts, while a slope of 1.08 −5 would allow more bin combinations with higher ids in the second part (see red line in <ref type="figure">Figure 3</ref>).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Re-ranking by line quantization</head><p>In the index structure, each database vector is quantized to its nearest bin with a quantization error ∆ i . To find the best vectors in the bin they need to be sorted based </p><formula xml:id="formula_8">[x] p − [c] p distance part p ′ : [x] p ′ − [c] p ′</formula><p>naive: 10 bins anisotropic: 8 bins optimal: 7 bins <ref type="figure">Figure 3</ref>: Merging the independent lookups from differents parts p, p ′ to find the best bin-combination requires sorting all combinations. A Dijkstra-based traversal <ref type="bibr" target="#b3">[4]</ref> (green) cannot be evaluated on a GPU due to its sequential nature, though it is the optimal sequence. Possible parallel approximations are a naive (blue) or a anisotropic (red) heuristic.</p><p>on their distance to the query vector. However, full Ddimensional distance calculations for each vector are too expensive. Similarly, re-ranking based on product quantized residuals <ref type="bibr" target="#b8">[9]</ref> requires comparison to yet another codebook.</p><p>Inspired by the Johnson-Lindenstrauss lemma <ref type="bibr" target="#b7">[8]</ref>, we propose line quantization, where some of the information gathered during traversal is reused.</p><p>Offline computation Each vector ( ) is quantized to the nearest projection ( ) onto any line ( -) through the level 1 centroids for each part, see <ref type="figure" target="#fig_4">Figure 4</ref>. For multiple parts, this quantization effectively spans hyper-planes. The distance of the query point to the line quantized vector can be evaluated exactly and efficiently using only one 2D triangle calculation per part.</p><p>In order to disambiguate the database vectors x in these bins, we propose an approximation by projecting each vector part [x] p in the linear subspace span([c i ] p , [c j ] p ), c i , c j ∈ C defined by the first level centroids [c i ] p and [c j ] p illustrated by in <ref type="figure" target="#fig_4">Figure 4</ref>. We chose [c i ] p , [c j ] p such that the quantization error δ p is minimized. Therefore, when approximating each database vector part</p><formula xml:id="formula_9">[x] p by (1 − λ p ) [c i ] p + λ p [c j ] p calculating the distance d(y, x)</formula><p>does not rely on the values of x but uses existing information from the tree-structure.</p><p>Using this approach, we store λ p and (i p , j p ) for each database vector using 1+1 bytes in our implementation. Storing the information of λ p and the indicies from <ref type="figure" target="#fig_5">Figure 5</ref> describes the approximation ( ) of a vector ( ). In fact, all information about database vector x i ∈ X we need for the complete algorithm is encoded in the 3 · P tuple x i ↔ (λ 1 , . . . , λ P , i 1 , . . . , i P , j 1 , . . . , j P ),  with error δ p . When re-ranking the exact distance h p between the query ( [y] p ) and the quantized database point is obtained using triangulation. All necessary values are known as they are computed during tree traversal (a p , b p ) or during database construction (c p , λ p , (i, j)).</p><formula xml:id="formula_10">[c i ] p , [c j ] p in</formula><formula xml:id="formula_11">∆ 1 ∆ 2 [b k ] p [x 1 ] p δ 1 [x 2 ] p δ 2 [c 1 ] p [c 2 ] p [c 3 ] p [y] p<label>(7)</label></formula><formula xml:id="formula_12">λ p c p δ p ∆ p ([c i ] p ) ∆ p ([c j ] p ) h p (y, x) b p a p [y] p [x] p [c i ] p [c j ] p</formula><p>which can be heavily compressed to about 2 bytes per part. While this scheme does not have the same compression rate as previous methods, it is the first to allow an efficient parallel re-ranking on the GPU by look-up from already computed values without any computational overhead.</p><p>We only need to store one small global lookup table of P × k 1 × k 1 precomputed distances between all pairs of level 1 centroids, i.e. [c s ] p − [c t ] p 2 2 for all p, s, t. This can be computed in the offline phase as it is independent of query vectors.</p><p>Online computation During tree traversal all distances between a query point y ∈ R D and all level 1 centroids have already been computed as list of pairs (i, d) <ref type="bibr" target="#b0">1</ref> p . The approximate distance to the database vector x is computed given the triple (λ p , i p , j p ), looking up a p and b p in the query's list, and c p . The distance between y and x is approximated by</p><formula xml:id="formula_13">d(y, x) 2 = P p=1 d([y] p , [x] p ) 2 ≈ P p=1 h p (y, x) 2 (8) ≈ P p=1 b 2 p + λ 2 p · c 2 p + λ p · (a 2 p − b 2 p − c 2 p ) . (9)</formula><p>Note, that it is possible to compute the distance between a query and database vector by triangulation exactly up to the projection error δ i as illustrated in <ref type="figure" target="#fig_5">Figure 5</ref>.</p><p>In practice we use different numbers of parts for the tree (P tree = 2 or 4) and for the line quantization (P line = 8, 16 or 32) for sufficiently precise re-ranking. Using exactly the same level 1 codebook with p parts, we split each centroid part to get p ′ = k · p parts and compute the distances by aggregating the components.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">GPU Implementation</head><p>Our approach is well suited to take advantage of GPU parallelism, which we implemented in CUDA. There are two levels of granularity of parallelism. The first is by processing multiple vectors in parallel, each vector with one block of threads. The second is by processing vector elements in parallel for all threads within the block.</p><p>Database bins are represented by a long, sorted array containing all vector IDs and a pointer array indicating where the vectors of each bin start. The pointer array is assembled by first computing a histogram of vectors over all bins and then computing the prefix sum <ref type="bibr" target="#b16">[17]</ref>. In order to deal with a possibly excessive number of bins, we hash the bins using a simple modulus. As many bins contain zero vectors collision is simply ignored.</p><p>One kernel computes the distances to all level 1 centroids and sorts them using bitonic sort in shared memory. The second kernel does the same for the selected level 2 clusters based on the previous output. These two kernels are used both for sorting vectors into the bins as well as for kNN queries. For database vectors, a special kernel computes the optimal line projection (Sec. 3.3).</p><p>For each query vector, we then generate an ordered list of bins following the heuristic of Sec. 3.2. Each thread in a block computes and stores one bin ID. All empty bins are removed. Then, the kernel produces a list of potential vector IDs, each thread is responsible for copying all vectors IDs of one bin. The final kernel calculates the distances for the re-ranking using the line quantization and outputs the reranked list of IDs. Here, re-ranking one vector is executed by one warp each. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Results</head><p>We now present the results of the PQT evaluated on several standard benchmark sets. All reported CPU query times were obtained from a single-thread C++ implementation using SSE2 instructions. Results of our GPU implementations are obtained with a NVIDIA GTX Titan X.</p><p>We use the publicly available benchmark SIFT1M, SIFT1B datasets <ref type="bibr" target="#b9">[10]</ref>, of 10 6 , 10 9 128-dim vectors and GIST1M <ref type="bibr" target="#b8">[9]</ref> of 10 6 960-dim vectors. For the codebook training process we used the first 100K/1M vectors from the respective datasets. It was not possible to obtain any results on GIST1M using FLANN in <ref type="table">Table 2</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Query times and Recall</head><p>We compared our implementation with the available implementations of <ref type="bibr" target="#b10">[11]</ref> and <ref type="bibr" target="#b3">[4]</ref>. Due to the approximation nature of these algorithms and discrete parameter space it is not trivial to find parameter settings which produce the same accuracy for timing comparisons. Therefore, we choose a highly optimized GPU-based exhaustive search as a strong baseline method. The accuracy is measured in recall R@x, which is the fraction of nearest neighbors found in the first x proposed vectors after re-ranking. <ref type="table">Table 1</ref> gives the average query time in milliseconds obtained on the same machine using public available code. Compared to all PQ-based approaches <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b10">11]</ref> our approach (P line = 32) is faster on the CPU at similar accuracy. Allowing <ref type="bibr" target="#b10">[11]</ref> to use more memory consumption for re-ranking slows down the query process. Note that the reported time of <ref type="bibr" target="#b10">[11]</ref>   <ref type="table">Table 2</ref>: Performance of the GIST1M dataset using different methods. PQT uses 128 parts for re-ranking. tion of query vector with a D × D rotation matrix, which was pre-computed. On the GPU, sorting the SIFT1M vectors into the bins takes 1051ms, performing the line quantization for these 1M vectors about 458ms (p = 4, k 1 = 16, k 2 = 8, w = 8).</p><p>The processing time for one query is roughly 39 microseconds, split into 4% traversal, 35% bin selection, 11% vector proposal, and 50% re-ranking. In our implementation the maximum number of sortable vectors on the GPU per query is currently limited to 4096 during re-ranking. Applying different algorithms, this restriction could be removed.</p><p>With the right configuration of bins, high recall values can even be achieved on the SIFT1B data set ( <ref type="figure" target="#fig_6">Figure 6</ref>). Because the full data set did not fit on the GPU, the data base was build in waves of 1M vectors, aggregating the information on the CPU. With file I/O this took about 144min. On a NVIDIA GTX Titan X with 12GB of RAM one can upload the resulting DB structure, i.e. bin sizes and vector IDs per bin. For the SIFT1B dataset it was essential to re-sort the proposed bins by the actual distance. This slowed down query time to 0.027ms in total without re-ranking. The recall rate of our approach is R@10=0.35. For the re-ranking we directly accessed the CPU main memory from the GPU   <ref type="table">Table 3</ref>: Squared Line-quantization error (distortion δ) by projecting each x ∈ X onto a line using p = 2, k 1 = 16, k 2 = 8, h 1 = 4 for the SIFT1M data set. Last column gives the average query time.</p><p>resulting in a total query time of 0.15ms. Memory is the limiting factor for the maximum number of actual bins. We apply hashing to 100M bins. Increasing the number of parts P or introducing a further level into the tree would further boost the number of bins -at the same time, also the number of bins to be visited in the vicinity would drastically increase and slow down the system.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Precision of Line Quantization</head><p>We tested the performance of encoding each database vector x ∈ X by its projection onto a line for different numbers of parts used for line quantization (see <ref type="figure" target="#fig_7">Figure 7</ref> and <ref type="table">Table 3</ref>). The recall rate increases with the number of line parts, P line . Low quantization errors with moderate computational and storage effort are obtained with P line = 16. Note, that the necessary data for each query vector is directly assembled during the tree traversal without the need for any further quantization computation. See the supplementary material for re-ranking results on MNIST (784 dimensions).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>In conclusion, we introduce a new method for efficient similarity search on large, high dimensional datasets. We propose a two level Product Quantization Tree for quickly indexing large numbers of bins with minimal memory and computation overhead. We combined this with a novel reranking method based on closest-line projections, and a bin ordering heuristic. The tree structure provides all intermediate values, which accelerate the re-ranking procedure.</p><p>Our prototype implementation demonstrates improvement in accuracy and speed over state-of-the art methods for ANN queries. We demonstrated the scalability from competitive performance to FLANN <ref type="bibr" target="#b15">[16]</ref> in small benchmark sets (SIFT1M) and outperform to the state-of-the-art methods at the challenging BigANN benchmark set containing one billion vectors of dimension 128, as well as in datasets with high dimensionality (GIST1M). By construction, the proposed approach can easily be implemented as well on the GPU , which evaluates to a significant speedup against previous methods.</p><p>While our method worked well in the examples and datasets we tried, there are many avenues for future research. For example, it is possible that other tree structures featuring different combinations of PQ and VQ, or even these methods in combination with different approaches such as KD-trees, or LSH would be an interesting area of future research. Additionally, performing efficient on-the-fly updates to the database vectors, and resulting tree structure would be another area for future work.</p><p>Acknowledgement This work has been partially supported by the DFG Emmy Noether fellowship Le 1341/1-1 and an NVIDIA hardware grant.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>[x] p independently c p : X → C p , x → c p (x) := arg min c∈Cp d([x] p , c), (2)</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 1 :</head><label>1</label><figDesc>Three different quantization schemes with k = 32 clusters. Vector Quantization (a) represents vectors by their closest centroids. Product Quantization performs the clustering in subspaces (here axes) (b). A tree structure can be used to build a hierarchy of clusters on each axis (c).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 2 :</head><label>2</label><figDesc>Both parts of ([x] 1 , [x] 2 ) ∈ R D are quantized by a VQ tree with k 1 = 4 clusters in the first and k 2 = 5 finer clusters in the second level. During traversal, only the best w closest clusters of the first level are refined. The example search space by extending w = 2 clusters is illustrated as the gray area.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 4 :</head><label>4</label><figDesc>Line Quantization. In traditional PQ, each database vector x i ( ) is projected onto the bin centroid ( ) yielding an approximation error ∆ i . Vectors in a bin would be indistinguishable wrt. a query y. We project x i onto ( ) on the nearest line -which gives an approximation error δ i .</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 5 :</head><label>5</label><figDesc>Exact query to line calculation. The database vector part ([x] p , ) is projected onto ( ) at the line ([c i ] p , [c j ] p )</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 6 :</head><label>6</label><figDesc>Recall rates on the SIFT1B data set (p = 4, k 1 = 32, k 2 = 16, w = 8) with ordering of bins. The recall from PQT is without a reranking step. Even with significant lower query time, our approach is comparable in quality to the inverted multi-index with k = 2 12 .</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 7 :</head><label>7</label><figDesc>Line Quantization. The different curves show the recall of the SIFT1M dataset for varying values of P line using p = 2, k 1 = 16, k 2 = 8, w = 4. A query took 3, 4, 6, 9ms on a single CPU with |L c | &lt; 20000.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>excludes all intensive operations like the multiplica-</figDesc><table>method 
+avg. (ms) R@100 
+
+SH [5] 
+22.7 
+0.132 
+IVFADC 
+65.9 
+0.744 
+FLANN 
+not possible 
+PQT(CPU) 
+63 
+0.83 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head></head><label></label><figDesc>P line min distor. max distor. avg. distor. time (ms)</figDesc><table>2 
+10874.9 
+179870 
+30534.6 
+2.0 
+4 
+8967.8 
+166722 
+26257.9 
+2.6 
+8 
+6709.2 
+145082 
+19719.4 
+3.6 
+16 
+3318.3 
+84640 
+10509.7 
+5.3 
+32 
+1035.3 
+39143 
+3686.71 
+8.5 
+
+</table></figure>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Near-optimal hashing algorithms for approximate nearest neighbor in high dimensions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Andoni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Indyk</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Commun. ACM</title>
+		<imprint>
+			<biblScope unit="volume">51</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page">117</biblScope>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Additive quantization for extreme vector compression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Babenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lempitsky</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Tree quantization for largescale similarity search and classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Babenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lempitsky</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">The inverted multi-index</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Babenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">S</forename><surname>Lempitsky</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Locality-sensitive hashing scheme based on p-stable distributions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Datar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Immorlica</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Indyk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">S</forename><surname>Mirrokni</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Twentieth Annual Symposium on Computational Geometry, SCG &apos;04</title>
+		<meeting>the Twentieth Annual Symposium on Computational Geometry, SCG &apos;04<address><addrLine>New York, NY, USA</addrLine></address></meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">An algorithm for finding best matches in logarithmic expected time</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">H</forename><surname>Friedman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">L</forename><surname>Bentley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">A</forename><surname>Finkel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Math. Softw</title>
+		<imprint>
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="209" to="226" />
+			<date type="published" when="1977" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Optimized product quantization for approximate nearest neighbor search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Ge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Ke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR 2013</title>
+		<imprint>
+			<publisher>IEEE Computer Society</publisher>
+			<date type="published" when="2013-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Approximate nearest neighbors: Towards removing the curse of dimensionality</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Indyk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Motwani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Thirtieth Annual ACM Symposium on Theory of Computing, STOC &apos;98</title>
+		<meeting>the Thirtieth Annual ACM Symposium on Theory of Computing, STOC &apos;98<address><addrLine>New York, NY, USA</addrLine></address></meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="1998" />
+			<biblScope unit="page" from="604" to="613" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Product quantization for nearest neighbor search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Douze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">Searching in one billion vectors: re-rank with source coding. CoRR, abs/1102</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Tavenard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Douze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Amsaleg</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="volume">3828</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Locally optimized product quantization for approximate nearest neighbor search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Kalantidis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Avrithis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of International Conference on Computer Vision and Pattern Recognition (CVPR 2014)</title>
+		<meeting>International Conference on Computer Vision and Pattern Recognition (CVPR 2014)<address><addrLine>Columbus, Ohio</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2014-06" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Quantization based on a novel sample-adaptive product quantizer (sapq)</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">S</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">B</forename><surname>Shroff</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Information Theory</title>
+		<imprint>
+			<biblScope unit="volume">45</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<biblScope unit="page" from="2306" to="2320" />
+			<date type="published" when="1999" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Korman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Avidan</surname></persName>
+		</author>
+		<title level="m">Coherency Sensitive Hashing. 2011 Int. Conf. Comput. Vis</title>
+		<imprint>
+			<date type="published" when="2001" />
+			<biblScope unit="page" from="1607" to="1614" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">An algorithm for vector quantizer design</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Linde</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Buzo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">M</forename><surname>Gray</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Communications</title>
+		<imprint>
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="1980" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Least squares quantization in pcm</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lloyd</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Inf. Theor</title>
+		<imprint>
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="129" to="137" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Scalable nearest neighbor algorithms for high dimensional data. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Muja</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Lowe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Scan primitives for gpu computing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sengupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Harris</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">D</forename><surname>Owens</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 22Nd ACM SIGGRAPH/EUROGRAPHICS Symposium on Graphics Hardware, GH &apos;07</title>
+		<meeting>the 22Nd ACM SIGGRAPH/EUROGRAPHICS Symposium on Graphics Hardware, GH &apos;07<address><addrLine>Aire-la-Ville, Switzerland, Switzerland</addrLine></address></meeting>
+		<imprint>
+			<publisher>Eurographics Association</publisher>
+			<date type="published" when="2007" />
+			<biblScope unit="page" from="97" to="106" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Fast ANN for high-quality collaborative filtering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tsai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Steinberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Pajak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Pulli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">High-Performance Graphics</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="61" to="70" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

@@ -1,0 +1,924 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Augmented Blendshapes for Real-time Simultaneous 3D Head Modeling and Facial Motion Capture</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Diego</forename><surname>Thomas</surname></persName>
+							<email>diegot.thomas@gmail.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Kyushu University</orgName>
+								<address>
+									<settlement>Fukuoka</settlement>
+									<country key="JP">Japan</country>
+								</address>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="institution">Ichiro Taniguchi Kyushu University</orgName>
+								<address>
+									<settlement>Fukuoka</settlement>
+									<country key="JP">Japan</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Augmented Blendshapes for Real-time Simultaneous 3D Head Modeling and Facial Motion Capture</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:37+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>t=0.0s t=9.6s t=14.0s t = 0s t = 9.6s t = 14s t = 6.7s t = 11.3s Figure 1: Real-time simultaneous 3D head modeling and facial motion capture using an RGB-D camera. The 3D model of the head of a moving person refines over time (left to right) while the facial motion is being captured.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Abstract</head><p>We propose a method to build in real-time animated 3D head models using a consumer-grade RGB-D camera. Our framework is the first one to provide simultaneously comprehensive facial motion tracking and a detailed 3D model of the user's head. Anyone's head can be instantly reconstructed and his facial motion captured without requiring any training or pre-scanning. The user starts facing the camera with a neutral expression in the first frame, but is free to move, talk and change his face expression as he wills otherwise. The facial motion is tracked using a blendshape representation while the fine geometric details are captured using a Bump image mapped over the template mesh. We propose an efficient algorithm to grow and refine the 3D model of the head on-the-fly and in real-time. We demonstrate robust and high-fidelity simultaneous facial motion tracking and 3D head modeling results on a wide range of subjects with various head poses and facial expressions. Our proposed method offers interesting possibilities for animation production and 3D video telecommunications.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>High-fidelity 3D reconstruction of the human head using RGB-D cameras is a key component for realistic human avatar creation. For efficient and realistic animation production, the facial animation sequence of the built 3D model of the head also needs to be captured. In the film and game industry, for example, facial performances are captured and then retargeted to a CAD 3D model of the head.</p><p>Marker-less facial motion capture, on one hand, is well established in the computer graphics community. Several methods using template 3D models <ref type="bibr" target="#b1">[3,</ref><ref type="bibr" target="#b12">14,</ref><ref type="bibr" target="#b24">25]</ref> achieve realtime accurate facial motion capture from videos of RGB-D images. On the other hand, dense 3D reconstruction of the head has made significant progress in the computer vision community since the development of consumer depth cameras. Applications of dense 3D modeling techniques to build 3D head models from static scenes <ref type="bibr" target="#b0">[2,</ref><ref type="bibr" target="#b11">13,</ref><ref type="bibr" target="#b32">32]</ref> showed compelling results in terms of details in the produced 3D models. Recently, an extension of the popular KinectFusion algorithm <ref type="bibr" target="#b15">[17]</ref> called DynamicFusion <ref type="bibr" target="#b16">[18]</ref> was proposed that can handle even dynamic scenes.</p><p>While recent advances have shown compelling results in either facial motion capture or dense 3D modeling, they do not allow to produce both results at the same time. Though DynamicFusion <ref type="bibr" target="#b16">[18]</ref> allows to capture deformations of the face, the results are limited compared to those obtained with facial motion capture systems (e.g., eyelids movements can not be captured). Moreover, the obtained deformations are not intuitive for animation purpose (animations such as "mouth open" or "mouth closed" are more intuitive to animate the face). This is because the head is animated using unstructured deformation nodes, without any semantic meaning. Note that DynamicFusion was designed for a more general purpose: dynamic scene reconstruction, while in this work we focus on 3D modeling of the animated head.</p><p>Simultaneous dense 3D modeling of the head and facial motion capture is particularly interesting for communication systems, where the user's expressions can be retargeted online to its own 3D model, built on-the-fly with RGB-D cameras. Only a few coefficients (for the head pose and facial animation) need to be communicated at run time (the updated 3D model do not need to be sent at video frame-rate), which would allow smooth communications even with low internet bandwidth, or massive multiparty communications for example.</p><p>We propose a method to simultaneously build a highfidelity 3D model of the head and capture its facial motion using an RGB-D camera <ref type="figure">(Fig. 1)</ref>. To do so, (1) we introduce a new 3D representation of the head based on blendshapes <ref type="bibr" target="#b24">[25]</ref> and Bump images <ref type="bibr" target="#b23">[24]</ref>, and (2) we propose an efficient method to fuse in real-time input RGB-D data into our proposed 3D representation. While blendshape coefficients encode facial expressions, the Bump image augments the blendshape meshes to encode the geometric details of the user's head. The head position and its facial motion are tracked in real-time using a facial motion capture approach, while the 3D model of the head grows and refines on-the-fly with input RGB-D images using a running average strategy. Our proposed method do not require any training, fine fitting or pre-scanning to produce accurate animation results and highly detailed 3D models. Our main contribution is to propose the first system that is able to build, in real-time, detailed (with Bump and color images) and comprehensive (with blendshape representation) animated 3D models of the user's head.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related works</head><p>There are two categories of closely related work: 1) realtime facial motion capture and 2) real-time dense 3D reconstruction. While facial motion capture systems strive to capture high fidelity facial expressions, dense 3D reconstruction methods focus on constructing detailed 3D models of a target scene (the user's head in our case).</p><p>Real-time facial motion capture Research on real-time marker-free facial motion capture using RGB-D sensors have raised much interest in computer graphics in the last few years <ref type="bibr" target="#b1">[3,</ref><ref type="bibr" target="#b2">4,</ref><ref type="bibr" target="#b5">7,</ref><ref type="bibr" target="#b12">14,</ref><ref type="bibr" target="#b14">16,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b25">26]</ref>. The use of blendshapes introduced by Weise et al. in <ref type="bibr" target="#b24">[25]</ref> for tracking facial motions has become popular and motivated many researchers to build more portable <ref type="bibr" target="#b2">[4]</ref> or user-friendly systems <ref type="bibr" target="#b1">[3,</ref><ref type="bibr" target="#b12">14,</ref><ref type="bibr" target="#b14">16]</ref>. In these works, facial expressions are expressed using a weighted sum of blendshapes. The tracking process then consists of (1) estimating the head pose and (2) optimizing the weights of each blendshape to fit the input RGB-D image. In <ref type="bibr" target="#b2">[4,</ref><ref type="bibr" target="#b24">25]</ref> the blendshapes were first fit to the user's face in a pre-processing training stage where the user was asked to perform several pre-defined expres-sions. Calibration-free systems were proposed in <ref type="bibr" target="#b1">[3,</ref><ref type="bibr" target="#b12">14,</ref><ref type="bibr" target="#b14">16]</ref> where the neutral blendshape was adjusted on-the-fly to fit the input RGB-D images. Sparse facial features were combined with depth data in <ref type="bibr" target="#b3">[5,</ref><ref type="bibr" target="#b4">6,</ref><ref type="bibr" target="#b12">14,</ref><ref type="bibr" target="#b14">16]</ref> to improve tracking. Though compelling results were reported, much efforts were made on capturing high fidelity facial motions (for retargeting purpose for example), but the geometric details of the built 3D models were not as good as those obtained with state-of-the-art dense 3D modeling methods <ref type="bibr" target="#b15">[17]</ref>.</p><p>Chen et al. <ref type="bibr" target="#b5">[7]</ref> demonstrated that a template 3D model with geometric details close to the shape of the user's face can improve the facial motion tracking quality. In this work, the template mesh was built offline by scanning the user's face in a neutral expression. The template mesh was then incrementally deformed using embedded deformation <ref type="bibr" target="#b21">[23]</ref> to fit the input depth images. High fidelity facial motions were obtained but at the cost of a pre-processing scanning stage required to build the user-specific template mesh. Moreover, parts of the user's head that do not animate (e.g. the ears or the hair) were simply ignored and not modelled.</p><p>Real-time dense 3D reconstruction On the other hand, low-cost depth cameras have spurred a flurry of research on real-time dense 3D reconstruction of indoor scenes. In KinectFusion, introduced by Newcombe et al. <ref type="bibr" target="#b15">[17]</ref> and all follow-up research <ref type="bibr" target="#b10">[12,</ref><ref type="bibr" target="#b17">19,</ref><ref type="bibr" target="#b18">20,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b28">28,</ref><ref type="bibr" target="#b29">29]</ref>, the 3D model is represented as a volumetric Truncated Signed Distance Function (TSDF) <ref type="bibr" target="#b6">[8]</ref>, and depth measurements of a static scene are fused into the TSDF to grow the 3D model. Applications of 3D reconstruction using RGB-D cameras to build a human avatar were proposed using either a single camera <ref type="bibr" target="#b0">[2,</ref><ref type="bibr" target="#b11">13,</ref><ref type="bibr" target="#b32">32]</ref> or multiple cameras <ref type="bibr" target="#b13">[15]</ref>. The user was then assumed to hold still during the whole scanning period.</p><p>Recently, much interest has been given to reconstruct 3D models of dynamic scenes. Dou et al. <ref type="bibr" target="#b9">[11]</ref> introduced a directional distance function to build dynamic 3D models of the human body offline. In <ref type="bibr" target="#b8">[10]</ref>, static parts of the scene were pre-scanned offline, and movements of the body were tracked online. Zhang et al. <ref type="bibr" target="#b30">[30]</ref> proposed to merge different partial 3D scans obtained offline with KinectFusion in different poses into a single canonical 3D model. More recently, Newcombe et al. <ref type="bibr" target="#b16">[18]</ref> extended KinectFusion to DynamicFusion, which allows capturing dynamic changes in the volumetric TSDF in real-time by using embedded deformation <ref type="bibr" target="#b21">[23]</ref>. Compelling results were reported for realtime dynamic 3D face modeling in terms of geometric accuracy. However, in terms of facial motion capture, the results were not as good as those reported in <ref type="bibr" target="#b2">[4,</ref><ref type="bibr" target="#b12">14]</ref>. This is because color information was ignored. As a consequence, visual features such as facial landmarks were not used and movements of the eyelids, for example, could not be captured. Note that the method fails to achieve dynamic reconstruction of scenes that move quickly from a close to open topology. Therefore, the user must keep the mouth open for a few seconds at the beginning of the scanning process, which is not practical. Moreover, the volumetric TSDF requires a large amount of memory, precluding online streaming of the reconstructed dynamic 3D model for communication purposes.</p><p>We use a Bump image <ref type="bibr" target="#b23">[24]</ref> mapped over blendshapes because it is light in memory yet produces accurate 3D models. Moreover, by using blendshapes we can achieve stateof-the-art facial motion tracking performances <ref type="bibr" target="#b12">[14]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Proposed 3D representation of the head</head><p>We introduce a new 3D representation of the head that allows us to capture facial motions as well as fine geometric details of the user's head. We propose to augment the popular blendshape meshes <ref type="bibr" target="#b24">[25]</ref> with a Bump image <ref type="bibr" target="#b23">[24]</ref>. While blendshape coefficients encode facial expressions, the Bump image encodes the geometric deviations of the user's head to the template mesh. We also build a color image for better visual impression.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Blendshape representation</head><p>We briefly recall the blendshape representation, commonly used in facial motion capture systems <ref type="bibr" target="#b1">[3,</ref><ref type="bibr" target="#b2">4,</ref><ref type="bibr" target="#b12">14,</ref><ref type="bibr" target="#b14">16,</ref><ref type="bibr" target="#b24">25]</ref>. Facial expressions are represented using a set of blendshape meshes {B i } i∈[0:n] (we used n + 1 = 28 blendshape mehes in our experiments), where B 0 is the mesh with neutral expression and B i , i &gt; 0 are the meshes in various base expressions. All blendshape meshes have the same number of vertices and share the same triangulation. A 3D point at the surface of the head is expressed as a linear combination of the blendshape meshes:</p><formula xml:id="formula_0">M(x) = B 0 + n i=1 x iBi , where x = [x 1 , x 2 , ..., x n ] are the blendshape coefficients (rang- ing from 0 to 1) andB i = B i − B 0 for i ∈ [1 : n]. We call M(x) the blended mesh.</formula><p>The blendshape representation is an efficient way to accurately and quickly capture facial motions. However, because it is a template-based representation, it is not possible to capture the fine geometric details of the user's head (the hair for example can not be modeled). This is because realtime, accurate fitting of the template 3D meshes to input RGB-D images is a difficult task. Moreover, the resolution of the blendshape meshes is insufficient to capture fine geometric details. We overcome this limitation by augmenting the set of blendshape meshes with a single pair of Bump and color images (as illustrated in <ref type="figure" target="#fig_1">Fig. 2</ref>).</p><p>We slightly simplify the original blendshape meshes <ref type="bibr" target="#b24">[25]</ref> around the ears and around the nose. This is because these areas are too much detailed for our proposed 3D representation. We instead record geometric details of the head in the Bump image. The original and modified templates with highlighted modified areas are shown in <ref type="figure" target="#fig_2">Fig. 3</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Augmented blendshapes</head><p>Each vertex in the blendshape meshes has texture coordinates (the same vertex in different base expression has the same texture coordinates). This allows <ref type="bibr" target="#b12">[14]</ref> to map color images onto the blended mesh (i.e., weighted sum of blendshape meshes) for example. We propose to build an additional texture image, called Bump image that encodes the deviations of the user's head to the blendshape meshes in the direction of the normal vectors. Our proposed 3D representation is illustrated in <ref type="figure" target="#fig_1">Fig. 2 (a)</ref> and detailed below.</p><p>In addition to the 3D positions of the vertices  We define an index image Indx such that for each pixel (u, v) in the texture coordinate space, Indx(u, v) is the index in F of the triangle the pixel belongs to. We build the index image by drawing each triangle in F in the texture coordinate space with its own index as color. We also define a three channel weight image W such that W(u, v) is the barycentric coordinates of pixel (u, v) for the triangle F(Indx(u, v)). Note that the two images Indx and W depend only on the triangulation F and the texture coordinates of the vertices of the blendshape meshes. They are totally independent from the user and can thus be computed once and for all and saved in the hard drive.</p><formula xml:id="formula_1">{{B i (j)} j∈[0:l] } i∈</formula><formula xml:id="formula_2">(j) = [s j 0 , s j 1 , s j 2 ]} j∈[0:f ] ,</formula><p>For each blendshape mesh, we define a vertex image V i and a normal image N i , i ∈ [0 : n]:</p><formula xml:id="formula_3">V i (u, v) = 2 k=0 W(u, v)[k]B i (F(Indx(u, v))[k]), N i (u, v) = 2 k=0 W(u, v)[k]Nmle i (F(Indx(u, v))[k]).</formula><p>We also define the difference</p><formula xml:id="formula_4">imagesV i = V i − V 0 and N i = N i − N 0 for i ∈ [1 : n].</formula><p>We now define our proposed Bump image Bump that represents the fine geometric details of the user's head. Given a facial expression x (i.e. n blendshape coefficients), we define a vertex image V x and a normal image N x for the blended mesh 1 :</p><formula xml:id="formula_5">V x (u, v) = V 0 (u, v) + n i=1 x iVi (u, v), N x (u, v) = N 0 (u, v) + n i=1 x iNi (u, v).</formula><p>1 Note that N x is not normalised. It is not a standard normal image.  Each pixel (u, v) in the Bump image corresponds to the 3D point</p><formula xml:id="formula_6">P x (u, v) = V x (u, v) + Bump(u, v)N x (u, v).<label>(1)</label></formula><p>All values in the Bump image are initialised to 0 2 . Each pixel in the Bump image represents one 3D point at the surface of the head. This drastically increases the resolution of the 3D model compared to the blendshape meshes, which is the first advantage of our proposed 3D representation. The second advantage is that fine details can be captured (even far from the blendshape meshes, like the hair for example). The third advantage is that a single Bump image is sufficient to obtain detailed 3D models in all base expressions. This is because the Bump image represents the geometric deviations to the template mesh. Moreover, as we will see in Sec. 4.3, updating the Bump image is fast and easy.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Proposed 3D modeling method</head><p>We propose a method to build a high-fidelity 3D model of the head with facial animations from a live stream of 2 Note that P x (u, v) is a linear combination of x.</p><p>RGB-D images using our introduced 3D representation of the head. The 3D model of the head is initialised with the first input RGB-D image: the blendshape mesh with neutral expression is roughly fit and aligned to the input depth image using sparse facial features and the depth image. In the initialisation step, the user is assumed to be facing the camera (so that all facial features are visible) and with a neutral expression. Note that this is the only constraint of our proposed method. At runtime, the pose of the head is estimated by solving a rigid alignment problem between the current RGB-D image and our proposed 3D model in its current state (i.e. augmented blended mesh). The blendshape coefficients are then estimated following a facial motion capture technique <ref type="bibr" target="#b12">[14]</ref> and the pair of Bump and color images is updated with the current RGB-D image. The pipeline of our proposed method is illustrated in <ref type="figure" target="#fig_3">Fig. 4</ref>.</p><p>Our proposed method allows us to capture fine geometric and color details of the head, recorded in the pair of Bump and color images, as well as the facial motion, recorded in the sequence of blendshape coefficients. Our proposed 3D model is accurate yet requires low memory consumption (only 2 texture images). Moreover, it is possible to animate the 3D model with only the head pose and a few blendshape coefficients. It is thus particularly well suited for 3D video communication purposes.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Initialisation</head><p>We assume that the user starts facing the camera with a neutral expression (this is the only assumption done in this paper), and we initialise our 3D model with the first RGB-D image. This procedure is illustrated in the upper part of <ref type="figure" target="#fig_3">Fig. 4</ref> and detailed below.</p><p>First, we detect facial features using the system called In-traFace <ref type="bibr" target="#b7">[9]</ref>. These sparse features are matched to manually </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Tracking</head><p>At runtime, we successively track the rigid motion of the head and the blendshape coefficients using the current state of our proposed 3D model of the head and the input RGB-D image. Sparse facial features are also used to improve tracking performances. This procedure is illustrated in the lower part of <ref type="figure" target="#fig_3">Fig. 4</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Rigid head motion estimation</head><p>We estimate the pose (R, t) (where R is the rotation matrix and t is the trans-lation vector) of the head by computing the rigid transformation between the input RGB-D image and the (global) 3D model of the head (that is being built) in its current expression state. We solve for this rigid alignment problem using the iterative closest point (ICP) algorithm <ref type="bibr" target="#b19">[21]</ref>, which is based on point-to-plane constraints on the depth image and point-to-point constraints on the 3D facial features. By contrast with <ref type="bibr" target="#b1">[3,</ref><ref type="bibr" target="#b12">14,</ref><ref type="bibr" target="#b14">16,</ref><ref type="bibr" target="#b24">25]</ref> we use all points available from the Bump image (including points in the hair) instead of using only a subset of vertices in the blendshape meshes. As a consequence, we have many more correspondences for accurate dense 3D pose estimation. We eliminate correspondences that are farther than 1 cm and those that normal vectors have difference in angle greater than 30 degrees.</p><p>Blendshape coefficients estimation For each input RGB-D image we estimate the blendshape coefficients using the same approach as in <ref type="bibr" target="#b12">[14]</ref>. Note that differently from <ref type="bibr" target="#b12">[14]</ref> we did not model the occlusions, which is left as future work, and we used the point-to-point constraints on the 3D facial features (instead of on the 2D facial features). Moreover, we use all points available from the Bump image for dense point correspondences. Our point-to-plane fitting term on the depth image is (b) Identify the best match for data fusion. All candidate pixels are projected into the 3D space (in magenta in the red box), and the one closest to the normal vector is identified as the best match. The best match is projected onto the normal vector and the distance to the template surface in the normal direction of the original augmented 3D point and the projected best match are fused using a running average. where (u, v) is a pixel in the Bump image, v (u,v) is the closest point to RP x (u, v)+t in the depth image and n <ref type="bibr">(u,v)</ref> is the normal vector of v (u,v) . Our point-to-point fitting term on 3D facial features is</p><formula xml:id="formula_7">c S (u,v) (x) = (n (u,v) (RP x (u, v) + t − v (u,v) )) 2 ,</formula><formula xml:id="formula_8">c F j (x) = RP x (lmk j ) + t − v j 2 2 ,</formula><p>where lmk j is the location of the j th landmark in the Bump image and v j is the j t h 3D facial landmark in the RGB-D image.</p><p>The blendshape coefficients are computed by solving the minimisation problem for the total fitting term</p><formula xml:id="formula_9">x = arg min x (u,v) c S (u,v) (x) + w 1 j c F j (x) + w 2 n k=1 x 2 k ,</formula><p>where w 1 and w 2 are weighting factors set to 30 and 0.3 (respectively) in our experiments.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Data fusion</head><p>Our proposed 3D model of the head grows and refines on-the-fly with input RGB-D images. We use a running average strategy to integrate new RGB-D data into the Bump and color images. To do so, we define an additional Mask image Mask with the same size as the Bump image, which records confidence of data at each pixel. The main problem now is how to select, for each pixel in the Bump (and color) image, the corresponding pixel in the RGB-D image.</p><p>For a given x (blendshape coefficients), each pixel (u, v) in the Bump image corresponds to a 3D point P x (u, v) that lies in the line L x (u, v) directed by the vector N x (u, v) and passing by the 3D point V x (u, v) (see Eq. (1)). For each input RGB-D image, with estimated pose (R, t) and blendshape coefficients x, we update the Bump (and color) values in all pixels using the 3D point in the RGB-D image that is closest to the lineL x (u, v), directed by the vector RN x (u, v) and passing by the 3D point RV x (u, v) + t. This procedure is illustrated in <ref type="figure" target="#fig_4">Fig. 5</ref> and detailed below 3 .</p><p>For each pixel (u, v), we search for the 3D point in the RGB-D image that is closest to the lineL x (u, v) by walking through a projected segment in the depth image. We define the segment</p><formula xml:id="formula_10">S(u, v) = [RP x (u, v) + t − λRN x (u, v); RP x (u, v) + t + λRN x (u, v)], where λ = 5 cm if Mask(u, v) = 0 (in such a case Bump(u, v) = 0), λ = max(1, 5</formula><p>Mask(u,v) ) cm otherwise. We then walk through the projected segment π(S(u, v)), where π is the perspective projection operator and identify the point p u,v closest to the lineL x (u, v). We compute the distance d <ref type="bibr">(u,v)</ref> from p u,v to the corresponding point RV x (u, v) + t on the blended mesh in the direction RN x (u, v):</p><formula xml:id="formula_11">d (u,v) = (p u,v − (RV x (u, v) + t)) · (RN x (u, v)),</formula><p>where · is the scalar product. We then apply the running average between d <ref type="bibr">(u,v)</ref> and Bump(u, v) as follows:</p><formula xml:id="formula_12">Bump(u, v) = Mask(u,v)Bump(u,v)+d (u,v) Mask(u,v)+1 , Mask(u, v) = Mask(u, v) + 1.</formula><p>The color image is updated in the same way.</p><p>We do not update the value of the Bump image at pixel (u,v) when the corresponding point p u,v is either farther than 1 cm to the lineL x (u, v), farther than τ cm to the point P x (u, v) (with τ = 3 if Mask(u, v) = 0 and τ = 1 otherwise), or when the difference in angle between the normal vector of p u,v and N x (u, v) is greater than 45 degrees. Moreover, in cases where the 3D point RP x (u, v)+t projects to a pixel in the depth image that has a depth value greater than 10 cm than the depth value of RP x (u, v) + t (i.e. visibility violation) the mask value at pixel (u, v) is decreased by 1.</p><p>At each frame, we apply a median filter (with a window size of 3 × 3 pixels) to the Bump image to remove outliers.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Results</head><p>We demonstrate the ability of our proposed method to generate high-fidelity 3D models of the head in dynamic scenes along with the facial motions, with real experiments using both the Kinect for XBOX 360 and Kinect V2 sensors. The Kinect for XBOX 360 sensor (based on structured light) provides RGB-D images at video frame-rate with a resolution of 640 × 480 pixels in the color image and of 320 × 240 pixels in the depth image; the Kinect V2 sensor (based on time of flight) provides RGB-D images at video frame-rate with a resolution of 1920 × 1080 pixels in the color image and of 512 × 424 pixels in the depth image. <ref type="figure" target="#fig_5">Figure 6</ref> shows the first frame of RGB-D videos captured with both sensors, as well as the final 3D model obtained with our proposed method, in the pose of the first frame and with neutral expression. These videos illustrate several challenging situations with various facial expressions, extreme head poses and different shapes of the head. Our proposed Bump image that augments the blendshape meshes allowed us to capture detailed and various geometric details around the head, including the hair (which was not possible with state-of-the-art blendshape methods <ref type="bibr" target="#b12">[14]</ref>), with similar accuracy for different users. In addition, the (underlying) blendshape representation allowed us to capture fine facial motions in real-time, which also helped to build accurate 3D models of the head even in dynamic scenes. Our proposed method is robust to data noise, head pose and facial expression changes, which allowed us to obtain similarly satisfactory results with different sensors.</p><p>In <ref type="figure" target="#fig_6">Fig. 7</ref>, we can see that the Bump image grows and refines over time to generate accurate 3D models with various facial expressions. In particular, by using facial fea-tures in addition to the depth image, we could successfully track the movement of the eyelids <ref type="figure" target="#fig_6">(Fig. 7 (b)</ref> at t = 17s, t = 22s and t = 24s).This is not possible without using facial features because the depth information alone can not distinguish between "eye closed" and "eye opened" ( <ref type="bibr" target="#b16">[18]</ref>). Furthermore, contrary to <ref type="bibr" target="#b16">[18]</ref> we do not need to start the sequence by scanning the head with mouth opened because we know (with the blendshape meshes) the topology of the head (i.e., mouth and eyes can open and close).</p><p>In all our experiments, we used a Bump, color and Mask image with resolution of 240 × 240 pixels (i.e., with average distance between neighbouring points of about 1 mm). The Mask and Depth images were a one-channel unsigned short image, and the color image was a three-channels unsigned char image. Therefore our 3D model required only about 400 KB memory and 28 floating values per frame (i.e., blendshape coefficients) to record the full 3D video.</p><p>Limitations While our proposed method can handle various head poses and facial expressions, occlusions (like the hand occluding the head for example) are not explicitly handled, which is left as future work. Furthermore, the generated color images were not always satisfactory because of blurring artefacts. This is mainly due to the running average technique used to accumulate color data. The variation of color values at the surface of the head is not continuous, thus averaging data from neighbouring pixels creates blurred color images 4 .</p><p>Performance The full pipeline of our proposed method runs a 30 fps on a macbook pro with a 2.8 GHz Intel Core i7 CPU with 16 GB RAM and an AMD Radeon R9 M370X graphics processor. While our code is not fully optimised, we measured the following average timings: head pose estimation took about 2 ms, blendshape coefficients estimation took about 20 ms and data fusion took about 7 ms.</p><p>(a) Current augmented blended shape retargeted to the live frame for "Scene 1" t = 0s t = 3.3s t = 6s t = 7.3s t = 10s t = 13.3s t = 16.3s t = 0s t = 8s t = 14s t = 17s</p><p>Bump image for "Scene 1"</p><p>(b) Current augmented blended shape retargeted to the live frame for "Scene 2" t = 0s t = 8s t = 14s t = 24s</p><p>Bump image for "Scene 2" t = 0s t = 11s t = 13s t = 16s t = 17s t = 24s The sequence in (a) was captured with a Kinect for XBOX 360 sensor. Note that our method can handle extreme pose of the head because it accurately models its 3D geometry (even for the hair). The sequence in (b) was captured with a Kinect v2 sensor. Note that by using facial features we could successfully track the movements of the eyelid.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>We proposed a method to build in real-time detailed animated 3D models of the head in dynamic scenes captured by an RGB-D camera.The contributions of this work are two fold: (1) we introduced a new 3D representation for the head by augmenting blenshape meshes with a single Bump image, and (2) we proposed an efficient data integration technique to grow and refine our proposed 3D representation on-the-fly with input RGB-D images. The Bump image, which augments the blendshape meshes, allowed us to capture detailed and various geometric details around the head (including the hair), while the blendshape representation allowed us to capture fine facial motions in real-time. Our proposed method do not require any training or fine fitting of the blendshape meshes to the user, which makes it easy to use and implement. We believe that our proposed method offers interesting possibilities for applications in telecommunications, where amount of data that can be uploaded is limited (e.g., low bandwidth communications or massive multiparty communications).</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>[0:n] in all blendshape meshes (where l + 1 is the number of vertices), we also have the values of the normal vectors {{Nmle i (j)} j∈[0:l] } i∈[0:n] and the list of triangular faces {F</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>blended mesh retargeted to input frames (with the final Bump image) The main idea of our proposed method is that a single pair of Bump and color images is sufficient to augment all template blendshape meshes and build a space of high fidelity user-specific facial expressions. While the blendshape meshes represent the general shape of the head and facial expressions, the Bump image represents the fine details of the user's head.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 :</head><label>3</label><figDesc>Original and modified blendshape mesh with neutral expression (B 0 ). For each pose, the original mesh is on the left side and our modified mesh is on the right side. Modified areas are highlighted by the red circles.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 :</head><label>4</label><figDesc>The pipeline of our proposed method. The 3D model is initialised with the first input RGB-D image that is assumed to be in neutral expression. The template blendshape meshes are non-rigidly aligned to the input depth image to roughly fit the shape of the user's head. The initial Bump (and color) image is created to record details of the user's face geometry. At runtime, the current 3D model is used to rigidly track the global motion of the head and estimate blendshape coefficients (which identify the current facial expression). Once this non-rigid alignment is done, new measurements are fused into the Bump and color images to improve the quality of the 3D model. defined features in the blendshape mesh B 0 with neutral expression. B 0 is then scaled so that the euclidean distances between the facial features in B 0 match the ones computed from the RGB-D image. IntraFace also gives us a rotation matrix that is used to roughly align B 0 to the first input RGB-D image. The translation vector is computed as the difference vector between the facial features in B 0 and in the depth image corresponding to the tip of the nose.Second, we perform elastic registration with the facial features as proposed in<ref type="bibr" target="#b31">[31]</ref> to quickly and roughly fit B 0 to the user's head. All deformations are then transferred to all other blendshape meshes B i , i &gt; 0<ref type="bibr" target="#b20">[22]</ref>. The pose of the head is refined using ICP with the depth image, and we create the Bump and color images with the first RGB-D image (see Sec. 4.3).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 5 :</head><label>5</label><figDesc>Data fusion into the Bump image. For each pixel in the Bump image, (a) a few candidate points are selected in the input RGB-D image and (b) the best match among these candidates is identified and used to update the pixel value.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 6 :</head><label>6</label><figDesc>The first frame and final retargeted 3D model from results obtained with our proposed method shown in our accompanying video available at [1]. The four results on the left side of the figure were obtained using a Kinect for XBOX 360, while the four results on the right side of the figure were obtained with a Kinect V2. Source code is available at [1].</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 7 :</head><label>7</label><figDesc>Real-time reconstruction of animated 3D models of the head for two scenes. Upper rows of (a) and (b) show the Bump images as they grow and refine over time. Lower rows show the augmented blended meshes at different time (with the current Bump image).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>where f +1 is the number of faces and [s j 0 , s j 1 , s j 2 ] are the indices in {B i } i∈[0:n] of the three vertices that are the summits of the j th face. Note that F is the same for all blendshape meshes. Before building the Bump image, we need to define a few intermediate images that are useful for computations.</figDesc><table></table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">Note that the Bump image records deviation in the normal direction. This is why we must average data in the normal direction for consistency.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="4">Note that the color texture is used only for visualisation purpose. It does not impact on the performance of our proposed system.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgments</head><p>This research was partially supported by the JSPS fellowship program and the CNRS/JSPS Joint Research Project.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Compact and accurate 3-d face modeling using an rgb-d camera: Let&apos;s open the door to 3-d video conference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Anasosalu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Thomas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Sugimoto</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision Workshops (ICCVW), 2013 IEEE International Conference on</title>
+		<imprint>
+			<date type="published" when="2013-12" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="67" to="74" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Online modeling for realtime facial animation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bouaziz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pauly</surname></persName>
+		</author>
+		<idno>40:1- 40:10</idno>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Graph</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">3d shape regression for real-time facial animation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">L C</forename><surname>Cao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Weng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Zhou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Displaced dynamic expression regression for real-time facial tracking and animation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Cao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Hou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Zhou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Graph</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="43" to="44" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Facewarehouse: A 3d facial expression database for visual computing. Visualization and Computer Graphics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Cao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Weng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Zhou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="413" to="425" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Accurate and robust 3d facial capture using a single rgbd camera</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-L</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-T</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Chai</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision (ICCV), 2013 IEEE International Conference on</title>
+		<imprint>
+			<date type="published" when="2013-12" />
+			<biblScope unit="page" from="3615" to="3622" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">A volumetric method for building complex models from range images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Levoy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of SIGGRAPH</title>
+		<meeting>of SIGGRAPH</meeting>
+		<imprint>
+			<date type="published" when="1996" />
+			<biblScope unit="page" from="303" to="312" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>De La Torre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W.-S</forename><surname>Chu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Xiong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Vicente</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Ding</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Cohn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Intraface</surname></persName>
+		</author>
+		<title level="m">11th IEEE International Conference and Workshops on</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="1" to="8" />
+		</imprint>
+	</monogr>
+	<note>Automatic Face and Gesture Recognition (FG)</note>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Temporally enhanced 3d capture of room-sized dynamic scenes with commodity depth cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Dou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Fuchs</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Virtual Reality (VR), 2014 iEEE</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page" from="39" to="44" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Scanning and tracking dynamic objects with commodity depth cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Dou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Fuchs</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-M</forename><surname>Frahm</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Mixed and Augmented Reality (ISMAR), 2013 IEEE International Symposium on</title>
+		<imprint>
+			<date type="published" when="2013-10" />
+			<biblScope unit="page" from="99" to="106" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Patch volumes: Segmentation-based consistent mapping with rgb-d cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Henry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fox</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bhowmik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Mongia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">3D Vision -3DV 2013, 2013 International Conference on</title>
+		<imprint>
+			<date type="published" when="2013-06" />
+			<biblScope unit="page" from="398" to="405" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Laser scan quality 3-d face modeling using a low-cost depth camera</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hernandez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Choi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Medioni</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Signal Processing Conference (EUSIPCO), 2012 Proceedings of the 20th European</title>
+		<imprint>
+			<date type="published" when="2012-08" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="1995" to="1999" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Unconstrained realtime facial performance capture</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P.-L</forename><surname>Hsieh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Omnikinect: Real-time dense volumetric data acquisition and applications</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Kainz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hauswiesner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Reitmayr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Steinberger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Grasset</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Gruber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Veas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kalkofen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Seichter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Schmalstieg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 18th ACM Symposium on Virtual Reality Software and Technology, VRST &apos;12</title>
+		<meeting>the 18th ACM Symposium on Virtual Reality Software and Technology, VRST &apos;12<address><addrLine>New York, NY, USA</addrLine></address></meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="25" to="32" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Realtime facial animation with on-the-fly correctives</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Ye</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Bregler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Graph</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page">5</biblScope>
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Kinectfusion: Real-time dense surface mapping and tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Newcombe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Hilliges</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Molyneaux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Davison</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hodges</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of ISMAR</title>
+		<meeting>of ISMAR</meeting>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="127" to="136" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Dynamicfusion: Reconstruction and tracking of non-rigid scenes in realtime</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">A</forename><surname>Newcombe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fox</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Real-time 3d reconstruction at scale using voxel hashing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Niebner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zollhofer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Stamminger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Graph</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="1" to="169" />
+			<date type="published" when="2013-11" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Moving volume kinectfusion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Vona</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">British Machine Vision Conference (BMVC)</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Efficient variants of the icp algorithm</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Rusinkiewicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Levoy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings. Third International Conference on</title>
+		<meeting>Third International Conference on</meeting>
+		<imprint>
+			<date type="published" when="2001" />
+			<biblScope unit="page" from="145" to="152" />
+		</imprint>
+	</monogr>
+	<note>3-D Digital Imaging and Modeling</note>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Deformation transfer for triangle meshes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">W</forename><surname>Sumner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Popović</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Graph</title>
+		<imprint>
+			<biblScope unit="volume">23</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="399" to="405" />
+			<date type="published" when="2004-08" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Embedded deformation for shape manipulation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">W</forename><surname>Sumner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pauly</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACM SIGGRAPH</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title/>
+	</analytic>
+	<monogr>
+		<title level="j">Papers</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2007" />
+			<publisher>ACM</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">A flexible scene representation for 3d reconstruction using an rgb-d camera</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Thomas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Sugimoto</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision (ICCV), 2013 IEEE International Conference on</title>
+		<imprint>
+			<date type="published" when="2013-12" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Realtime performance-based facial animation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Weise</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bouaziz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pauly</surname></persName>
+		</author>
+		<idno>77:1-77:10</idno>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Graph</title>
+		<imprint>
+			<biblScope unit="volume">30</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Face/off: Live facial puppetry</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Weise</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pauly</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 2009 ACM SIG-GRAPH/Eurographics Symposium on Computer Animation, SCA &apos;09</title>
+		<meeting>the 2009 ACM SIG-GRAPH/Eurographics Symposium on Computer Animation, SCA &apos;09<address><addrLine>New York, NY, USA</addrLine></address></meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="7" to="16" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Deformation-based loop closure for large scale dense rgbd slam</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Whelan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kaess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Leonard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Mcdonald</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Intelligent Robots and Systems (IROS)</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+				<title level="m">IEEE/RSJ International Conference on</title>
+		<imprint>
+			<date type="published" when="2013-11" />
+			<biblScope unit="page" from="548" to="555" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Kintinuous: Spatially extended kinectfusion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Whelan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Mcdonald</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kaess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Fallon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Johannsson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Leonard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advanced Reasoning with Depth Cameras, in conjunction with Robotics: Science and Systems</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">A memoryefficient kinectfusion using octree</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the First International Conference on Computational Visual Media, CVM&apos;12</title>
+		<meeting>the First International Conference on Computational Visual Media, CVM&apos;12<address><addrLine>Berlin, Heidelberg</addrLine></address></meeting>
+		<imprint>
+			<publisher>Springer-Verlag</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="234" to="241" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Quality dynamic human body modeling using a single low-cost depth camera</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Fu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ye</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Yang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2014 IEEE Conference on</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page" from="676" to="683" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Elastic fragments for dense scene reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q.-Y</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Miller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision (ICCV), 2013 IEEE International Conference on</title>
+		<imprint>
+			<date type="published" when="2013-12" />
+			<biblScope unit="page" from="473" to="480" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Automatic reconstruction of personalized avatars from 3d face scans</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zollhofer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Martinek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Greiner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Stamminger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Submuth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Comput. Animat. Virtual Worlds</title>
+		<imprint>
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="issue">2-3</biblScope>
+			<biblScope unit="page" from="195" to="202" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

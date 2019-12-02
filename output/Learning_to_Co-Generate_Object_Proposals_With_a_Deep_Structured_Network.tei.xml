@@ -1,0 +1,782 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Learning to Co-Generate Object Proposals with a Deep Structured Network</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zeeshan</forename><surname>Hayder</surname></persName>
+							<email>zeeshan.hayder@anu.edu.au</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Australian National University</orgName>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="department">NICTA *</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xuming</forename><surname>He</surname></persName>
+							<email>xuming.he@anu.edu.au</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Australian National University</orgName>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="department">NICTA *</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Mathieu</forename><surname>Salzmann</surname></persName>
+							<email>mathieu.salzmann@epfl.ch</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Australian National University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><roleName>EPFL, Switzerland</roleName><surname>Cvlab</surname></persName>
+						</author>
+						<title level="a" type="main">Learning to Co-Generate Object Proposals with a Deep Structured Network</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:42+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Generating object proposals has become a key component of modern object detection pipelines. However, most existing methods generate the object candidates independently of each other. In this paper, we present an approach to co-generating object proposals in multiple images, thus leveraging the collective power of multiple object candidates. In particular, we introduce a deep structured network that jointly predicts the objectness scores and the bounding box locations of multiple object candidates. Our deep structured network consists of a fully-connected Conditional Random Field built on top of a set of deep Convolutional Neural Networks, which learn features to model both the individual object candidates and the similarity between multiple candidates. To train our deep structured network, we develop an end-to-end learning algorithm that, by unrolling the CRF inference procedure, lets us backpropagate the loss gradient throughout the entire structured network. We demonstrate the effectiveness of our approach on two benchmark datasets, showing significant improvement over state-of-the-art object proposal algorithms.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Generating object proposals has recently become one of the key components of modern object detection techniques <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b9">10,</ref><ref type="bibr" target="#b5">6]</ref>. By filtering out the irrelevant portions of the input image, these proposals hugely reduce the search space of object detectors, which has proven beneficial for both speed an accuracy.</p><p>Existing object proposal methods <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b14">15,</ref><ref type="bibr" target="#b18">18,</ref><ref type="bibr" target="#b22">22,</ref><ref type="bibr" target="#b25">25,</ref><ref type="bibr" target="#b11">12]</ref>, however, all generate candidate detections one by one, independently of each other. By contrast, in a parallel line of research, object co-detection <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b9">10,</ref><ref type="bibr" target="#b10">11]</ref> has emerged as an effective approach to leveraging the information jointly contained in multiple images to improve detection accuracy. Unfortunately, to model the similarity of multiple objects, existing methods rely on either handcrafted features <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b20">20,</ref><ref type="bibr" target="#b10">11]</ref>, or features learned for object recognition <ref type="bibr" target="#b9">[10]</ref>. As a consequence, they are ill-suited to handle general object proposals, whose appearance is subject to much larger variations than specific object classes.</p><p>In this paper, we introduce an approach to co-generating object proposals in multiple images. To this end, we propose a deep structured network that lets us learn features to model (i) the appearance of individual object candidates; and (ii) the similarity between multiple object candidates. As a result, our model is able to leverage the collective power of multiple object candidates, while coping with the large appearance variability of general object proposals.</p><p>More specifically, given an initial pool of object candidates, our model consists of a fully-connected Conditional Random Field (CRF) built on top of a set of deep Convolutional Neural Networks (CNNs), one for each candidate. The CNN module of each candidate predicts (i) an objectness score; (ii) a bounding box location; and (iii) a low-dimensional feature vector employed in the pairwise term of the CRF. This pairwise term takes the form of a Gaussian kernel, which allows us to perform inference efficiently <ref type="bibr" target="#b12">[13]</ref>, even for large numbers of candidates. Altogether, the resulting deep structured model jointly produces improved objectness scores for multiple candidates and refined locations for the foreground objects.</p><p>We introduce an end-to-end learning algorithm to estimate the weights of our deep structured network. To this end, we follow a stochastic gradient descent procedure using mini-batches on which we define the CRF. By unrolling the iterations of our CRF inference strategy, we can backpropagate the gradient of our loss function throughout the entire structured network. This lets us learn the similarity of pairs of candidates, thus effectively benefitting from multiple candidates to co-generate high-quality object proposals.</p><p>We demonstrate the effectiveness of our approach on two benchmark datasets for object proposal generation: Pascal VOC 2007 <ref type="bibr" target="#b4">[5]</ref> and MS COCO <ref type="bibr" target="#b16">[17]</ref>. Our experiments evidence the benefits of leveraging multiple images for object proposal generation over state-of-the-art methods that generate the proposals individually.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>Objectness has essentially lead to a paradigm shift in object detection. Instead of the traditional sliding window approach, objectness facilitates detection by proposing a smaller number of interesting candidate regions. These object proposals have now become ubiquitous in state-of-theart detectors <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b5">6]</ref>. While object proposals have also been considered in the context of depth images <ref type="bibr" target="#b24">[24]</ref>, below, we focus on methods designed for RGB images, which are more common for large-scale object detection.</p><p>Most objectness methods rely on well-engineered handcrafted features. For instance, Alexe et al. <ref type="bibr" target="#b0">[1]</ref> introduced a generic objectness measure using four image cues, including multi-scale saliency, color contrast, edge density and superpixel straddleness. Instead of performing exhaustive search over the image, the Selective Search method of Uijlings et al. <ref type="bibr" target="#b22">[22]</ref> utilizes an image over-segmentation. This method achieves high accuracy, and is therefore widely used as an initial step for detection. Krähenbühl et al. <ref type="bibr" target="#b14">[15]</ref> introduced a fast method based on the geodesic distance transform, which can be computed in near-linear time and generates object proposals at different scales. To date, the fastest method to generate object proposals is that of Cheng et al. <ref type="bibr" target="#b3">[4]</ref>. To achieve speed, this method relies on a binary representation of gradient-based features. This speed, however, comes at some loss in object localization accuracy. By contrast, Zitnick et al. <ref type="bibr" target="#b25">[25]</ref> exploited the edges and edge groups at the object boundaries to better localize the objects and generate good-quality proposals.</p><p>Recently, Pinheiro et al. <ref type="bibr" target="#b18">[18]</ref> proposed to go beyond handcrafted features for object proposal generation. In particular, <ref type="bibr" target="#b18">[18]</ref> leverages the representation power of deep networks to learn a discriminative CNN that generates boxes and segmentation proposals. Ultimately, this method achieves state-of-the-art accuracy and competitive speed.</p><p>While effective, all existing objectness methods essentially generate one proposal at a time, without considering interactions between the proposals beyond simple exclusion via non-maximum suppression. By contrast, object co-detection <ref type="bibr" target="#b1">[2]</ref> attempts to simultaneously exploit the similarity between pairs of objects to perform detection jointly in multiple images. Most existing co-detection methods rely on simple handcrafted features to model object similarity <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b20">20,</ref><ref type="bibr" target="#b10">11]</ref>. By contrast, in our previous work <ref type="bibr" target="#b9">[10]</ref>, we performed feature selection using pre-trained CNN features. In both cases, however, the resulting techniques are ill-suited to produce general object proposals, because the employed features are tuned to the problem of detecting specific objects. Here, instead, we co-generate object proposals from multiple images by introducing a deep structured network that lets us learn general object features, as well as pairwise features to model proposal similarity. To the best of our knowledge, leveraging the power of multiple images has never been achieved in the context of objectness.</p><p>The idea of deep structured neural networks has nonetheless been exploited in the past and can be traced back to the 90s <ref type="bibr" target="#b15">[16]</ref>. More recently, such structured networks have been exploited for the task of object recognition and semantic segmentation <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b19">19,</ref><ref type="bibr" target="#b23">23]</ref>. In this context, Schwing et al. <ref type="bibr" target="#b19">[19]</ref> and Zheng et al. <ref type="bibr" target="#b23">[23]</ref> have also proposed to exploit the efficient mean-field inference procedure of <ref type="bibr" target="#b12">[13]</ref>. However, these approaches, beside tackling a different problem than ours, still rely on simple handcrafted features in their pairwise term. By contrast, here, in addition to the unary features, we also learn pairwise features that are backpropagated throughout the entire network. As demonstrated by our experiments, by learning this similarity, we effectively exploit the joint information of multiple object candidates to produce high-quality object proposals.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Co-Generating Object Proposals</head><p>We tackle the problem of jointly predicting a set of object proposals from multiple images 1 . Ultimately, our goal is to leverage the collective information contained in a set of object candidates to obtain high-quality object proposals. To this end, we start from an initial pool of object candidates and develop a deep structured network that improves their ranking and localization. This deep structured network models both the appearance of each object candidate and the interactions between these candidates.</p><p>Formally, let X = {x 1 , · · · , x N } be an initial pool of object candidates generated from a set of images I, typically by an existing object proposal method, such as Bing or Selective Search. Each object candidate x i denotes an image window cropped from one of the images in I. For each x i , we introduce (i) a binary variable y i , which indicates whether x i is a foreground object (y i = 1) or background clutter (y i = 0); and (ii) a continuous real-valued vector t i = (t i,x , t i,y , t i,w , t i,h ) T containing the offset to the true object location if x i is a foreground object and 0 otherwise.</p><p>We formulate the co-generation of object proposals for image set I as a multi-label prediction problem, in which we simultaneously predict the labels Y = {y 1 , · · · , y N } and the location offsets T = {t 1 , · · · , t N } of the object candidate set X. To this end, we develop a deep structured network that defines a joint distribution over Y and T given X, denoted by P (Y, T|X). Our deep structured network consists of two components: One CNN for each object candidate, with weights shared across all candidates, which provides a general object representation, and one fully-connected CRF, which captures the similarity between every pair of object candidates.</p><p>Specifically, the joint distribution defined by the deep <ref type="figure">Figure 1</ref>: Overview of our deep structured network for object proposal co-generation. Our model consists of one deep CNN module per object candidate, linked by a fullyconnected CRF.</p><p>structured network can be written as</p><formula xml:id="formula_0">P (Y, T|X) = 1 Z(X) exp − N i=1 φ(y i , t i |x i ) − N i=1 j&gt;i ψ(y i , y j |x i , x j ) ,<label>(1)</label></formula><p>where Z(·) is the partition function, and φ, ψ are the unary and pairwise potential functions, respectively. The unary potential φ encodes how likely a candidate x i is to be assigned label y i with location offset t i , while the pairwise potential ψ is a symmetric term encouraging any two similar candidates to have the same label assignment. To fully leverage the representative power of CNNs, we make both the unary and pairwise potentials depend on the CNN modules of our deep structured network. Intuitively, and as illustrated by <ref type="figure">Fig. 1</ref>, a CNN module corresponding to candidate x i produces features for the unary term of x i and features for the pairwise terms involving x i . Furthermore, the pairwise term connects multiple CNN modules to form a structured prediction model. In the remainder of this section, we describe our network architecture and potential functions in details.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Deep CNNs for Individual Object Candidates</head><p>The network architecture constituting the CNN module for each individual object candidate x i is depicted by <ref type="figure">Fig. 2</ref>. As mentioned above, this CNN module produces (i) a unary term consisting of an objectness score and of a refined object location; and (ii) a feature vector for the pairwise term. To this end, the output of this network consists of three sibling layers. The first one relies on a softmax layer to predict the foreground/background probabilities; the second one makes use of a regression layer that outputs the four realvalued coordinates of the foreground location offset; and the third one employs a fully-connected layer to generate a low-dimensional feature vector for the CRF pairwise terms.</p><p>More specifically, let us denote by f net i the output of the FC 7 layer of the CNN for object candidate x i . The three network outputs are computed as</p><formula xml:id="formula_1">P u (y i ) ∝ exp(w T u,yi f net i ) (2) t i = W T r f net i y i = 1 ,<label>(3)</label></formula><formula xml:id="formula_2">h p i = W T p f net i ,<label>(4)</label></formula><p>where w u,yi , W r and W p denote the fully-connected weights to generate the label probabilities, the estimated object location offsets and the features for the pairwise potential, respectively. By y i = 1 , we mean that the estimated offset will be W T r f net i if the predicted label y i = 1, and 0 otherwise. This lets us write our unary potential as</p><formula xml:id="formula_3">φ(y i , t i |x i ) = −w T u,yi f net i + t i − W T r f net i y i = 1 2 ,<label>(5)</label></formula><p>which measures the cost for a candidate x i to belong to the foreground/background class and have offset t i .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Fully-connected CRF for Candidate Similarity</head><p>On top of the deep CNN modules, we construct a fullyconnected CRF, which models inter-candidate similarity. To this end, we define the pairwise potential ψ as a datadependent smoothing term that encourages similar object candidates to share the same label. As in <ref type="bibr" target="#b12">[13]</ref>, we restrict the data-dependent weight in the pairwise potential to take the form of a Gaussian kernel. This yields</p><formula xml:id="formula_4">ψ(y i , y j |X i , X j ) = µ(y i , y j )k(h p i , h p j ) (6) = µ(y i , y j )k(W T p f net i , W T p f net j ) , with k(h p i , h p j ) = exp − 1 2 h p i − h p j 2 ) ,<label>(7)</label></formula><p>where h p is defined in Eq. 4, and µ is a label compatibility function. While a general compatibility function can be learned <ref type="bibr" target="#b13">[14]</ref>, in practice, we found that a Potts model, i.e., µ(y i , y j ) = y i = y j , was already effective. Our deep structured model differs from the existing fully-connected CRFs for semantic labeling in several ways. First, since our nodes correspond to object proposals, our CRF implements multiple tasks, including labeling object candidates and refining their locations. In addition, we do not rely on the traditional bilateral kernels, which use manually selected features. Instead, we learn a low-dimensional feature representation that, when used in a Gaussian kernel, is able to encode candidate similarity. As a side effect, we do not need to define a covariance matrix for the kernel, since the weights W p implicitly handle this. This simplifies the end-to-end learning of the full network.  <ref type="figure">Figure 2</ref>: Detailed architecture of our deep structured network for object proposal co-generation. Each input image first goes through a series of convolutional layers, followed by Region-of-Interest (RoI) pooling corresponding to the different candidates in the image. Each candidate then passes through several fully-connected layers to predict unary features, pairwise features and bounding box location offsets. The features are finally employed in a fully-connected CRF. During training, our model makes use of a multi-task loss.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Efficient Object Proposal Co-Generation</head><p>Given our deep structured model, we co-generate object proposals by taking a set of initial object candidates as input, and jointly inferring the MAP estimates of the objects' labels and location offsets, as well as the posterior marginal probabilities of the labels. Note that the MAP estimates of the labels and location offsets are decoupled. Indeed, for any label assignment y i , the minimizer of the second term in Eq. 5 is given by</p><formula xml:id="formula_5">t * i = W T r f net i y i = 1 ,<label>(8)</label></formula><p>since t i does not appear in the pairwise terms. Therefore, we can first compute the MAP label assignment and obtain the location offsets from Eq. 8.</p><p>To compute the MAP and posterior marginals of the label variables, we make use of the same efficient meanfield inference as in <ref type="bibr" target="#b12">[13]</ref>. Specifically, we approximate the joint label probability by a factorized distribution Q(Y) = i q i (y i ). The mean-field inference updates approximate the marginals iteratively as</p><formula xml:id="formula_6">q (t) i (y i ) = 1 Z i exp w T u,yi f net i (9) − j =i yj µ(y i , y j )k(h p i , h p j )q (t−1) j (y j ) ,</formula><p>where t denotes the iteration step, and Z i is the approximate partition function (i.e., the normalizer). These updates can be computed efficiently for a large number of object candidates using a fast Gaussian filtering technique. After performing inference, the MAP estimate of the object label is approximated by y * i = arg max yi q i (y i ). We use the (approximate) marginal probabilities of the foreground class as scores to generate the final ranking of the object proposals.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Learning our Deep Structured Network</head><p>We now develop an end-to-end learning method to estimate the parameters of our multi-output deep structured network. To this end, let D = {X,Ŷ,</p><formula xml:id="formula_7">T} = {(x i ,ŷ i ,t i )} N i=1</formula><p>be a set of object candidates extracted from training im-ages with ground-truth object bounding boxes. Note that this training set contains both foreground objects and background clutter, obtained with the same objectness algorithm as at test time. The offsets of these candidates are normalized by the size of the bounding boxes (scale-invariant) and expressed in log-space. Furthermore, to handle the iterative nature of mean-field inference, we unroll its iterations and denote the output of the final one by {q</p><formula xml:id="formula_8">(m) i } N i=1 .</formula><p>To train our deep structured network, we employ a multitask loss L, which combines a classification loss L y for the object labels and a regression loss L r for the box offsets. This loss can be expressed as</p><formula xml:id="formula_9">L(D) = L y (Q m ,Ŷ) + λL r (T,T) (10) = − i log q (m) i (ŷ i ) + λ ŷ i = 1 t i −t i SL1 ,</formula><p>where T = {t i } is the offset predictions from the network, and λ is a hyperparameter balancing the two tasks. For offset regression, Eq. 10 makes use of a smoothed L 1 loss, denoted by · SL1 and defined as</p><formula xml:id="formula_10">z SL1 = k 0.5z 2 k |z k | &lt; 1 + (|z k | − 0.5) |z k | ≥ 1 .</formula><p>Our deep structured network has four sets of parameters, including the network weights W cnn before the FC 7 layer of the CNN module, the unary term weights W u , the regression weights W r and the pairwise feature weights W p . We use stochastic gradient descent (SGD) to train those weights in an end-to-end manner. The overall training procedure consists of two steps: We first pre-train the CNN modules and then train the full structured model using mini-batches.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Pre-training the Deep CNN Module</head><p>In a first stage, we train the CNN module corresponding to the individual object candidates. In other words, in this stage, we ignore the pairwise features and the dense CRF layer. The CNN module has two outputs: the object label probability P u (y i ) and the bounding box location offset t i . We train it using the same procedure as the Fast RCNN <ref type="bibr" target="#b5">[6]</ref>.</p><p>More specifically, we start from a convolutional neural network (VGG-16 <ref type="bibr" target="#b21">[21]</ref>) pre-trained on ImageNet, which gives us an initialization for the weights W cnn . We then define our training loss as <ref type="bibr" target="#b10">(11)</ref> and adopt the same strategy of mini-batch sampling and back-propagation through RoI pooling layers as in <ref type="bibr" target="#b5">[6]</ref>. This pre-training step initializes the unary and regression weights (W u and W r ), and fine-tunes the network ones (W cnn ).</p><formula xml:id="formula_11">L c = − i log P u (ŷ i ) + λ ŷ i &gt; 0 t i −t i SL1 ,</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">End-to-end Learning with Mini-batches</head><p>In a second stage, given the weight initializations described above, we learn our complete deep structured network. To this end, we follow an SGD procedure using minibatches on which we define the fully-connected CRF. The main challenge of this procedure is to derive the gradient of the loss function L(D) with respect to the weight parameters and to compute this gradient efficiently. Below, we will focus on the gradient of L y , since the second term L r , not involving the CRF, can be handled in the same manner as in Fast RCNN (as in the pre-training of Section 4.1).</p><p>We derive a mean-field gradient method which computes the parameter gradients of our deep structured model recursively, similarly to <ref type="bibr" target="#b13">[14]</ref>. Note that, unlike <ref type="bibr" target="#b13">[14]</ref>, we need to compute the gradient w.r.t. the unary and pairwise weights W u and W p , as well as the network features f net i in order to backpropagate the gradient to the CNN modules.</p><p>As before, let us denote the marginals by q = (q T 1 , · · · , q T N ) T . The gradient of the loss L y w.r.t. a parameter w can be written as ∂L y ∂w = ∂L y ∂q ∂q T ∂w .</p><p>Let u = (u T 1 , · · · , u T N ) T be the unary term for the label variables, where u i = −[w u,0 , w u,1 ] T f net i , andΨ be the matrix form of the pairwise term, i.e.,Ψ = K ⊗ µ, where K = [k ij ] N ×N is the kernel matrix and k ij = k(h p i , h p j ). Following <ref type="bibr" target="#b13">[14]</ref>, the gradient can be recursively computed as</p><formula xml:id="formula_13">∂L y (q m (w)) ∂w = m t=1 b (t)T ∂u ∂w + q (t−1) ∂Ψ ∂w ,<label>(13)</label></formula><formula xml:id="formula_14">where b (t) = (b (t),T 1 , · · · , b (t),T N</formula><p>) T is the normalized loss gradient at iteration t. This normalized loss gradient is defined recursively as</p><formula xml:id="formula_15">b (m) = A (m) ∇L y (q (m) ) T (14) b (t) = A (t)Ψ b (t+1) , t = 1, · · · , m − 1 ,<label>(15)</label></formula><p>where A (t) is a block diagonal matrix with blocks A</p><formula xml:id="formula_16">(t) i = q (t) i q (t) T i − diag(q (t)</formula><p>i ). We now derive the two partial derivatives in Eq. 13 for different weights and features.</p><p>Unary weights and features. The unary weight matrix W u only appears in the first term of Eq. 13. This term can be computed as</p><formula xml:id="formula_17">∂b T u ∂W u = i b i f net T i .<label>(16)</label></formula><p>The gradient of the unary term w.r.t. the deep network features f net i can be computed similarly as</p><formula xml:id="formula_18">∂b T u ∂f net i = W T u b i .<label>(17)</label></formula><p>Note that this feature gradient will be combined with the feature gradient of the pairwise term derived below.</p><p>Pairwise weights and features. For the pairwise term, we apply the chain-rule and first compute the gradient w.r.t. the pairwise features h p i . This yields</p><formula xml:id="formula_19">∂b TΨ q ∂h p i = ∂ ∂h i b T K (m) ⊗ µ (m) q = j (h p j − h p i )q T j K (m) ij µ (m) b i (18) = j h p j q T j K (m) ij µ (m) b i − h p i b T i j K (m) ij µ (m) q j .</formula><p>This gradient can be computed efficiently using highdimensional filtering on the permutohedral lattice <ref type="bibr" target="#b12">[13]</ref>. The gradient w.r.t. the pairwise weight matrix W p and the CNN features f net i can be computed as</p><formula xml:id="formula_20">∂b TΨ q ∂W p = i ∂b TΨ q ∂h p i ∂h p T i ∂W p = i ∂b TΨ q ∂h p i f net T i (19) ∂b TΨ q ∂f net i = ∂b TΨ q ∂h p i ∂h p T i ∂f net i = W T p ∂b TΨ q ∂h p i .<label>(20)</label></formula><p>Altogether, we can compute all the gradients in a single forward and backward pass over our full deep structured network. The overall mean-field gradient computation framework is summarized in Algorithm 1. In practice, we use different step sizes for the unary, pairwise, regression and CNN weights, which helps the learning procedure focus on the pairwise and regression weights, while only fine-tuning the rest of the network.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experiments</head><p>In this section, we demonstrate the effectiveness of our method on the problem of large-scale proposal generation for generic objects. To this end, we evaluate our approach on two challenging datasets with multiple object classes, i.e., PASCAL VOC 2007 and Microsoft COCO, and compare our results with those of the state-of-the-art object proposal methods. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Algorithm 1 Mean-field Gradient for Classification Loss</head><formula xml:id="formula_21">Input: Features {f net i } N i=1 ,</formula><formula xml:id="formula_22">ui = q 0 i = −W T u f net i 3: h p i = W T p f net i 4: for t = 1 ... m do 5: q (t) i = 1 Z exp ui − j =i k(h p i , h p j )µq (t−1) j 6:</formula><p>end for 7: end procedure Phase 2: Gradient Computation 8: procedure (Backward pass) <ref type="bibr">9:</ref> g u w ← 0 10:</p><formula xml:id="formula_23">g p w ← 0 11: g net f ← 0 12: A (m) i = q (m) i q (m) T i − diag(q (m) i ) 13: b (m−1) = A (m) ∇Ly(q (m) ) T 14: for t = m − 1 ... 1 do 15: A (t) i = q (t) i q (t) T i − diag(q (t) i ) 16: g u w ← g u w + ∂ ∂Wu b (t) T u ⊲ Eq. 16 17: g net f,i ← g net f,i + ∂ ∂f net i b (t) T u ⊲ Eq. 17 18: g p w ← g p w + ∂ ∂W p b (t) TΨ q (t)</formula><p>⊲ Eq. 19 <ref type="bibr" target="#b19">19</ref>:</p><formula xml:id="formula_24">g net f,i ← g net f,i + ∂ ∂f net i b (t) TΨ q (t) ⊲ Eq. 20 20: b (t−1) = A (t)Ψ b (t)</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>21:</head><p>end for 22: end procedure</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Datasets and Setup</head><p>The Pascal VOC 2007 dataset <ref type="bibr" target="#b4">[5]</ref> comprises 5011 training-validation (trainval) images and 4952 test images, and the Microsoft COCO 2014 validation dataset <ref type="bibr" target="#b16">[17]</ref> contains 82783 training images and 40504 validation images. For Pascal VOC 2007, we used all the trainval data to learn our deep structured model, and evaluated it using all the test data. For Microsoft COCO, we also used all the training images to learn our model, but, following <ref type="bibr" target="#b18">[18]</ref>, used only the first 5000 validation images for evaluation purpose.</p><p>In our experiments, we evaluated several techniques to generate the initial set of candidates. The choice of the particular initial proposal generation methods we use was motivated by the fact that <ref type="bibr" target="#b11">[12]</ref>, whose protocol we follow, and other existing methods used them for these datasets. In particular, we used Bing <ref type="bibr" target="#b3">[4]</ref> for both datasets, as well as Selective Search <ref type="bibr" target="#b22">[22]</ref> for Pascal and Edge Box <ref type="bibr" target="#b25">[25]</ref> for MS COCO, which represent the most commonly-used methods for each dataset, respectively. For training, we obtained the mini-batches by randomly sampling 2 images from the training set and taking 512 candidates per image. At test time, given the initial candidates of all the test images, we extracted the unary features, bounding box location offsets and pairwise features for each candidate using the deep CNN, and then performed inference in the fully-connected CRF using all the candidates. This allows us to truly exploit the similarities across all the test data, and, thanks to the efficient inference procedure, remains fast (e.g., 1.4 sec. for roughly 10k Bing candidates per image).</p><p>The standard error measures to evaluate object proposal quality rely on Average Recall (AR). It has been shown that, for a fixed number of proposals per image, AR correlates well with the mean Average Precision of the object detector applied to the proposals <ref type="bibr" target="#b11">[12]</ref>. We therefore report our results using the average recall metrics defined by Hosang et al. <ref type="bibr" target="#b11">[12]</ref> and the COCO-style metrics <ref type="bibr" target="#b16">[17]</ref> used in <ref type="bibr" target="#b18">[18]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Results on VOC 2007</head><p>In <ref type="table">Table 1</ref>, we provide a quantitative comparison of our approach with state-of-the-art objectness methods according to the criteria of <ref type="bibr" target="#b16">[17]</ref> on the Pascal VOC 2007 dataset. The results of these baselines were directly reproduced from their respective papers. Note that our approach yields stateof-the-art results; for 10 and 100 proposals, when using Bing candidates, and for 1000 proposals, when using Selective Search candidates. <ref type="table">Table 1</ref> also shows that, when selecting 100 proposals, our co-generation approach yields consistent improvement across different sizes of objects. In terms of runtime, our method remains highly competitive. Altogether, we believe that these results clearly evidence the benefits of co-generating the object proposals.</p><p>The results of our approach and of the baselines according to the criteria defined by Hosang et al. <ref type="bibr" target="#b11">[12]</ref> are shown in <ref type="figure" target="#fig_1">Fig. 3</ref> 2 . In particular, the top row of <ref type="figure" target="#fig_1">Fig. 3</ref> depicts the recall as a function of the Intersection over Union (IoU) threshold when using the 10, 100, 1000 &amp; 10000 highestscoring bounding boxes per image, respectively. The bottom row of <ref type="figure" target="#fig_1">Fig. 3</ref> shows the AR and the recall as a function of the number of proposals for IoU thresholds of 0.5, 0.7 and 0.8, respectively. Again, these curves clearly show that co-generating the proposals yields to much better object bounding boxes. In particular, it is interesting to note that, even though the AR of the initial Bing bounding boxes is quite low, it is boosted to state-of-the-art results after our deep structured co-generation process. Note also that, while initially better, the Selective Search candidates still benefit from our approach. Interestingly, at high IoU, our results with Bing candidates tend to outperform our results with Selective Search candidates.</p><p>To evidence that our approach is not simply learning the  <ref type="table">Table 1</ref>: AR analysis on the PASCAL VOC 2007 test set: We compare our method with state-of-the-art object proposal baselines according to the criteria of <ref type="bibr" target="#b16">[17]</ref>. The results of our approach are provided in Rows 7-8 when using Bing and Selective Search to generate the initial candidates, respectively. The AR for small, medium and large objects were computed for 100 proposals. Note that our co-generation approach outperforms the state-of-the-art baseline in all metrics. The difference in speed between two versions of our approach is due to the fact that Bing yields a larger candidate pool than Selective Search. We compare our method with state-of-the-art object proposal baselines according to the criteria of <ref type="bibr" target="#b11">[12]</ref>. Top: Recall v.s. IoU threshold. These recall curves were generated using the highest-scoring 10, 100, 1000 and 10000 object proposals, respectively. Bottom: Recall v.s. Number of Proposals. The first plot shows the AR, and the remaining recall curves were generated using IoU thresholds of 0.5, 0.7 and 0.8, respectively. In all the plots, the dashed lines correspond to our co-generation results, in blue when using Selective Search candidates (Co-Obj (SS)) and in black when using Bing candidates (Co-Obj (B)). The baselines correspond to Bing (B), EdgeBoxes (EB70), Geodesic (G), MCG (M) and SelectiveSearch (SS). These results clearly evidence the benefits of our co-generation approach.</p><p>behavior of a particular proposal method, we evaluated it with different proposal generation techniques during training and test time. As shown in <ref type="table" target="#tab_3">Table 2</ref>, our method still outperforms the initial proposal generation methods, thus evidencing that it truly learns the relevant context for the object candidates themselves. We acknowledge, however, that the best results are obtained when using the same method at training and test time.   <ref type="table">Table 3</ref>: AR analysis on the MS COCO validation set: We compare our method with state-of-the-art object proposal baselines according to the criteria of <ref type="bibr" target="#b16">[17]</ref>. The results of our approach are provided in Rows 7-8 when using Bing and EdgeBox to generate the initial candidates, respectively. The AR for small, medium and large objects were computed for 100 proposals. Note that our co-generation approach outperforms the state-of-the-art baseline in all metrics. We compare our method with state-of-the-art object proposal baselines according to the criteria of <ref type="bibr" target="#b11">[12]</ref>. Top: Recall v.s. IoU threshold. These recall curves were generated using the highest-scoring 10, 100, 1000 and 10000 object proposals, respectively. Bottom: Recall v.s. Number of Proposals. The first plot shows the AR, and the remaining recall curves were generated using IoU thresholds of 0.5, 0.7 and 0.8, respectively. In all the plots, the dashed lines correspond to our co-generation results, in blue when using EdgeBox candidates (Co-Obj (EB)) and in black when using Bing candidates (Co-Obj (B)). The baselines correspond to Bing (B), EdgeBoxes (EB70), Geodesic (G), MCG (M) and SelectiveSearch (SS). These results again evidence the benefits of our co-generation approach.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">Results on Microsoft COCO</head><p>The results on Microsoft COCO, using the same metrics as before, are provided in <ref type="table">Table 3</ref> and <ref type="figure" target="#fig_2">Fig. 4</ref>, respectively. The same conclusions as before can be drawn from this analysis: Co-generating object proposals clearly is beneficial over generating the proposals independently. Our approach with EdgeBox initial candidates yields state-ofthe-art results, with our Bing-based approach still outperforming the baselines for all metrics, with the exception of AR@1000. The improvement due to our approach is again consistent across all object sizes. The runtimes of our method on the MS COCO dataset are 1 and 0.8 sec per image when using Bing and EdgeBox, respectively.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>We have introduced a framework to jointly generate object proposals from multiple images, thus leveraging the collective power of multiple object candidates. Our method is based on a deep structured network that jointly predicts the objectness scores and the bounding box locations of multiple object candidates by extracting features that model the individual object candidates and the similarity between them. Our experiments have demonstrated the benefits of our approach over the state-of-the-art methods that generate object proposals individually. In the future, we intend to exploit our high-quality object proposals to improve the accuracy of object (co-)detection.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 3 :</head><label>3</label><figDesc>Pascal VOC 2007 test:</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 4 :</head><label>4</label><figDesc>MS COCO validation:</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Initial Weights Wu, Wp, Mean-field Iterations m, Loss Function Ly Output: Feature and Weight Gradients: g u</figDesc><table>w , g p 
+w , g net 
+
+f,i 
+
+Phase 1: Joint Inference 
+
+1: procedure (Forward pass) 
+
+2: 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 2 :</head><label>2</label><figDesc>Using different initial proposal methods: Rows 1-2 show the baseline object proposal methods. Rows 3-6 show our results using various candidate generation options at training and test time.</figDesc><table>Microsoft COCO 2014 
+
+AR@10 AR@100 AR@1000 AR@Small AR@Medium AR@Large 
+
+Bing 
+0.042 
+0.100 
+0.189 
+0.001 
+0.063 
+0.319 
+EdgeBoxes 
+0.074 
+0.178 
+0.338 
+0.015 
+0.134 
+0.502 
+Geodesic 
+0.040 
+0.180 
+0.359 
+-
+-
+-
+Selective Search 
+0.052 
+0.163 
+0.357 
+0.012 
+0.132 
+0.466 
+MCG 
+0.101 
+0.246 
+0.398 
+0.008 
+0.119 
+0.530 
+DeepMask 
+0.153 
+0.313 
+0.446 
+-
+-
+-
+Ours Co-Obj (Bing) 
+0.183 
+0.340 
+0.423 
+0.111 
+0.438 
+0.590 
+Ours Co-Obj (Edge Boxes 70) 0.189 
+0.366 
+0.492 
+0.107 
+0.449 
+0.686 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Note that our approach also applies to the multiple proposals of a single image.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">Note that we do not have access to the code, or the bounding boxes, of<ref type="bibr" target="#b18">[18]</ref>, and were thus unable to compute these curves for their approach.</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">What is an object</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Alexe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Deselaers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ferrari</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Object co-detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Xiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Learning deep structured models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">BING: binarized normed gradients for objectness estimation at 300fps</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H S</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">The pascal visual object classes (voc) challenge. The International Journal of Computer Vision (IJCV)</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">V</forename><surname>Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K I</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Fast R-CNN</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Rich feature hierarchies for accurate object detection and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Robust Object Co-detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Jou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Cai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">F</forename><surname>Chang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Simultaneous detection and segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hariharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Structural kernel learning for large scale multiclass object co-detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Hayder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Salzmann</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Object co-detection via efficient inference in a fully-connected crf</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Hayder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Salzmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>He</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">What makes for effective detection proposals?</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">H</forename><surname>Hosang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Benenson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI)</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Efficient inference in fully connected crfs with gaussian edge potentials</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krähenbühl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The Conference on Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Parameter learning and convergent inference for dense random fields</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krähenbühl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Geodesic object proposals</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krähenbühl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Gradientbased learning applied to document recognition. Proceedings of the IEEE</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Haffner</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Maire</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">D</forename><surname>Bourdev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Microsoft COCO: common objects in context</title>
+	</analytic>
+	<monogr>
+		<title level="m">The European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Learning to segment object candidates</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">O</forename><surname>Pinheiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Collobert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The Conference on Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Fully connected deep structured networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">CoRR</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">CoDeL: An efficient human codetection and labeling framework</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Liao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Jia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Selective search for object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Uijlings</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Van De Sande</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Gevers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Smeulders</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">The International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page">6</biblScope>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Conditional random fields as recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Jayasumana</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Romera-Paredes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vineet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Du</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Object proposal estimation in depth images using compact 3d shape manifolds</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">A</forename><surname>Prisacariu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Averkiou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-M</forename><surname>Cheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">J</forename><surname>Mitra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H</forename><surname>Torr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">German Conference on Pattern Recognition (GCPR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Edge boxes: Locating object proposals from edges</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

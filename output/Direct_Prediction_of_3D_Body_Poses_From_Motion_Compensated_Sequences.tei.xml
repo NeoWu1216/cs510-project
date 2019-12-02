@@ -1,0 +1,1202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Direct Prediction of 3D Body Poses from Motion Compensated Sequences</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Bugra</forename><surname>Tekin</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="laboratory">CVLab</orgName>
+								<orgName type="institution">EPFL</orgName>
+								<address>
+									<settlement>Lausanne</settlement>
+									<country key="CH">Switzerland</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Artem</forename><surname>Rozantsev</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="laboratory">CVLab</orgName>
+								<orgName type="institution">EPFL</orgName>
+								<address>
+									<settlement>Lausanne</settlement>
+									<country key="CH">Switzerland</country>
+								</address>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Vincent</forename><surname>Lepetit</surname></persName>
+							<email>lepetit@icg.tugraz.at</email>
+							<affiliation key="aff0">
+								<orgName type="laboratory">CVLab</orgName>
+								<orgName type="institution">EPFL</orgName>
+								<address>
+									<settlement>Lausanne</settlement>
+									<country key="CH">Switzerland</country>
+								</address>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="institution">TU Graz</orgName>
+								<address>
+									<settlement>Graz</settlement>
+									<country key="AT">Austria</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pascal</forename><surname>Fua</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="laboratory">CVLab</orgName>
+								<orgName type="institution">EPFL</orgName>
+								<address>
+									<settlement>Lausanne</settlement>
+									<country key="CH">Switzerland</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Direct Prediction of 3D Body Poses from Motion Compensated Sequences</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:39+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We propose an efficient approach to exploiting motion information from consecutive frames of a video sequence to recover the 3D pose of people. Previous approaches typically compute candidate poses in individual frames and then link them in a post-processing step to resolve ambiguities. By contrast, we directly regress from a spatio-temporal volume of bounding boxes to a 3D pose in the central frame.</p><p>We further show that, for this approach to achieve its full potential, it is essential to compensate for the motion in consecutive frames so that the subject remains centered. This then allows us to effectively overcome ambiguities and improve upon the state-of-the-art by a large margin on the Human3.6m, HumanEva, and KTH Multiview Football 3D human pose estimation benchmarks.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>In recent years, impressive motion capture results have been demonstrated using depth cameras, but 3D body pose recovery from ordinary monocular video sequences remains extremely challenging. Nevertheless, there is great interest in doing so, both because cameras are becoming ever cheaper and more prevalent and because there are many potential applications. These include athletic training, surveillance, and entertainment.</p><p>Early approaches to monocular 3D pose tracking involved recursive frame-to-frame tracking and were found to be brittle, due to distractions and occlusions from other people or objects in the scene <ref type="bibr" target="#b42">[43]</ref>. Since then, the focus has shifted to "tracking by detection," which involves detecting human pose more or less independently in every frame followed by linking the poses across the frames <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b30">31]</ref>, which is much more robust to algorithmic failures in isolated frames. More recently, an effective single-frame approach to learning a regressor from a kernel embedding of 2D HOG features to 3D poses has been proposed <ref type="bibr" target="#b16">[17]</ref>. Excellent results have also been reported using a Convolutional Neural Net <ref type="bibr" target="#b24">[25]</ref>.</p><p>However, inherent ambiguities of the projection from 3D to 2D, including self-occlusion and mirroring, can still confuse these state-of-the-art approaches. A linking procedure can correct for these ambiguities to a limited extent by exploiting motion information a posteriori to eliminate erroneous poses by selecting compatible candidates over consecutive frames. However, when such errors happen frequently for several frames in a row, enforcing temporal consistency afterwards is not enough.</p><p>In this paper, we therefore propose to exploit motion information from the start. To this end, we learn a regression function that directly predicts the 3D pose in a given frame of a sequence from a spatio-temporal volume centered on it. This volume comprises bounding boxes surrounding the person in consecutive frames coming before and after the central one. We will show that this approach is more effective than relying on regularizing initial estimates a posteriori. We evaluated different regression schemes and obtained the best results by applying a Deep Network to the spatiotemporal features <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b44">45]</ref> extracted from the image volume. Furthermore, we show that, for this approach to perform to its best, it is essential to align the successive bounding boxes of the spatio-temporal volume so that the person inside them remains centered. To this end, we trained two Convolutional Neural Networks to first predict large body shifts between consecutive frames and then refine them. This approach to motion compensation outperforms other more standard ones <ref type="bibr" target="#b27">[28]</ref> and improves 3D human pose estimation accuracy significantly. <ref type="figure" target="#fig_0">Fig. 1</ref> depicts sample results of our approach.</p><p>The novel contribution of this paper is therefore a principled approach to combining appearance and motion cues to predict 3D body pose in a discriminative manner. Furthermore, we demonstrate that what makes this approach both practical and effective is the compensation for the body motion in consecutive frames of the spatiotemporal volume. We show that the proposed framework improves upon the state-of-the-art <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b24">25]</ref> by a large margin on Hu-man3.6m <ref type="bibr" target="#b16">[17]</ref>, HumanEva <ref type="bibr" target="#b35">[36]</ref>, and KTH Multiview Football <ref type="bibr" target="#b5">[6]</ref> 3D human pose estimation benchmarks.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>Approaches to estimating the 3D human pose can be classified into two main categories, depending on whether they rely on still images or image sequences. We briefly review both kinds below. In the results section, we will demonstrate that we outperform state-of-the-art representatives of each of these two categories.</p><p>3D Human Pose Estimation in Single Images. Early approaches tended to rely on generative models to search the state space for a plausible configuration of the skeleton that would align with the image evidence <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b34">35]</ref>. These methods remain competitive provided that a good enough initialization can be supplied. More recent ones <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b5">6]</ref> extend 2D pictorial structure approaches <ref type="bibr" target="#b9">[10]</ref> to the 3D domain. However, in addition to their high computational cost, they tend to have difficulty localizing people's arms accurately because the corresponding appearance cues are weak and easily confused with the background <ref type="bibr" target="#b32">[33]</ref>.</p><p>By contrast, discriminative regression-based approaches <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b39">40]</ref> build a direct mapping from image evidence to 3D poses. Discriminative methods have been shown to be effective, especially if a large training dataset, such as <ref type="bibr" target="#b16">[17]</ref> is available. Within this context, rich features encoding depth <ref type="bibr" target="#b33">[34]</ref> and body part information <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b24">25]</ref> have been shown to be effective at increasing the estimation accuracy. However, these methods can still suffer from ambiguities such as self-occlusion, mirroring and foreshortening, as they rely on single images. To overcome these issues, we show how to use not only appearance, but also motion features for discriminative 3D human pose estimation purposes.</p><p>In another notable study, <ref type="bibr" target="#b3">[4]</ref> investigates merging image features across multiple views. Our method is fundamen-tally different as we do not rely on multiple cameras. Furthermore, we compensate for apparent motion of the person's body before collecting appearance and motion information from consecutive frames.</p><p>3D Human Pose Estimation in Image Sequences. Such approaches also fall into two main classes.</p><p>The first class involves frame-to-frame tracking and dynamical models <ref type="bibr" target="#b42">[43]</ref> that rely on Markov dependencies on previous frames. Their main weakness is that they require initialization and cannot recover from tracking failures.</p><p>To address these shortcomings, the second class focuses on detecting candidate poses in individual frames followed by linking them across frames in a temporally consistent manner. For example, in <ref type="bibr" target="#b1">[2]</ref>, initial pose estimates are refined using 2D tracklet-based estimates. In <ref type="bibr" target="#b46">[47]</ref>, dense optical flow is used to link articulated shape models in adjacent frames. Non-maxima suppression is then employed to merge pose estimates across frames in <ref type="bibr" target="#b6">[7]</ref>. By contrast to these approaches, we capture the temporal information earlier in the process by extracting spatiotemporal features from image cubes of short sequences and regressing to 3D poses. Another approach <ref type="bibr" target="#b4">[5]</ref> estimates a mapping from consecutive ground-truth 2D poses to a central 3D pose. Instead, we do not require any such 2D pose annotations and directly use as input a sequence of motion-compensated frames.</p><p>While they have long been used for action recognition <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b44">45]</ref>, person detection <ref type="bibr" target="#b27">[28]</ref>, and 2D pose estimation <ref type="bibr" target="#b10">[11]</ref>, spatiotemporal features have been underused for 3D body pose estimation purposes. The only recent approach we are aware of is that of <ref type="bibr" target="#b45">[46]</ref> that involves building a set of point trajectories corresponding to high joint responses and matching them to motion capture data. One drawback of this approach is its very high computational cost. Also, while the 2D results look promising, no quantitative 3D results are provided in the paper and no code is available for comparison purposes.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Method</head><p>Our approach involves finding bounding boxes around people in consecutive frames, compensating for the motion to form spatiotemporal volumes, and learning a mapping from these volumes to a 3D pose in their central frame.</p><p>In the remainder of this section, we first introduce our formalism and then describe each individual step, depicted by <ref type="figure" target="#fig_1">Fig. 2.</ref> </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Formalism</head><p>In this work, we represent 3D body poses in terms of skeletons, such as those shown in <ref type="figure" target="#fig_0">Fig. 1</ref>, and the 3D locations of their D joints relative to that of a root node. As several authors before us <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b16">17]</ref>, we chose this representation because it is well adapted to regression and does not require us to know a priori the exact body proportions of our subjects. It suffers from not being orientation invariant but using temporal information provides enough evidence to overcome this difficulty. Let I i be the i-th image of a sequence containing a subject and Y i ∈ R 3·D be a vector that encodes the corresponding 3D joint locations. Typically, regression-based discriminative approaches to inferring Y i involve learning a parametric <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b17">18]</ref> or non-parametric <ref type="bibr" target="#b41">[42]</ref> model of the mapping function, </p><formula xml:id="formula_0">X i → Y i ≈ f (X i ) over training examples, where X i = Ω(I i ; m i ) is</formula><formula xml:id="formula_1">= {(X i , Y i )} N i=1 .</formula><p>As discussed in Section 2, in such a setting, reliably estimating the 3D pose is hard to do due to the inherent ambiguities of 3D human pose estimation such as self-occlusion and mirror ambiguity. Instead, we model the mapping function f conditioned on a spatiotemporal 3D data volume consisting of a sequence of T frames centered at image i,</p><formula xml:id="formula_2">V i = [I i−T /2+1 , . . . , I i , . . . , I i+T /2 ], that is, Z i → Y i ≈ f (Z i ) where Z i = ξ(V i ; m i−T /2+1 , . . . , m i , . . . , m i+T /2 ) is a feature vector computed over the data volume, V i . The training set, in this case, is T = {(Z i , Y i )} N i=1 ,</formula><p>where Y i is the pose in the central frame of the image stack. In practice, we collect every block of consecutive T frames across all training videos to obtain data volumes. We will show in the results section that this significantly improves performance and that the best results are obtained for volumes of T = 24 to 48 images, that is 0.5 to 1 second given the 50fps of the sequences of the Human3.6m <ref type="bibr" target="#b16">[17]</ref> dataset.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Spatiotemporal Features</head><p>Our feature vector Z is based on the 3D HOG descriptor <ref type="bibr" target="#b44">[45]</ref>, which simultaneously encodes appearance and motion information. It is computed by first subdividing a data volume such as the one depicted by <ref type="figure" target="#fig_1">Fig. 2</ref>(c) into equally-spaced cells. For each one, the histogram of oriented 3D spatio-temporal gradients <ref type="bibr" target="#b20">[21]</ref> is then computed. To increase the descriptive power, we use a multi-scale approach. We compute several 3D HOG descriptors using different cell sizes. In practice, we use 3 levels in the spatial dimensions-2×2, 4×4 and 8×8-and we set the temporal cell size to a small value-4 frames for 50 fps videos-to capture fine temporal details. Our final feature vector Z is obtained by concatenating the descriptors at multiple resolutions into a single vector.</p><p>An alternative to encoding motion information in this way would have been to explicitly track body pose in the spatiotemporal volume, as done in <ref type="bibr" target="#b1">[2]</ref>. However, this involves detection of the body pose in individual frames which is subject to ambiguities caused by the projection from 3D to 2D as explained in Section 1 and not having to do this is a contributing factor to the good results we will show in Section 4.</p><p>Another approach for spatiotemporal feature extraction could be to use 3D CNNs directly operating on the pixel intensities of the spatiotemporal volume. However, in our experiments, we have observed that, 3D CNNs did not achieve any notable improvement in performance compared to spatial CNNs. This is likely due to the fact that 3D CNNs remain stuck in local minima due to the complexity of the model and the large input dimensionality. This is also observed in <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b25">26]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Motion Compensation with CNNs</head><p>For the 3D HOG descriptors introduced above to be representative of the person's pose, the temporal bins must correspond to specific body parts, which implies that the person should remain centered from frame to frame in the bounding boxes used to build the image volume. We use the Deformable Part Model detector (DPM) <ref type="bibr" target="#b9">[10]</ref> to obtain these bounding boxes, as it proved to be effective in various applications. However, in practice, these bounding boxes may not be well-aligned on the person. Therefore, we need to  first shift these boxes as shown in <ref type="figure" target="#fig_1">Fig. 2</ref>(c) before creating a spatiotemporal volume. In <ref type="figure" target="#fig_4">Fig. 3</ref>, we illustrate this requirement by showing heat maps of the gradients across a sequence without and with motion compensation. Without it, the gradients are dispersed across the region of interest, which reduces feature stability.</p><p>We therefore implemented an object-centric motion compensation scheme inspired by the one proposed in <ref type="bibr" target="#b31">[32]</ref> for drone detection purposes, which was shown to perform better than optical-flow based alignment <ref type="bibr" target="#b27">[28]</ref>. To this end, we train regressors to estimate the shift of the person from the center of the bounding box. We apply these shifts to the frames of the image stack so that the subject remains centered, and obtain what we call a rectified spatio-temporal volume (RSTV), as depicted in <ref type="figure" target="#fig_1">Fig. 2(c)</ref>. We have chosen CNNs as our regressors, as they prove to be effective in various regression tasks.</p><p>More formally, let m be an image patch extracted from a bounding box returned by DPM. An ideal regressor ψ(·) for our purpose would return the horizontal and vertical shifts δu and δv of the person from the center of m: ψ(m) = (δu, δv). In practice, to make the learning task easier, we introduce two separate regressors ψ coarse (·) and ψ f ine (·). We train the first one to handle large shifts and the second to refine them. We use them iteratively as illustrated by Algorithm 1. After each iteration, we shift the images by the computed amount and estimate a new shift. This process typically takes only 4 iterations, 2 using ψ coarse (·) and 2 using ψ f ine (·).</p><p>Both CNNs feature the same architecture, which comprises fully connected, convolutional, and pooling layers, as depicted by <ref type="figure" target="#fig_1">Fig. 2(b)</ref> and <ref type="figure" target="#fig_5">Fig. 4</ref>. Pooling layers are usually used to make the regressor robust to small image translations. However, while reducing the number of parameters to learn, they could negatively impact performance as our goal is precise localization. We therefore do not use pooling at the first convolutional layer, only in the subsequent ones. This yields accurate results while keeping the number of parameters small enough to prevent overfitting.</p><p>Training our CNNs requires a set of image windows centered on a subject, shifted versions, such as the one Algorithm 1 Object-centric motion compensation.</p><p>Input: image I, initial location estimate (i, j) ψ * (·) = ψ coarse (·) for the first 2 iterations, ψ f ine (·) for the other 2,</p><formula xml:id="formula_3">(i 0 , j 0 ) = (i, j) for o = 1 : M axIter do (δu o , δv o ) = ψ * (I(i o−1 , j o−1 )), with I(i o−1 , j o−1 ) the image patch in I centered on (i o−1 , j o−1 ) (i o , j o ) = (i o−1 + δu o , j o−1 + δv o ) end for (i, j) = (i M axIter , j M axIter )</formula><p>depicted by <ref type="figure" target="#fig_5">Fig. 4</ref>, and the corresponding shift amounts (δu, δv). We generate them from training data by randomly shifting ground truth bounding boxes in horizontal and vertical directions. For ψ coarse these shifts are large, whereas for ψ f ine they are small, thus representing the specific tasks of each regressor.</p><p>Using our CNNs requires an initial estimate of the bounding box for every person, which is given by DPM. However, applying the detector to every frame of the video is time consuming. Thus, we decided to apply DPM only to the first frame. The position of the detection is then refined and the resulting bounding box is used as an initial estimate in the second frame. Similarly, its position is then corrected and the procedure is iterated in subsequent frames. The initial person detector provides rough location estimates and our motion compensation algorithm naturally compensates even for relatively large positional inaccuracies using the regressor, ψ coarse . Some examples of our motion compensation algorithm, an analysis of its efficiency as compared to optical-flow and further implementation details can be found in the supplementary material.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Pose Regression</head><p>We cast 3D pose estimation in terms of finding a mapping Z → f (Z) ≈ Y, where Z is the 3D HOG descriptor computed over a spatiotemporal volume and Y is the 3D pose in its central frame. To learn f , we considered Kernel Ridge Regression (KRR) <ref type="bibr" target="#b13">[14]</ref>, Kernel Dependency Estimation (KDE) <ref type="bibr" target="#b7">[8]</ref> as they were used in previous works on this task <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b16">17]</ref>, and Deep Networks.</p><p>Kernel Ridge Regression (KRR) trains a model for each dimension of the pose vector separately. To find the mapping from spatiotemporal features to 3D poses, it solves a regularized least-squares problem of the form,</p><formula xml:id="formula_4">argmin W i ||Y i − WΦ Z (Z i )|| 2 2 + ||W|| 2 2 ,<label>(1)</label></formula><p>where (Z j , Y j ) are training pairs and Φ Z is the Fourier approximation to the exponential-χ 2 kernel <ref type="bibr" target="#b16">[17]</ref>. This problem can be solved in closed-form by</p><formula xml:id="formula_5">W = (Φ Z (Z) T Φ Z (Z) + I) −1 Φ Z (Z) T Y.</formula><p>Kernel Dependency Estimation (KDE) is a structured regressor that accounts for correlations in 3D pose space. To learn the regressor, not only the input as in the case of KRR, but also the output vectors are lifted into high-dimensional Hilbert spaces using kernel mappings Φ Z and Φ Y , respectively <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b16">17]</ref>. The dependency between high dimensional input and output spaces is modeled as a linear function. The corresponding matrix W is computed by standard kernel ridge regression,</p><formula xml:id="formula_6">argmin W i ||Φ Y (Y i ) − WΦ Z (Z i )|| 2 2 + ||W|| 2 2 ,<label>(2)</label></formula><p>To produce the final prediction Y, the difference between the predictions and the mapping of the output in the high dimensional Hilbert space is minimized by findinĝ</p><formula xml:id="formula_7">Y = argmin Y ||W T Φ Z (Z) − Φ Y (Y)|| 2 2 .<label>(3)</label></formula><p>Although the problem is non-linear and non-convex, it can nevertheless be accurately solved given the KRR predictors for individual outputs to initialize the process. In practice, we use an input kernel embedding based on 15,000-dimensional random feature maps corresponding to an exponential-χ 2 kernel, a 4000-dimensional output embedding corresponding to radial basis function kernel as in <ref type="bibr" target="#b23">[24]</ref>.</p><p>Deep Networks (DN) rely on a multilayered architecture to estimate the mapping to 3D poses. We use 3 fullyconnected layers with the rectified linear unit (ReLU) activation function in the first 2 layers and a linear activation function in the last layer. The first two layers consist of 3000 neurons each and the final layer has 51 outputs, corresponding to 17 3D joint positions. We performed cross-validations across the network's hyperparameters and choose the ones with the best performance on a validation set. We minimize the squared difference between the prediction and the ground-truth 3D positions to find the mapping f parametrized by Θ:</p><formula xml:id="formula_8">Θ = argmin Θ i ||f Θ (Z i ) − Y i || 2 2 .<label>(4)</label></formula><p>We used the ADAM <ref type="bibr" target="#b19">[20]</ref> gradient update method to steer the optimization problem with a learning rate of 0.001 and dropout regularization to prevent overfitting. We will show in the results section that our DN-based regressor outperforms KRR and KDE <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b16">17]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Results</head><p>We evaluate our approach on the Human3.6m <ref type="bibr" target="#b16">[17]</ref>, HumanEva-I/II <ref type="bibr" target="#b35">[36]</ref>, and KTH Multiview Football II <ref type="bibr" target="#b5">[6]</ref> datasets. Human3.6m is a recently released large-scale motion capture dataset that comprises 3.6 million images and corresponding 3D poses within complex motion scenarios. 11 subjects perform 15 different actions under 4 different viewpoints. In Human3.6m, different people appear in the training and test data. Furhtermore, the data exhibits large variations in terms of body shapes, clothing, poses and viewing angles within and across training/test splits <ref type="bibr" target="#b16">[17]</ref>. The HumanEva-I/II datasets provide synchronized images and motion capture data and are standard benchmarks for 3D human pose estimation. We further provide results on the KTH Multiview Football II dataset to demonstrate the performance of our method in a non-studio environment. In this dataset, the cameraman follows the players as they move around the pitch. We compare our method against several state-of-the-art algorithms in these datasets. We chose them to be representative of different approaches to 3D human pose estimation, as discussed in Section 2. For those which we do not have access to the code, we used the published performance numbers and ran our own method on the corresponding data.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Evaluation on Human3.6m</head><p>To quantitatively evaluate the performance of our approach, we first used the recently released Human3.6m <ref type="bibr" target="#b16">[17]</ref> dataset. On this dataset, the regression-based method of <ref type="bibr" target="#b16">[17]</ref> performed best at the time and we therefore use it as a baseline. That method relies on a Fourier approximation of 2D HOG features using the χ 2 comparison metric, and we will refer to it as "e χ2 -HOG+KRR" or "e χ2 -HOG+KDE", depending on whether it uses KRR or KDE. Since then, even better results have been obtained for some of the actions by using CNNs <ref type="bibr" target="#b24">[25]</ref>. We denote it as CNN-Regression. We refer to our method as "RSTV+KRR", "RSTV+KDE" or "RSTV+DN", depending on whether we use respectively KRR, KDE, or deep networks on the features extracted from the Rectified Spatiotemporal Volumes (RSTV). We report pose estimation accuracy in terms of average Euclidean distance between the ground-truth and predicted joint positions (in millimeters) as in <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b24">25]</ref> and exclude the first and last T /2 frames (0.24 seconds for T = 24 at 50 fps).</p><p>The authors of <ref type="bibr" target="#b24">[25]</ref> reported results on subjects S9 and S11 of Human3.6m and those of <ref type="bibr" target="#b16">[17]</ref> made their code available. To compare our results to both of those baselines, we therefore trained our regressors and those of <ref type="bibr" target="#b16">[17]</ref>   <ref type="table">Table 1</ref>. 3D joint position errors in Human3.6m using the metric of average Euclidean distance between the ground truth and predicted joint positions (in mm) to compare our results, obtained with the different regressors described in Section 3.4, as well as for those of <ref type="bibr" target="#b16">[17]</ref> and <ref type="bibr" target="#b24">[25]</ref>. Our method achieves significant improvement over state-of-the-art discriminative regression approaches by exploiting appearance and motion cues from motion compensated sequences. '-' indicates that the results are not reported for the corresponding action class. Standard deviations are given in parantheses.</p><p>ferent actions. We used 5 subjects (S1, S5, S6, S7, S8) for training purposes and 2 (S9 and S11) for testing. Training and testing is carried out in all camera views for each separate action, as described in <ref type="bibr" target="#b16">[17]</ref>. Recall from Section 3.1 that 3D body poses are represented by skeletons with 17 joints. Their 3D locations are expressed relative to that of a root node in the coordinate system of the camera that captured the images. <ref type="table">Table 1</ref> summarizes our results 1 on Human3.6m and Figs. 5-6 depict some of them on selected frames. We provide additional figures in the supplementary material. Overall, our method significantly outperforms e χ2 -HOG+KDE <ref type="bibr" target="#b16">[17]</ref> for all actions, with the mean error reduced by about 23%. It also outperforms the method of <ref type="bibr" target="#b15">[16]</ref>, which itself reports an overall performance improvement of 17% over e χ2 -HOG+KDE and 33% over plain HOG+KDE on a subset of the dataset consisting of single images. Furthermore, it improves on CNN-Regression <ref type="bibr" target="#b24">[25]</ref> by a margin of more than 5% for all the actions for which accuracy numbers are reported. The improvement is particularly marked for actions such as Walking and Eating, which involve substantial amounts of predictable motion. For Buying, Sitting and Sitting Down, using the structural information of the human body, RSTV+KDE yields better pose estimation accuracy. On 12 out of 15 actions and in average over all actions in the dataset, RSTV+DN yields the best pose estimation accuracy.</p><p>In the following, we analyze the importance of motion compensation and of the influence of the temporal window size on pose estimation accuracy. Additional analyses can be found in the supplementary material.</p><p>Importance of Motion Compensation. To highlight the importance of motion compensation, we recomputed our features without it. We will refer to this method as STV. We also tried using a recent optical flow (OF) algorithm for motion compensation <ref type="bibr" target="#b27">[28]</ref>.</p><p>We provide results in <ref type="table">Table 2</ref> for two actions, which are representative in the sense that the Walking Dog one involves a lot of movement while subjects performing the Greeting action tend not to walk much. Even without the motion compensation, regression on the features extracted from spatiotemporal volumes yields better accuracy than the method of <ref type="bibr" target="#b16">[17]</ref>. Motion compensation significantly improves pose estimation performance as compared to STVs. Furthermore, our CNN-based approach to motion compensation (RSTV) yields higher accuracy than optical-flow based motion compensation <ref type="bibr" target="#b27">[28]</ref>.  <ref type="table">Table 2</ref>. Importance of motion compensation. The results of <ref type="bibr" target="#b16">[17]</ref> are compared against those of our method, without motion compensation and with motion compensation using either optical flow (OF) of <ref type="bibr" target="#b27">[28]</ref> or our algorithm introduced in Section 3.3.</p><p>Influence of the Size of the Temporal Window. In <ref type="table">Table 3</ref>, we report the effect of changing the size of our temporal windows from 12 to 48 frames, again for two representative actions. Using temporal information clearly helps and the best results are obtained in the range of 24 to 48 frames, which corresponds to 0.5 to 1 second at 50 fps. When the temporal window is small, the amount of information encoded in the features is not sufficient for accurate estimates. By contrast, with too large windows, overfitting can be a problem as it becomes harder to account for variation in the   <ref type="table">Table 3</ref>. Influence of the size of the temporal window. We compare the results of <ref type="bibr" target="#b16">[17]</ref> against those obtained using our method, RSTV+DN, with increasing temporal window sizes.</p><p>input data. Note that a temporal window size of 12 frames already yields better results than the method of <ref type="bibr" target="#b16">[17]</ref>. For the experiments we carried out on Human3.6m, we use 24 frames as it yields both accurate reconstructions and efficient feature extraction.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Evaluation on HumanEva</head><p>We further evaluated our approach on HumanEva-I and HumanEva-II datasets. The baselines we considered are frame-based methods of <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b14">15,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b38">39,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b43">44]</ref>, frame-toframe-tracking approaches which impose dynamical priors on the motion <ref type="bibr" target="#b36">[37,</ref><ref type="bibr" target="#b40">41]</ref> and the tracking-by-detection framework of <ref type="bibr" target="#b1">[2]</ref>. The mean Euclidean distance between the ground-truth and predicted joint positions is used to evalu-ate pose estimation performance. As the size of the training set in HumanEva is too small to train a deep network, we use RSTV+KDE instead of RSTV+DN.</p><p>We demonstrate in Tables 4 and 5 that using temporal information earlier in the inference process in a discriminative bottom-up fashion yields more accurate results than the above-mentioned approaches that enforce top-down temporal priors on the motion.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>HumanEva-I:</head><p>For the experiments we carried out on HumanEva-I, we train our regressor on training sequences of Subject 1, 2 and 3 and evaluate on the "validation" sequences in the same manner as the baselines we compare against <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b36">37,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b38">39,</ref><ref type="bibr" target="#b40">41,</ref><ref type="bibr" target="#b43">44]</ref>. Spatiotemporal features are computed only from the first camera view. We report the performance of our approach on cyclic and acyclic motions, more precisely Walking and Boxing, in <ref type="table">Table 4</ref> and depict example 3D pose estimation results in <ref type="figure" target="#fig_7">Fig. 7</ref>. The results show that our method outperforms the state-of-the-art approaches on this benchmark as well.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>HumanEva-II: On</head><p>HumanEva-II, we compare against <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b14">15]</ref> as they report the best monocular pose </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Walking</head><p>Boxing Method: S1 S2 S3 Avg. S1 S2 S3 Avg.</p><p>Taylor et al. <ref type="bibr" target="#b40">[41]</ref> 48. <ref type="bibr" target="#b7">8</ref>   <ref type="table">Table 4</ref>. 3D joint position errors (in mm) on the Walking and Boxing sequences of HumanEva-I. We compare our approach against methods that rely on discriminative regression <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b21">22]</ref>, 2D pose detectors <ref type="bibr" target="#b37">[38,</ref><ref type="bibr" target="#b38">39,</ref><ref type="bibr" target="#b43">44]</ref>, 3D pictorial structures <ref type="bibr" target="#b2">[3]</ref>, CNN-based markerless motion capture method of <ref type="bibr" target="#b8">[9]</ref> and methods that rely on topdown temporal priors <ref type="bibr" target="#b36">[37,</ref><ref type="bibr" target="#b40">41]</ref>. '-' indicates that the results are not reported for the corresponding sequences.</p><p>estimation results on this dataset. HumanEva-II provides only a test dataset and no training data, therefore, we trained our regressors on HumanEva-I using videos captured from different camera views. This demonstrates the generalization ability of our method to different camera views. Following <ref type="bibr" target="#b1">[2]</ref>, we use subjects S1, S2 and S3 from HumanEva-I for training and report pose estimation results in the first 350 frames of the sequence featuring subject S2. Global 3D joint positions in HumanEva-I are projected to camera coordinates for each view. Spatiotemporal features extracted from each camera view are mapped to 3D joint positions in its respective camera coordinate system, as done in <ref type="bibr" target="#b28">[29]</ref>. Whereas <ref type="bibr" target="#b1">[2]</ref> uses additional training data from the "People" <ref type="bibr" target="#b29">[30]</ref> and "Buffy" <ref type="bibr" target="#b10">[11]</ref> datasets, we only use the training data from HumanEva-I. We evaluated our approach using the official online evaluation tool. We illustrate the comparison in <ref type="table">Table 5</ref>, where our method achieves the state-of-the-art performance.  <ref type="table">Table 5</ref>. 3D joint position errors (in mm) on the Combo sequence of the HumanEva-II dataset. We compare our approach against the tracking-by-detection framework of <ref type="bibr" target="#b1">[2]</ref> and recognition-based method of <ref type="bibr" target="#b14">[15]</ref>. '-' indicates that the result is not reported for the corresponding sequence.   <ref type="table">Table 6</ref>. On the KTH Multiview Football II we have compared our method using a single camera to those of <ref type="bibr" target="#b5">[6]</ref> using either single or two cameras and to the one of <ref type="bibr" target="#b2">[3]</ref> using two cameras. '-' indicates that the result is not reported for the corresponding body part.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Evaluation on KTH Multiview Football Dataset</head><p>As in <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b5">6]</ref>, we evaluate our method on the sequence containing Player 2. The first half of the sequence is used for training and the second half for testing, as in the original work <ref type="bibr" target="#b5">[6]</ref>. To compare our results to those of <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b5">6]</ref>, we report pose estimation accuracy in terms of percentage of correctly estimated parts (PCP) score. As in the Hu-manEva experiments, we provide results for RSTV+KDE. <ref type="figure" target="#fig_8">Fig. 8</ref> depicts example pose estimation results. As shown in <ref type="table">Table 6</ref>, we outperform the baselines even though our algorithm is monocular, whereas they use both cameras. This is due to the fact that the baselines instantiate 3D pictorial structures relying on 2D body part detectors, which may not be precise when the appearance-based information is weak. By contrast, collecting appearance and motion information simultaneously from rectified spatiotemporal volumes, we achieve better 3D pose estimation accuracy.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>We have demonstrated that taking into account motion information very early in the modeling process yields significant performance improvements over doing it a posteriori by linking pose estimates in individual frames. We have shown that extracting appearance and motion cues from rectified spatiotemporal volumes disambiguate challenging poses with mirroring and self-occlusion, which brings about substantial increase in accuracy over the state-of-the-art methods on several 3D human pose estimation benchmarks. Our proposed framework is generic and could be used for other kinds of articulated motions.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>3D human pose estimation in Human3.6m, HumanEva and KTH Multiview Football datasets. The recovered 3D skeletons are reprojected into the images in the top row and shown by themselves in the bottom row. Our approach can reliably recover 3D poses in complex scenarios by collecting appearance and motion evidence simultaneously from motion compensated sequences. All the figures in this paper are best viewed in color.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .</head><label>2</label><figDesc>Overview of our approach to 3D pose estimation. (a) A person is detected in several consecutive frames. (b) Using a CNN, the corresponding image windows are shifted so that the subject remains centered. (c) A rectified spatiotemporal volume (RSTV) is formed by concatenating the aligned windows. (d) A pyramid of 3D HOG features are extracted densely over the volume. (e) The 3D pose in the central frame is obtained by regression.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>a feature vector computed over the bounding box or the foreground mask, m i , of the person in I i . The model parameters are usually learned from a labeled set of N training examples, T</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 3 .</head><label>3</label><figDesc>Heat maps of the gradients across all frames for Greeting action (a) without and (b) with motion compensation. When motion compensation is applied, body parts become covariant with the 3D HOG cells across frames and thus the extracted spatiotemporal features become more part-centric and stable.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 4 .</head><label>4</label><figDesc>Motion Compensation CNN architecture. The network consists of convolution (dark red), pooling (purple) and fully connected (yellow) layers. The output of the network is a twodimensional vector that describes horizontal and vertical shifts of the person from the center of the patch.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 5 .Figure 6 .</head><label>56</label><figDesc>Pose estimation results on Human3.6m. The rows correspond to the Buying, Discussion and Eating actions. (a) Reprojection in the original images and projection on the orthogonal plane of the ground-truth skeleton for each action. (b,c) The skeletons recovered by the approach of [17] and our method. Note that our method can recover the 3D pose in these challenging scenarios, which involve significant amounts of self occlusion and orientation ambiguity. 3D human pose estimation with different regressors on Human3.6m. (a) Reprojection in the original images and projection on the orthogonal plane of the ground truth skeletons for Walking Pair action class. (b,c,d) The 3D body pose recovered using the KRR, KDE or DN regressors applied to RSTV.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 7 .</head><label>7</label><figDesc>Results on HumanEva-I. The recovered 3D poses and their projection on the image are shown for Walking and Boxing actions. More results are provided in the supplementary material.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_8"><head>Figure 8 .</head><label>8</label><figDesc>Results on KTH Multiview Football II. The 3D skeletons are recovered from Camera 1 images and projected on those of Camera 2 and 3, which were not used to compute the poses.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>for 15 dif-</figDesc><table>Method 
+
+Directions 
+Discussion 
+Eating 
+Greeting 
+Phone Talk 
+Posing 
+Buying 
+Sitting 
+e χ2 -HOG+KRR [17] 140.00 (42.55) 189.36 (94.79) 157.20 (54.88) 167.65 (60.16) 173.72 (60.93) 159.25 (52.47) 214.83 (86.36) 193.81 (69.29) 
+e χ2 -HOG+KDE [17] 132.71 (61.78) 183.55 (121.71) 132.37 (90.31) 164.39 (91.51) 162.12 (83.98) 150.61 (93.56) 171.31 (141.76) 151.57(93.84) 
+CNN-Regression [25] 
+-
+148.79 (100.49) 104.01 (39.20) 127.17 (51.10) 
+-
+-
+-
+-
+
+RSTV+KRR (Ours) 
+119.73 (37.43) 159.82 (91.81) 113.42 (50.91) 144.24 (55.94) 145.62 (57.78) 136.43 (44.49) 166.01 (69.94) 178.93 (69.32) 
+RSTV+KDE (Ours) 
+103.32 (55.29) 158.76 (119.16) 89.22 (37.45) 127.12 (76.58) 119.35 (53.53) 115.14 (65.21) 108.12 (84.10) 136.82 (91.25) 
+RSTV+DN (Ours) 
+102.41 (36.13) 147.72 (90.32) 88.83 (32.13) 125.28 (51.78) 118.02 (51.23) 112.38 (42.71) 129.17 (65.93) 138.89 (66.18) 
+
+Method: 
+Sitting Down 
+Smoking 
+Taking Photo 
+Waiting 
+Walking 
+Walking Dog 
+Walking Pair 
+Average 
+e χ2 -HOG+KRR [17] 279.07 (102.81) 169.59 (60.97) 211.31 (83.72) 174.27 (82.99) 108.37 (30.63) 192.26 (90.63) 139.76 (38.86) 178.03 (67.47) 
+e χ2 -HOG+KDE [17] 243.03 (173.51) 162.14 (91.08) 205.94 (111.28) 170.69 (96.38) 96.60 (40.61) 177.13(130.09) 127.88 (69.35) 162.14 (99.38) 
+CNN-Regression [25] 
+-
+-
+189.08 (93.99) 
+-
+77.60 (23.54) 146.59 (75.38) 
+-
+-
+
+RSTV+KRR (Ours) 247.21 (101.14) 140.54 (56.04) 192.75 (84.85) 156.84 (78.13) 70.98 (22.69) 152.01 (76.16) 91.47 (26.30) 147.73 (61.52) 
+RSTV+KDE (Ours) 206.43 (163.55) 119.64 (69.67) 185.96 (116.29) 146.91 (98.81) 66.40 (20.92) 128.29 (95.34) 78.01 (28.70) 126.03 (78.39) 
+RSTV+DN (Ours) 
+224.9 (100.63) 118.42 (54.28) 182.73 (80.04) 138.75 (77.24) 55.07 (18.95) 126.29 (73.89) 65.76 (24.41) 124.97 (57.72) 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">The sequence corresponding to Subject 11 performing Directions action on camera 1 in trial 2 is removed from evaluation due to video corruption.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgments. This work was supported in part by the EUROSTARS Project CLASS.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">3D Human Pose from Silhouettes by Relevance Vector Regression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Triggs</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Monocular 3D Pose Estimation and Tracking by Detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andriluka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">3D Pictorial Structures for Multiple Human Pose Estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Belagiannis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Amin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andriluka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Navab</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ilic</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Twin Gaussian Processes for Structured Prediction. IJCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sminchisescu</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">On the Effect of Temporal Information on Monocular 3D Human Pose Estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Brauer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Gong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gonzalez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Arens</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">3D Pictorial Structures for Multiple View Articulated Pose Estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Burenius</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sullivan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Carlsson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Merging Pose Estimates Across Space and Time</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Burgos-Artizzu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hall</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">A General Regression Technique for Learning Transductions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Cortes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mohri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Weston</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Efficient Convnet-Based Marker-Less Motion Capture in General Scenes with a Low Number of Cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Elhayek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Aguiar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tompson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Pishchulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Andriluka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Bregler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Theobalt</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Felzenszwalb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<title level="m">Object Detection with Discriminatively Trained Part Based Models. PAMI</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Progressive Search Space Reduction for Human Pose Estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ferrari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Martin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Optimization and Filtering for Human Motion Capture</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gall</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Rosenhahn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-P</forename><surname>Seidel</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+			<publisher>IJCV</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Articulated Multi-Body Tracking Under Egomotion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gammeter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Jaeggli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Schindler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Leibe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">Kernel Methods in Machine Learning. The Annals of Statistics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Hofmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schlkopf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Smola</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">A Recognition-Based Motion Capture Baseline on the Humaneva II Test Data. MVA</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">R</forename><surname>Howe</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Iterated Second-Order Label Sensitive Pooling for 3D Human Pose Estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Ionescu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Carreira</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sminchisescu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Ionescu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Papava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Olaru</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sminchisescu</surname></persName>
+		</author>
+		<title level="m">Hu-man3.6M: Large Scale Datasets and Predictive Methods for 3D Human Sensing in Natural Environments. PAMI</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Semi-Supervised Hierarchical Models for 3D Human Pose Reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kanaujia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sminchisescu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">N</forename><surname>Metaxas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Large-Scale Video Classification with Convolutional Neural Networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Toderici</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Shetty</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Leung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sukthankar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Adam: A Method for Stochastic Optimisation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">A Spatio-Temporal Descriptor Based on 3D-Gradients</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kläser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Marszałek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Depth Sweep Regression Forests for Estimating 3D Human Pose from Images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kostrikov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gall</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Laptev</surname></persName>
+		</author>
+		<title level="m">On Space-Time Interest Points. IJCV</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Chebyshev Approximations to the Histogram χ 2 Kernel</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Lebanon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sminchisescu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">3D Human Pose Estimation from Monocular Images with Deep Convolutional Network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">B</forename><surname>Chan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Initialization Strategies of Spatio-Temporal Convolutional Neural Networks. CoRR</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Mansimov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<idno>abs/1503.07274</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Learning and Tracking Human Motion Using Functional Analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ormoneit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Sidenbladh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Black</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Hastie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fleet</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Workshop on Human Modeling, Analysis and Synthesis</title>
+		<imprint>
+			<date type="published" when="2000" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Exploring Weak Stabilization for Motion Feature Extraction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Evaluating Example-Based Pose Estimation: Experiments on the Humaneva Sets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Poppe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Learning to Parse Images of Articulated Bodies</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Strike a Pose: Tracking People by Finding Stylized Poses</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Forsyth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Flying Objects Detection from a Single Moving Camera</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rozantsev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Cascaded Models for Articulated Pose Estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Sapp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Toshev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Taskar</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Real-Time Human Pose Recognition in Parts from a Single Depth Image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cook</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Blake</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Stochastic Tracking of 3D Human Figures Using 2D Image Motion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Sidenbladh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Fleet</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2000" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+		<title level="m" type="main">Humaneva: Synchronized Video and Motion Capture Dataset and Baseline Algorithm for Evaluation of Articulated Human Motion. IJCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Sigal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Balan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<monogr>
+		<title level="m" type="main">Loose-Limbed People: Estimating 3D Human Pose and Motion Using Non-Parametric Belief Propagation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Sigal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Isard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">W</forename><surname>Haussecker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<publisher>IJCV</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">A Joint Model for 2D and 3D Pose Estimation from a Single Image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Simo-Serra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Quattoni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Torras</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Moreno-Noguer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Single Image 3D Human Pose Estimation from Noisy Observations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Simo-Serra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ramisa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Alenya</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Torras</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Moreno-Noguer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Discriminative Density Propagation for 3D Human Motion Estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sminchisescu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kanaujia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Metaxas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Dynamical Binary Latent Variable Models for 3D Human Pose Tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">W</forename><surname>Taylor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Sigal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Fleet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Sparse Probabilistic Regression for Activity-Independent Human Pose Inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Priors for People Tracking from Small Training Sets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fleet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Hertzman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Gao</surname></persName>
+		</author>
+		<imprint/>
+	</monogr>
+	<note>robust Estimation of 3D Human Poses from a Single Image</note>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Making Action Recognition Robust to Occlusions and Viewpoint Changes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Weinland</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ozuysal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Spatio-Temporal Matching for Human Detection in Video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>De La</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Torre</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Estimating Human Pose with Flowing Puppets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zuffi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Romero</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

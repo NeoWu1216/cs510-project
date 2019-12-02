@@ -1,0 +1,992 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Analyzing Classifiers: Fisher Vectors and Deep Neural Networks</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sebastian</forename><surname>Lapuschkin</surname></persName>
+							<email>sebastian.lapuschkin|wojciech.samek@hhi.fraunhofer.de</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Fraunhofer HHI</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexander</forename><surname>Binder</surname></persName>
+							<email>alexanderbinder@sutd.edu.sg</email>
+							<affiliation key="aff1">
+								<orgName type="institution">Singapore University of Technology and Design</orgName>
+								<address>
+									<addrLine>3 TU Berlin</addrLine>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Grégoire</forename><surname>Montavon</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Klaus-Robert</forename><surname>Müller</surname></persName>
+							<affiliation key="aff2">
+								<orgName type="institution">Korea University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Wojciech</forename><surname>Samek</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Fraunhofer HHI</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Analyzing Classifiers: Fisher Vectors and Deep Neural Networks</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:37+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Fisher vector (FV) classifiers and Deep</head><p>Neural Networks (DNNs) are popular and successful algorithms for solving image classification problems. However, both are generally considered 'black box' predictors as the non-linear transformations involved have so far prevented transparent and interpretable reasoning. Recently, a principled technique, Layer-wise Relevance Propagation (LRP), has been developed in order to better comprehend the inherent structured reasoning of complex nonlinear classification models such as Bag of Feature models or DNNs. In this paper we (1) extend the LRP framework also for Fisher vector classifiers and then use it as analysis tool to (2) quantify the importance of context for classification, (3) qualitatively compare DNNs against FV classifiers in terms of important image regions and (4) detect potential flaws and biases in data. All experiments are performed on the PASCAL VOC 2007 and ILSVRC 2012 data sets.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Deep Neural Networks (DNN) have defined state of the art in many fields, such as image classification <ref type="bibr" target="#b13">[14]</ref>, image detection <ref type="bibr" target="#b7">[8]</ref> and machine translation <ref type="bibr" target="#b25">[26]</ref>. While much of research is devoted to extending the applicability of DNNs to more domains <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b30">31]</ref>, we focus here on a different question, namely the impact of context, and the ability to use context. This question was raised already during times of the Pascal VOC challenge, where the amount of context was a matter of speculation, c.f . PASCAL VOC workshop presentation slides in <ref type="bibr" target="#b6">[7]</ref>.</p><p>The question of context is considered for two prominent types of classifiers. The first type, Fisher vectors (FV) <ref type="bibr" target="#b23">[24]</ref> are based on computing a single feature map on an image as a whole and subsequently computing one score. In such a setup one can expect that context plays naturally a role for the prediction as the image is processed as a whole during training and testing. In case of small training sample sizes and the absence of opportunities for fine-tuning, Fisher vec-tors still might be a viable alternative to DNNs due to their reduced parameter space. Examples for performance issues of Deep Neural Networks on small sample sizes without finetuning can be seen in <ref type="bibr" target="#b29">[30]</ref>. The question of context is also open for the second type, Deep Neural Networks. One might assume that context plays no role for neural networks when they are used in classification by detection setups. For example, a recent ImageNet challenge winner relied on 144 crops per test image and classifier <ref type="bibr" target="#b26">[27]</ref>. Another work using Pascal VOC data <ref type="bibr" target="#b19">[20]</ref> used at test time 500 multi-scale patches per test image. However in certain setups computing several hundred windows as required for classification by detection setups may not be possible, e.g. when using hardware without GPUs and much main memory, such as used consumer laptops or smartphones, and when having time constraints for computation of the test prediction on an image. One can expect to see a larger impact of context when resorting to a few regions of an image at test time only, and thus training and testing with larger image patches.</p><p>Our contribution here is as follows. <ref type="bibr" target="#b0">(1)</ref> We extend the method of <ref type="bibr" target="#b0">[1]</ref> to Fisher vectors, and apply relevance propagation for the first time to Fisher vectors. <ref type="bibr" target="#b1">(2)</ref> We define measures for the amount of context used for prediction in a single test image. <ref type="bibr" target="#b2">(3)</ref> We apply the measures of context for neural networks and Fisher vector based classifiers on the Pascal VOC dataset, as it offers a way to approximately validate context by its bounding box annotation. We compare the context dependence of Fisher vectors against neural nets which were trained on larger patches of input images. (4) We show that this methodology is able to identify strong cases of context and biases in the training data even without using bounding box information.</p><p>The next section reviews related work. Section 3 briefly describes the Fisher vector classifier. Section 4 introduces the extended LRP method to decompose a Fisher vector prediction into scores for small regions of the order of a local feature. The same section also proposes a novel LRP-based measure of the importance of context. Section 5 introduces the experimental setup and presents results. The paper concludes in Section 6 with a summary and an outlook.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related work</head><p>In recent years, interest in understanding image representations <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b18">19]</ref> and being able to explain the decision process of a classification system has increased, with e.g., gradient-based sensitivity analysis <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b24">25]</ref>. However, many approaches have been conceived with a specific pipeline architecture in mind. So do <ref type="bibr" target="#b27">[28]</ref> explain predictions for Bag of Word (BoW) features with hard mapping (Vector Quantization) and Histogram Intersection kernels, and <ref type="bibr" target="#b15">[16]</ref> identifies image regions critical for the prediction of a linear SVM classifier with max-pooling feature aggregation algorithm. A solution especially dedicated to visualize image regions triggering the prediction of deep convolutional neural networks with max-pooling layers and has been proposed in <ref type="bibr" target="#b29">[30]</ref> with deconvolution nets.</p><p>Recently, a paradigm called Layer-wise Relevance Propagation (LRP) has been introduced in [1] as a way to compute partial prediction contributions -or relevance values R -for intermediate and input representations based on the final classifier output. It computes scores for regions or pixels of an image explaining the prediction itself rather than the effect of single neurons or particular layers. See <ref type="bibr" target="#b17">[18]</ref> for a more in depth explanation of this method. It is applied in <ref type="bibr" target="#b0">[1]</ref> to Bag of Visual Words classifiers and Deep Neural Networks; in this paper we extend this method to make it applicable to Fisher vector classifiers.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Fisher vectors in a nutshell</head><p>Fisher Vectors <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b23">24]</ref> are a powerful tool to compute rich image or video representations and provide state-ofthe-art performance amongst feature extraction algorithms. <ref type="figure" target="#fig_0">Figure 1</ref> summarizes the steps involved in computing FV representation of an image. We introduce here a notation which later will be used in the Section 4.</p><p>An integral part for computing FVs is to fit a Gaussian Mixture Model (GMM) on top of the local descriptors L = {l} extracted from the training data to serve as a soft vocabulary of visual prototypes. Assuming a K-component GMM λ = {(π k , µ k , Σ k )} k=1..K , then π k is the mixture weight of component k, with k π k = 1 and ∀k : π k ≥ 0, µ k is the mean vector of the kth mixture component and Σ k its (diagonal) covariance matrix. For the computation of a full FV representation of an image, each local descriptor l is related to all K components of the trained GMM in its 0th (soft mapping weight), 1st (deviation from mean) and 2nd moment (variance) <ref type="bibr" target="#b23">[24]</ref>, i.e.</p><formula xml:id="formula_0">Ψ π k (l) = 1 √ π k (γ k (l) − π k )<label>(1)</label></formula><formula xml:id="formula_1">Ψ µ k (l) = 1 √ π k γ k (l) l − µ k σ k (2) Ψ σ k (l) = 1 √ π k γ k (l) 1 √ 2 (l − µ k ) 2 σ 2 k − 1<label>(3)</label></formula><p>with Ψ π k (l) ∈ R , both Ψ µ k (l) and Ψ σ k (l) ∈ R D and γ k (l) returning the soft assignment of l to the kth mixture component. The FV embedding Ψ λ (l) for a single descriptor l is then achieved by concatenating the mapping outputs relative to all K components into a (1 + 2D)K dimensional vector</p><formula xml:id="formula_2">Ψ λ (l) = [Ψ π1 (l) . . . Ψ µ1 (l) . . . Ψ σ1 (l) . . .]<label>(4)</label></formula><p>Having computed all those (as we will refer to now as) raw Fisher embeddings for all individual local descriptors, a single image-wise descriptor is achieved by averaging over the complete set of Ψ λ (l), followed by power normalization to reduce the sparsity of the descriptor and ℓ 2 -normalization to improve prediction performance <ref type="bibr" target="#b20">[21]</ref>. The application of both final normalization steps results in a so called improved Fisher Kernel and is -in combination with a linear SVM <ref type="bibr" target="#b4">[5]</ref> -equivalent to the transformation of the raw FV using the Hellinger's kernel function <ref type="bibr" target="#b20">[21]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Explaining classification decisions</head><p>Most predictors, including linear SVMs over Fisher vectors, incorporate several layers of non-linear mappings, resulting in a non-linear black box with respect to the dependency of the prediction on its pixel inputs. In this section we introduce the concept of Layer-wise Relevance Propagation (LRP) <ref type="bibr" target="#b0">[1]</ref> as a way to compute partial prediction contributions -or relevance values R -for intermediate and input representations based on the final classifier output. LRP acts on a single test-image similar to the work in <ref type="bibr" target="#b29">[30]</ref> and to partial-derivative based methods such as <ref type="bibr" target="#b24">[25]</ref>. We refer the reader to <ref type="bibr" target="#b22">[23]</ref> for a comparison of these three explanation approaches.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Layer-wise Relevance Propagation</head><p>Layer-wise Relevance Propagation decomposes the mappings performed during prediction time to attribute to each component of the input its share with which it contributes to the classifier output, explaining its relevance to the prediction output in its given state. This unsupervised process of decomposition is in principle applicable to any kind of model, resulting in high (positive) output values R identifying properties of the input speaking for the presence of the prediction target and low (or even negative) scores indicating no or negative contribution. The conservation principle inherent to LRP ensures that no amount of relevance is gained or lost in between layers of computation, where R (k) i signifies the relevance value attributed to the ith computation unit or dimension at the kth computation layer of the prediction pipeline, and where the sums run over all units of the corresponding layers. In the context of an image classification problem, iterating LRP from the classifier output to the input layer results in outputs R</p><formula xml:id="formula_3">i R (k) i = j R (k+1) j (5)</formula><formula xml:id="formula_4">(1) p for each pixel p, with f (x) = p R (1) p (6)</formula><p>and f (x) being equal the output layer relevance values. In <ref type="bibr" target="#b0">[1]</ref> examples have been given for decompositions of neural network architectures and Bag of Words feature extraction pipelines satisfying the above constraints.</p><p>LRP propagates the relevance R back from the output of a mapping towards its inputs. In a neural networks, a neuron maps a set of inputs {x i } to an output x j with monotonously increasing activation function g(·)</p><formula xml:id="formula_5">x j = g(z j ), z j = i z ij , z ij = w ij x i<label>(7)</label></formula><p>where the sum runs over all input neurons contributing to the activation of neuron x j . The goal is to compute a relevance R i for input x i when relevances R j for outputs x j are given. <ref type="bibr" target="#b0">[1]</ref> has introduced two possible formulas for relevance propagation</p><formula xml:id="formula_6">R i = j:i→j z ij z j + ǫ · sign(z j ) R j (8) R i = j:i→j α z + ij z + j − β z − ij z − j R j ,<label>(9)</label></formula><p>where j:i→j denotes a sum of all mappings which take x i as input. z + ij denotes the positive part of the term, i.e. max(0, z ij ), z + j is the sum over these positive parts. z − ij is defined analogously as the negative part and α − β = 1.</p><p>The same paper has introduced a method to compute relevances for Bag of Words vectors, however, it tacitly assumed that BoW mappings are dominantly non-negative. For Fisher vectors this assumption does not hold, as the features are derivatives with respect to parameters. For this reason we propose a modified approach.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">LRP for Fisher vector classifiers</head><p>Our variant to use LRP for Fisher vectors starts with writing the linear SVM as a mapping of features</p><formula xml:id="formula_7">f (x) = b + i α i y i D d=1 φ(x i ) d φ(x) d ,<label>(10)</label></formula><p>where x is a raw Fisher vector, and φ(x) realizes its normalization. In consistency with the first LRP formula, we define</p><formula xml:id="formula_8">R (3) (x) as R (3) d = i α i y i φ(x i ) d φ(x) d + b D<label>(11)</label></formula><p>From here on we apply for the mapping of local features l to Fisher vectors x, equation <ref type="formula">(8)</ref> instead of the approach used in <ref type="bibr" target="#b0">[1]</ref>. We can write the d-th dimension of the Fisher vector x d = l m d (l). This is a mapping of local features l onto the Fisher vector as a set of outputs (x d ) D d=1 . We apply equation <ref type="bibr" target="#b7">(8)</ref> with z ld = m d (l). m d (l) is given in the notation of Section 3 as the term from equation 4:</p><formula xml:id="formula_9">m (d) (l) = Ψ λ (l) (d)<label>(12)</label></formula><p>Pixel-wise relevance scores R <ref type="bibr" target="#b0">(1)</ref> p are then computed by uniformly distributing for all local features l the relevance scores R</p><p>(2) l onto the set of pixels p covered by the receptive field of l, resulting in a heatmap which can be visualized. The decomposition process with explicit redistribution formulas is depicted in <ref type="figure" target="#fig_0">Figure 1.</ref> </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Measuring context with LRP</head><p>The distribution of positive relevance mass in a heatmap can be used for assessing the importance of context for a particular image classification task. If bounding box annotation are available (as for the Pascal VOC dataset), we can compute the outside-inside relevance ratio metric defined as:</p><formula xml:id="formula_10">µ = 1 |Pout| q∈Pout R (1) q 1 |Pin| p∈Pin R (1) p<label>(13)</label></formula><p>with | · | being the cardinality operator and P out and P in being the set of pixels outside and inside the bounding box, respectively. A high relevance ratio indicates that the classifier uses a lot of context to support the decision. A low relevance ratio indicates that the classifier focuses instead on the object to support its decision. Note that this measure can not be 100% accurate in most cases, since for example the bounding box areas of slim but obliquely angled objects, for example, aeroplanes photographed during lift-off, will also cover a considerable amount of image background.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experimental evaluation</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Basic setup</head><p>All measurements are carried out on PASCAL VOC 2007 <ref type="bibr" target="#b5">[6]</ref> test data. Fisher vectors are computed using the encoding evaluation toolkit (version 1.1) from <ref type="bibr" target="#b2">[3]</ref> with settings as in this paper. The Fisher vectors are trained on the trainval part of the same dataset. The neural network is finetuned on the trainval part of PASCAL VOC 2012, starting from the BVLC reference classifier of the Caffe package <ref type="bibr" target="#b9">[10]</ref> with a base learning rate of 0.001 using a multi-label hinge loss. As we are interested in the ability of a neural net to use context, we do not use the bounding box ground truth to extract image patches which cover parts of bounding boxes. Instead we create 4 corner and one center crop per image together with mirroring, resulting in 10 training patches per image. Test scoring is done in the same fashion. This corresponds to a setting with only a few number of test windows, in which one would use larger patches during training and testing. The region-wise scores are computed for FV as described in Section 4 using equation <ref type="bibr" target="#b7">(8)</ref> with parameter ǫ = 1 and ǫ = 100. For neural nets we used equation <ref type="bibr" target="#b7">(8)</ref> with ǫ = 1, ǫ = 100 and equation <ref type="formula" target="#formula_6">(9)</ref>  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Are Fisher explanations meaningful?</head><p>The first step before measuring the amount of context is to validate whether the computed scores for a pixel or a region are meaningful at all. <ref type="figure" target="#fig_1">Figure 2</ref> depicts heatmaps computed on exemplary test images of the Pascal VOC data set considering the prediction score for a particular class. The quality of these explanations can be intuitively assessed by a human, e.g., it makes perfectly sense that the Fisher vector classifier finds that wheels are relevant for the class "bike", rail tracks are indicative for the class "train" and tableware is important for classifying images of class "dining table". These examples show that the largest part of the relevance mass does not necessarily need to lie on the object, on the contrary it may be the context which is the informative part.</p><p>In order to objectively validate that the Fisher vector heatmaps are meaningful we evaluate the decrease of the prediction score under perturbations. The idea is that a region such as an image patch is highly relevant, if modifying it results for most modifications in a sharp decline of the prediction for the whole image. Modifying a region is done by randomly perturbing the pixels with noise. The prediction score is averaged over a number of random perturbations, in order to capture the average change of the classifier.</p><p>This notion of relevant regions can be used for evaluation of region scores by sorting image regions along descending scores. Then, for each region in the sequence the average decrease of predictions is measured. The result is a graph as a function of the sequence index. Thus under this evaluation scheme, a region-wise score performs well if it assigns highest scores to regions which are most sensitive on average under perturbations and yield the sharpest decline of the prediction score. <ref type="bibr" target="#b22">[23]</ref> introduced this setup and evaluated the methods of <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b29">30]</ref>    </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Image</head><p>Fisher DeepNet <ref type="figure">Figure 4</ref>. Images of the class "sheep", processed by the FV and DNN models and heatmapped using LRP.</p><p>on ImageNet <ref type="bibr" target="#b21">[22]</ref>, SUN397 <ref type="bibr" target="#b28">[29]</ref> and MIT Places <ref type="bibr" target="#b31">[32]</ref>. Here we show that LRP scores computed are also meaningful for Fisher vectors. <ref type="figure" target="#fig_2">Figure 3</ref> shows this comparison against random orderings for scores computed. The LRP scores produce a more meaningful ordering than random sequences which motivates its use to define a measure for context.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">Shallow vs. deep features</head><p>We investigate in the light of the LRP framework what are the differences of strategies used to classify images between (1) a shallow model operating on high-resolution images: the FV model, and (2) a deep model operating on lower-resolution images: the DNN model. We consider first the class "sheep" for which the DNN produces much better predictions than the FV model (25% superior accuracy in absolute terms according to <ref type="table">Table 1</ref>).</p><p>Example of two images of class "sheep" and the corresponding heatmaps for the FV and DNN models are shown in <ref type="figure">Figure 4</ref>. The LRP analysis reveals that the FV and DNN models use clearly different strategies to predict the class:</p><p>The FV model bases its decision on the wool texture typical of the sheep and available at high-resolution, but ignores the exact shape of the sheep. Interestingly, relevance is also allocated to the context (here, positive relevance for the grass and negative relevance for the human face), indicating that the context is an essential component of the classifier and modulates the prediction score positively or negatively.</p><p>On the other hand, the DNN assigns a large proportion of heat to the border of the sheep, thus, showing that the shape of the sheep (e.g. its contour) is exploited in order to improve the prediction. Furthermore, for the DNN, the LRP method does not assign relevance to contextual elements such as the grass, or the human face, nor to the wool texture of the sheep, which is harder to detect due to the low resolution of images given to the DNN.</p><p>Overall, the LRP analysis indicates that the far superior predicting power of the DNN model must be attributed in largest part to the ability to model the exact shape of the sheep, making all remaining contextual or texture features less relevant. On the other hand, the less accurate FV model does benefit from the weak correlations between object class, texture and context to improve prediction quality.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.4.">Test error and model quality</head><p>For other classes, it can be observed in <ref type="table">Table 1</ref> that test error of the FV model is almost on par with the one of the DNN. We investigate whether high test accuracy is predictive of the ability of the model to extract meaningful features for a given class, or whether the decision is based mostly on undesirable contextual or artefactual features.</p><p>Contextual features. As an illustrative example, we consider the class "boat", where the performance of the DNN superior by less than 7% in absolute terms to the FV model. (Note that for other classes such as "sheep" or "bird", the DNN performance is superior by 25% or more.) It is tempting to conclude that, for the class "boat", both models should have learned a set of features of similarly high quality. LRP analysis gives a different answer: <ref type="figure">Figure 5</ref> (left) shows the heatmaps produced by the FV and DNN models on two archetypical images of the class "boat". For the DNN, LRP assigns most of the relevance to pixels corresponding to the actual boat. On the other hand, for the FV model, LRP assigns most relevance to the water below the boat (i.e. the FV model does not recognize the object itself, but its context). The heat distribution of average heatmaps (computed over all landscape-format images of the class "boat") corroborates what was observed for two selected images, in particular, a focus of the FV model on the bottom part of the image where water usually is, and a focus of the DNN model on the middle part of the image where the boat typically is. We can conclude from the LRP analysis, that while both classifiers have a roughly similar level of accuracy on the test images with class "boat", FV's performance is likely to decrease drastically if one were to consider boats located outside the water as test images. On the other hand, performance of the DNN would be less affected. Therefore, test error is a superficial predictor of model quality in this case.</p><p>Artefactual features. A second example where high accuracy does not necessarily translate into high quality features is for the class "horse". This class is predicted with similar accuracy by the FV and DNN models (approximately 1% difference in accuracy). <ref type="figure">Figure 5</ref> (right) shows LRP heatmaps for the FV and DNN model on an image of horse. While the DNN assigns relevance on the actually shown "horse", the FV assigns almost all relevance in the bottom-left corner the image, where careful inspection of the image reveals the presence of a copyright tag. Thus, the decision of the FV model is in large part based on the presence of the copyright tag, which is discriminative of the class horse. Removing the copyright tag completely changes the FV heatmap, but does not change significantly the DNN heatmap.</p><p>If the copyright tag is removed, the DNN is still able to predict the image because the pixels that support its decision are not affected. On the other hand, FV model prediction quality will be considerably reduced. The systematic focus of the FV model on the copyright tag is confirmed in the average heatmap, where the bottom-left corner is assigned large amount of heat. Therefore, for this class again, test error does not predict well model quality.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.5.">Quantitative analysis of context use</head><p>While we have so far provided a qualitative interpretation of FV heatmaps for examples and classes of interest, we can more systematically measure whether the model uses context or the actual object, by measuring for each classes and models the outside-inside relevance ratio µ computed by equation <ref type="bibr" target="#b12">13</ref>. Results are shown in <ref type="figure">Figure 6</ref>. Generally, the FV model uses more context than the DNN, as evidenced by a higher relevance ratio. However, there are significant differences between classes: Classes where the use of context by the FV model is particularly high are "boat" and "airplane", the first of which we have studied qualitatively in the previous section. For these two respective classes, the water and the sky are important contextual elements that support the decision of the Fisher model, due to their strong correlation. Another group of classes with high context of the Fisher model are "chair", "diningtable", "pottedplant" and "sofa" which share a semantic of indoor room sceneries.</p><p>For other classes such as "bicycle", "car", "motorbike", or "sheep", the Fisher model does not use much context. For the first three classes, the urban environment surrounding these classes is not predictive of the object being detected (i.e. it could not discriminate between these three classes based on the context only). For the last class, as it has been discussed in Section 5.3, the wool texture of the sheep (which lies inside the sheep bounding box) is a reasonable predictor for the class "sheep", although the actual object sheep (i.e. defined by its shape or contour) is not As for deep neural networks, classes with least context usage are "aeroplane", "bird", "sheep", "dog", "car", "cat" and "tvmonitor". Each of those is associated with a significantly better score achieved by the DNN.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.6.">Shallow vs. deep networks</head><p>Our results on ILSVCR 2012 validation data show that, when performing LRP on the BVLC Caffe reference versus GoogleNet, the use of contextual information is much lower for the deeper and better performing GoogleNet. Model architectures have been used as-is. In addition to depth, the type of layers (e.g. inception, normalization) may have an impact on the sparsity and should be subject to further studies. <ref type="figure" target="#fig_4">Figures 7 and 8</ref> present the results quantitatively and as exemplary heatmaps for the BVLC Reference <ref type="bibr" target="#b9">[10]</ref>, VGG CNN S <ref type="bibr" target="#b3">[4]</ref>, which has slightly lower error rate than the former, and GoogleNet <ref type="bibr" target="#b26">[27]</ref>. The latter two use smaller kernels with less stride at lowest level compared to the BVLC Reference. We noted on many examples, that GoogleNet is much sparser than the other two and tends to ignore irrelevant edges, for example its reaction to the gradient between the dark green trees and the sky in the motorscooter example picture is the weakest of all three nets.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>In this paper, we have analyzed what make Fisher vector models (FV) and deep neural networks (DNN) decide for a particular class. To achieve this, we have employed a heatmapping technique that determines what pixels in the image are used by a classifier to support its decision. The technique called layer-wise relevance propagation and originally developed for neural networks <ref type="bibr" target="#b0">[1]</ref> was extended to Fisher vector models, and validated using the method by <ref type="bibr" target="#b22">[23]</ref>. Our novel comparative analysis of FV and DNN classifiers corroborates empirically previous intuition relating the architecture of the classifier to the features it is able to extract. In particular, our analysis shows that the FV model  and GoogleNet (ggm, right three). Bot are 333 classes with lowest prediction accuracy w.r.t. the used network and top are 333 classes with highest prediction accuracy. GoogleNet uses less context. As for an explanation for the higher values of context importance relative to the results on PASCAL VOC 2007, visual inspection revealed that many of the ImageNet bounding boxes cover much less of the object than those used in Pascal VOC. compensates its lack of depth by the use of contextual information -potentially artefacts -that are weakly correlated to the object class. We thus demonstrate that the generalization capability of Fisher vector models can be overstated if test images also include similar context. On the other hand, DNNs base their decision on the actual object to detect and ignores its context. This focus on object detection has to be attributed to the higher overall predictive accuracy of the model, that removes the need for contextual information -even if the latter is discriminative. The focus on detection must also be attributed to the deep multitask properties of the DNN that favors composition of natural image features over lower-level features such as copyright text. These results argue in favor of incorporating heatmapping techniques into the data collection and model selection processes. The interpretable visual feedback that heatmaps provide can be used in particular to verify that the considered classifier bases its decision on the right set of features, and in the contrary case, select another model, or extend the dataset in a way that artefactual features can no longer support the classification decision.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Computing Fisher Vector representation of an image and explaining the classification decision.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .</head><label>2</label><figDesc>Images shown next to the heatmaps computed by application of LRP on the FV model when considering the prediction score for a particular class.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 .</head><label>3</label><figDesc>Heatmap quality measurements for Fisher vectors. The value A measures the area above the curve between the original prediction f (x) and the averaged perturbed prediction at step i in the sequence of regions. V represents the fraction of all perturbation sequences for which the prediction switched sign at some step in the sequence, with the gray bar chart showing how many sample traces changed class at each point of measurement.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 5 .Figure 6 .</head><label>56</label><figDesc>Top: Images of the classes "boat" and "horse", processed by the FV and DNN models and heatmapped using LRP. Bottom: Average heatmap scores over a random sample (of size between 47 and 177) of the distribution for each class and model. On the second image of class "horse", the copyright tag (marked by the red ellipse) has been removed. Outside-inside relevance ratio as computed by equation<ref type="bibr" target="#b12">13</ref> for the 20 classes of the Pascal VOC 2007 dataset. Left: ratios for the FV model. Right: ratios for the DNN model. being used.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 8 .</head><label>8</label><figDesc>Comparison of different pretrained models on ImageNet for classes "scooter", "frog" and "cat". From left to right: Input, heatmaps for BVLC CaffeNet, VGG CNN S and GoogleNet. GoogleNet is particularly sparse which holds for many other examples. See the supplement for a larger version and more examples.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 7 .</head><label>7</label><figDesc>DNN context scores for ImageNet 2012 for the BVLC CaffeNet (bvlc, left three bars), VGG CNN S (vgg, middle three)</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>with β = 1, α = 2. Random perturbations for Fisher vectors were achieved by randomly sampling local features from the GMM.Table 1. Prediction performance of the trained Fisher model and DNN in average precision (AP) per class in percent. The mAP scores for the FV model and DNN are 55.99 and 72.12 respectively.</figDesc><table>aer 
+bic 
+bir 
+boa 
+bot 
+F 79.08 66.44 45.90 70.88 27.64 
+D 88.08 79.69 80.77 77.20 35.48 
+bus 
+car 
+cat 
+cha 
+cow 
+F 69.67 80.96 59.92 51.92 47.60 
+D 72.71 86.30 81.10 51.04 61.10 
+din 
+dog 
+hor 
+mot 
+per 
+F 58.06 42.28 80.45 69.34 85.10 
+D 64.62 76.17 81.60 79.33 92.43 
+pot 
+she 
+sof 
+tra 
+tvm 
+F 28.62 49.58 49.31 82.71 54.33 
+D 49.99 74.04 49.48 87.07 67.08 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>for Deep Neural Networks tested</figDesc><table>Image 
+
+Heatmap 
+(bike) 
+Image 
+Heatmap 
+(person) 
+Image 
+Heatmap 
+(cat) 
+Image 
+Heatmap 
+(person) 
+
+Image 
+Heatmap 
+(train) 
+Image 
+Heatmap 
+(train) 
+Image 
+Heatmap 
+(dining table) 
+
+</table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0" />
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">On pixel-wise explanations for nonlinear classifier decisions by layer-wise relevance propagation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Binder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Montavon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Klauschen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K.-R</forename><surname>Müller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Samek</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PLOS ONE</title>
+		<imprint>
+			<biblScope unit="volume">10</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<biblScope unit="page">130140</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Baehrens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Schroeter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Harmeling</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kawanabe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Hansen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K.-R</forename><surname>Müller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">How to explain individual classification decisions. JMLR</title>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="page" from="1803" to="1831" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">The devil is in the details: an evaluation of recent feature encoding methods</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chatfield</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">S</forename><surname>Lempitsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page">8</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Return of the devil in the details: Delving deep into convolutional nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chatfield</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Support-vector networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Cortes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vapnik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Machine learning</title>
+		<imprint>
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="273" to="297" />
+			<date type="published" when="1995" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">The pascal visual object classes challenge: A retrospective</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M A</forename><surname>Eslami</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">V</forename><surname>Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K I</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">111</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="98" to="136" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K I</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<title level="m">The PASCAL Visual Object Classes Challenge 2010 (VOC2010) Results</title>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Rich feature hierarchies for accurate object detection and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="580" to="587" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Long short-term memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hochreiter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Comput</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1735" to="1780" />
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Caffe: Convolutional architecture for fast feature embedding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Karayev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Guadarrama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the ACM Int. Conf. on Multimedia</title>
+		<meeting>of the ACM Int. Conf. on Multimedia</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="675" to="678" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Deep fragment embeddings for bidirectional image sentence mapping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Joulin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Adv. in NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="1889" to="1897" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Large-scale video classification with convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Toderici</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Shetty</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Leung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sukthankar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="1725" to="1732" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Evolving large-scale neural networks for vision-based reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Koutník</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Cuccu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">J</forename><surname>Gomez</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">GECCO</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1061" to="1068" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Adv. in NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1106" to="1114" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Understanding image representations by measuring their equivariance and equivalence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Lenc</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="991" to="999" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">What has my classifier learned? visualizing the classification rules of bag-of-feature model by support region detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="3586" to="3593" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Understanding deep image representations by inverting them</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mahendran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="5188" to="5196" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Explaining nonlinear classification decisions with deep taylor decomposition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Montavon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Binder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Samek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K.-R</forename><surname>Müller</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1512.02479</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Understanding the fisher vector: a multimodal part model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Novotný</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Larlus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Perronnin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<idno>abs/1504.04763</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Learning and transferring mid-level image representations using convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Oquab</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Laptev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="1717" to="1724" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Improving the fisher kernel for large-scale image classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Perronnin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sánchez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mensink</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision-ECCV 2010</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="143" to="156" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Russakovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Satheesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bernstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<title level="m">ImageNet Large Scale Visual Recognition Challenge. IJCV</title>
+		<imprint>
+			<date type="published" when="2015-04" />
+			<biblScope unit="page" from="1" to="42" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Evaluating the visualization of what a deep neural network has learned</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Samek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Binder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Montavon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Müller</surname></persName>
+		</author>
+		<idno>abs/1509.06321</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Image classification with the fisher vector: Theory and practice</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sánchez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Perronnin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mensink</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Verbeek</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">IJCV</biblScope>
+			<biblScope unit="page" from="222" to="245" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Deep inside convolutional networks: Visualising image classification models and saliency maps</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR Workshop</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Sequence to sequence learning with neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><forename type="middle">V</forename><surname>Le</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In Av. in NIPS</title>
+		<imprint>
+			<biblScope unit="page" from="3104" to="3112" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Going deeper with convolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1" to="9" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title level="m" type="main">The visual extent of an object</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Uijlings</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Smeulders</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Scha</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<publisher>IJCV</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Sun database: Large-scale scene recognition from abbey to zoo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Ehinger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="3485" to="3492" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Visualizing and understanding convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">D</forename><surname>Zeiler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="818" to="833" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Partbased r-cnns for fine-grained category detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision -ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="834" to="849" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Learning deep features for scene recognition using places database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lapedriza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Adv. in NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="487" to="495" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

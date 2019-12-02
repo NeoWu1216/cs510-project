@@ -1,0 +1,1714 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Fine-grained Image Classification by Exploring Bipartite-Graph Labels</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Feng</forename><surname>Zhou</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">NEC Labs</orgName>
+								<orgName type="institution" key="instit2">NEC Labs</orgName>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuanqing</forename><surname>Lin</surname></persName>
+							<email>ylin@nec-labs.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">NEC Labs</orgName>
+								<orgName type="institution" key="instit2">NEC Labs</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Fine-grained Image Classification by Exploring Bipartite-Graph Labels</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:40+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Given a food image, can a fine-grained object recognition engine tell "which restaurant which dish" the food belongs to? Such ultra-fine grained image recognition is the key for many applications like search by images, but it is very challenging because it needs to discern subtle difference between classes while dealing with the scarcity of training data. Fortunately, the ultra-fine granularity naturally brings rich relationships among object classes. This paper proposes a novel approach to exploit the rich relationships through bipartite-graph labels (BGL). We show how to model BGL in an overall convolutional neural networks and the resulting system can be optimized through back-propagation. We also show that it is computationally efficient in inference thanks to the bipartite structure. To facilitate the study, we construct a new food benchmark dataset, which consists of 37,885 food images collected from 6 restaurants and totally 975 menus. Experimental results on this new food and three other datasets demonstrate BGL advances previous works in fine-grained object recognition. An online demo is available at http: //www.f-zhou.com/fg_demo/.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Fine-grained image classification concerns the task of distinguishing sub-ordinate categories of some base classes such as dogs <ref type="bibr" target="#b25">[26,</ref><ref type="bibr" target="#b42">43]</ref>, birds <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b7">8]</ref>, flowers <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b39">40]</ref>, plants <ref type="bibr" target="#b31">[32,</ref><ref type="bibr" target="#b44">45]</ref>, cars <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b35">36,</ref><ref type="bibr" target="#b47">48]</ref>, food <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b5">6,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b58">59]</ref>, clothes <ref type="bibr" target="#b13">[14]</ref>, fonts <ref type="bibr" target="#b9">[10]</ref> and furniture <ref type="bibr" target="#b3">[4]</ref>. It differs from the base-class classification <ref type="bibr" target="#b14">[15]</ref> in that the differences among object classes are more subtle, and thus it is more difficult to distinguish them. Yet fine-grained object classification is extremely useful because it is the key to a variety of challenging applications even difficult for human annotators.</p><p>While general image classification has achieved impressive success within the last few years <ref type="bibr" target="#b30">[31,</ref><ref type="bibr" target="#b48">49,</ref><ref type="bibr" target="#b45">46,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b55">56,</ref><ref type="bibr" target="#b21">22]</ref>, it is still very challenging to recognize object classes with ultra-fine granularity. For instance, how to recognize each of the three food images shown in <ref type="figure" target="#fig_0">Fig. 1</ref>  Their relationships can be modeled through three bipartite graphs, fine-grained classes vs. general food dishes (left) and fine-grained classes vs. two ingredients (right). This paper shows how to incorporate the rich bipartitegraph labels (BGL) into convolutional neural network training to improve recognition accuracy. jor aspects. First, different classes may be visually similar, e.g., the Mapo Tofu dish from Restaurant A (the 1 st image in <ref type="figure" target="#fig_0">Fig. 1</ref>) looks very similar to the one from Restaurant B (the 3 rd image in <ref type="figure" target="#fig_0">Fig. 1)</ref>. Second, each class may not have enough training images because of the ultra-fine granularity. In such setting, how to share information between similar classes while maintaining strong discriminativeness becomes more critical.</p><p>To that end, we propose a novel approach using bipartitegraph labels (BGL) that models the rich relationships among the ultra-fine grained classes. In the example of <ref type="figure" target="#fig_0">Fig. 1</ref>, the 1 st and 3 rd images are both Mapo Tofu dishes; and they share some ingredients with the 2 nd one. Such class relationships can be modeled in three bipartite graphs. This paper shows how to incorporate the class bipartite graphs into CNN and learn the optimal classifiers through overall back-propagation.</p><p>Using BGL has several advantages: (1) BGL imposes additional constraints to regularize CNN training, thereby largely reducing the possibility of overfitting when only a small amount of training data is available. <ref type="bibr" target="#b1">(2)</ref> Knowing classes that belong to the same coarse category or share some common attributes can allow us to borrow some knowledge from relevant classes. <ref type="bibr">(</ref>3) The supervised feature learning through a global back-propagation allows learning discriminative features for capturing subtle differences between similar classes. (4) By constraining the structure to bipartite graphs, BGL prevents the exponential explosion from enumerating all possible states in inference.</p><p>This work is in parallel to the existing big body of finegrained image classification research, which has focused on devising more discriminative feature by aligning object poses <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b61">62]</ref> and filtering out background through object segmentation <ref type="bibr" target="#b41">[42]</ref>. The techniques developed in this work can be combined with the ones in those existing research works to achieve better fine-grained image recognition performance.</p><p>To facilitate the study, we built an ultra-fine grained image recognition benchmark, which consists of 37,885 food training images collected directly from 6 restaurants with totally 975 menus. Our results show that the proposed BGL approach produces significantly better recognition accuracy compared to the powerful GoogLeNet <ref type="bibr" target="#b48">[49]</ref>. We also test the BGL approach on some existing fine-grained benchmark datasets. We observe the benefit of BGL modeling as well although the improvement is less significant because of the less rich class relationships.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Previous work</head><p>This section reviews the related work on fine-grained image classification, and structural label learning.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Fine-grained image classification</head><p>Fine-grained image classification needs to discern subtle differences among similar classes. The majority of existing approaches have thus been focusing on localizing and describing discriminative object parts in fine-grained domains. Various pose-normalization pooling strategies combined with 2D or 3D geometry have been proposed for recognizing birds <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b61">62,</ref><ref type="bibr" target="#b62">63,</ref><ref type="bibr" target="#b63">64]</ref>, dogs <ref type="bibr" target="#b36">[37]</ref> and cars <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b29">30]</ref>. The main drawback of these approaches is that part annotations are significantly more challenging to collect than image labels. Instead, a variety of methods have been developed towards the goal of finding object parts in an unsupervised or semi-supervised fashion. Krause et al. <ref type="bibr" target="#b28">[29]</ref> combined alignment with co-segmentation to generate parts without annotations. Lin et al. <ref type="bibr" target="#b34">[35]</ref> proposed an architecture that uses two separate CNN feature extractors to model the appearance due to where the parts are and what the parts look like. Jaderberg et al. <ref type="bibr" target="#b22">[23]</ref> introduced spatial trans-former, a new differentiable module that can be inserted into existing convolutional architectures to spatially transform feature maps without any extra training supervision. In parallel to above efforts, our approach focuses on exploiting rich class relationships and is applicable to generic fine-grained objects even when they do not own learnable structures (e.g., food dishes).</p><p>To provide good features for recognition, another prominent direction is to adopt detection and segmentation methods as an initial step and to filter out noise and clutter in background. For instance, Parkhi et al. <ref type="bibr" target="#b41">[42,</ref><ref type="bibr" target="#b42">43]</ref> proposed to detect some specific part (e.g., cat's head) and then performed a full-object segmentation through propagation. In another similar work, Angelova and Zhu <ref type="bibr" target="#b0">[1]</ref> further renormalized objects after segmentation to improve the recognition performance. However, better feature through segmentation always comes with computational cost as segmentation is often computationally expensive.</p><p>Recently, many other advances lead to improved results. For instance, Wang et al. <ref type="bibr" target="#b52">[53]</ref> and Qian et al. <ref type="bibr" target="#b43">[44]</ref> showed a more discriminative similarity can be learned through deep ranking and metric learning respectively. Xie et al. <ref type="bibr" target="#b56">[57]</ref> proposed a novel data augmentation approach to better regularize the fine-grained problems. Deng et al. <ref type="bibr" target="#b12">[13]</ref>, Branson et al. <ref type="bibr" target="#b7">[8]</ref> and Wilber et al. <ref type="bibr" target="#b54">[55]</ref> developed hybrid systems to introduce human in the loop for localizing discriminative regions for computing features. Focusing on different goal on exploring label structures, our method can be potentially combined with the above methods to further improve the performance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Structural label learning</head><p>While most existing works focus on single-label classification problem, it is more natural to describe real world images with multiple labels like tags or attributes. According to the assumptions on label structures, previous work on structural label learning can be roughly categorized as learning binary, relative or hierarchical attributes.</p><p>Much of prior work focuses on learning binary attributes that indicate the presence of a certain property in an image or not. For instance, previous works have shown the benefit of learning binary attributes for face verification <ref type="bibr" target="#b32">[33]</ref>, texture recognition <ref type="bibr" target="#b18">[19]</ref>, clothing searching <ref type="bibr" target="#b13">[14]</ref>, and zeroshot learning <ref type="bibr" target="#b33">[34]</ref>. However, binary attributes are restrictive when the description of certain object property is continuous or ambiguous.</p><p>To address the limitation of binary attributes, comparing attributes has gained attention in the last years. The relativeattribute approach <ref type="bibr" target="#b40">[41]</ref> learns a global linear ranking function for each attribute, offering a semantically richer way to describe and compare objects. While a promising direction, a global ranking of attributes tends to fail when facing finegrained visual comparisons. Yu and Grauman <ref type="bibr" target="#b59">[60]</ref> fixed this issue by learning local functions that tailor the comparisons to neighborhood statistics of the data. Recently, Yu and Grauman <ref type="bibr" target="#b60">[61]</ref> developed a Bayesian strategy to infer when images are indistinguishable for a given attribute.</p><p>Our method falls into the third category where the relation between the fine-grained labels and attributes is modeled in a hierarchical manner. In the past few years, extensive research has been devoted to learning a hierarchical structure over classes (see <ref type="bibr" target="#b50">[51]</ref> for a survey). Previous works have shown the benefits of leveraging the semantic class hierarchy using either unsupervised <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b49">50]</ref> or supervised <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b17">18,</ref><ref type="bibr" target="#b38">39]</ref> methods. Our work differs from previous works in the CNN-based framework and the setting focusing on multi-labeled object. The most similar works to ours are <ref type="bibr" target="#b46">[47]</ref> and <ref type="bibr" target="#b11">[12]</ref>, which show the advantages of exploring the tree-like hierarchy in small-scale (e.g., CIFAR-100) and graph-like structure in large-scale (e.g., ImageNet) categories respectively. Compared to <ref type="bibr" target="#b46">[47]</ref>, our method is able to handle more general structure (e.g., attributes) among fine-grained labels. Unlike <ref type="bibr" target="#b11">[12]</ref> relying on approximated inference, our method allows for efficient exact inference by modeling the label dependence as a star-like combination of bipartite graphs. In addition, we explore the hierarchical regularization on the last fully connected layer, which could further reduce the possibility of overfitting.</p><p>Our work is also related to previous methods in multitask learning (MTL) <ref type="bibr" target="#b8">[9]</ref>. To better learn multiple correlated subtasks, previous work have explored various ideas including, sharing hidden nodes in neural networks <ref type="bibr" target="#b8">[9]</ref>, placing a common prior in hierarchical Bayesian models <ref type="bibr" target="#b57">[58]</ref> and structured regularization in kernel methods <ref type="bibr" target="#b15">[16]</ref>, among others. Our method differs from the MTL methods mainly in the setting of multi-label setting for single objects.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">CNN with Bipartite-Graph Labels</head><p>This section describes the proposed BGL method in a common multi-class convolutional neural network (CNN) framework, which is compatible to most popular architectures like, AlexNet <ref type="bibr" target="#b30">[31]</ref>, GoogLeNet <ref type="bibr" target="#b48">[49]</ref> and VG-GNet <ref type="bibr" target="#b45">[46]</ref>. Our approach modifies their softmax layer as well as the last fully connected layer to explicitly model BGLs. The resulting CNN is optimized by a global backpropagation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Background</head><p>Suppose that we are given (see notation 1 ) a set of n images X = {(x, y), · · · } for training, where each image x is annotated with one of k fine-grained labels, y = 1, · · · , k. Let x ∈ R d denote the input feature of the last fullyconnected layer, which generates k scores f ∈ R k through a linear function f = W T x defined by the parameters W ∈ R d×k . In a nutshell, the last layer of CNN is to minimize the negative log-likelihood over the training data, i.e.,</p><formula xml:id="formula_0">min W (x,y)∈X − log P (y x, W),<label>(1)</label></formula><p>where the softmax score,</p><formula xml:id="formula_1">P (i x, W) = e f i k j=1 e f j . = pi,<label>(2)</label></formula><p>encodes the posterior probability of image x being classified as the i th fine-grained class.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Objective function with BGL modeling</head><p>Despite the great improvements achieved on base-class recognition in the last few years, recognizing object classes in ultra-fine granularity like the example shown in <ref type="figure" target="#fig_0">Fig. 1</ref> is still challenging mainly for two reasons. First, unlike general recognition task, the amount of labels with ultra-fine granularity is often limited. The training of a high-capacity CNN model is thus more prone to overfitting. Second, it is difficult to learn discriminative features to differentiate between similar fine-grained classes in the presence of large within-class difference.</p><p>To address these difficulties, we propose bipartite-graph labels (BGL) to jointly model the fine-grained classes with pre-defined coarse classes. Generally speaking, the choices of coarse classes can be any grouping of fine-grained classes. Typical examples include bigger classes, attributes or tags. For instance, <ref type="figure" target="#fig_0">Fig. 1</ref> shows three types of coarse classes defined on the fine-grained Tofu dishes (middle). In the first case (Graph 1 in <ref type="figure" target="#fig_0">Fig. 1</ref>), the coarse classes are two general Tofu food classes by neglecting the restaurant tags. In the second and third cases (Graph 2 and 3 in <ref type="figure" target="#fig_0">Fig. 1</ref>), the coarse classes are binary attributes according to the presence of some ingredient in the dishes. Compared to the original softmax loss (Eq. 2) defined only on fine-grained labels, the introduction of coarse classes in BGL has three benefits: (1) New coarse classes bring in additional supervised information so that the fine-grained classes connected to the same coarse class can share training data with each other.</p><p>(2) All fine-grained classes are implicitly ranked according to the connection with coarse classes. For instance, Toyota Camry 2014 and Toyota Camry 2015 are much closer to each other compared to Honda Accord 2015. This hierarchical ranking guides CNN training to learn more discriminative features to capture subtle difference between finegrained classes. (3) Compared to image-level labels (e.g., image attribute, bounding box, segmentation mask) that are expensive to obtain, it is relatively cheaper and more natural to define coarse classes over fine-grained labels. This fact endows BGL the board applicability in real scenario.</p><p>Given m types of coarse classes, where each type j contains k j coarse classes, BGL models their relations with the k fine-grained classes as m bipartite graphs grouped in a star-like structure. Take <ref type="figure" target="#fig_0">Fig. 1</ref> for instance, where the three types of coarse classes form three separated bipartite graphs with the fine-grained Tofu dishes, and there is no direct connection among the three types of coarse classes. For each graph of coarse type j, we encode its bipartite structure in a binary association matrix G j ∈ {0, 1} k×kj , whose element g j icj = 1 if the i th fine-grained label is connected with coarse label c j . As it will become clear later, this star-like composition of bipartite graphs enables BGL to perform exact inference as opposed to the use of other general label graphs (e.g., <ref type="bibr" target="#b11">[12]</ref>).</p><p>To generate the scores f j = W T j x ∈ R kj for coarse classes of type j, we augment the last fully-connected layer with m additional variables,</p><formula xml:id="formula_2">{W j } j , where W j ∈ R d×kj .</formula><p>Given an input image x of i th fine-gained class, BGL models its joint probability with any m coarse labels {c j } j as,</p><formula xml:id="formula_3">P (i, {cj}j x, W, {Wj}j) = 1 z e f i m j=1 g j ic j e f j c j ,</formula><p>where z is the partition function computed as:</p><formula xml:id="formula_4">z = k i=1 e f i m j=1 k j c j =1 g j ic j e f j c j .</formula><p>At first glance, computing z is infeasible in practice. Because of the bipartite structure of the label graph, however, we could denote the non-zero element in i th row of G j as φ j i = c j where g j icj = 1. With this auxiliary function, the computation of z can be simplified as</p><formula xml:id="formula_5">z = k i=1 e f i m j=1 e f j φ j i .<label>(3)</label></formula><p>Compared to general CRF-based methods (e.g., <ref type="bibr" target="#b11">[12]</ref>) with exponential number of possible states, the complexity O(km) of computing z in BGL through Eq. 3 scales linearly with respect to the number of fine-grained classes (k) as well as the type of coarse labels (m). Given z, the marginal posterior probability over fine-grained and coarse labels can be computed as:</p><formula xml:id="formula_6">P (i x, W, {Wj}j) = 1 z e f i m j=1 e f j φ j i . = pi, P (cj x, W, {W l } l ) = 1 z k i=1 g j ic j e f i m l=1 e f l φ l i . = p j c j .</formula><p>As discussed before, one of the difficulties in training CNN is the possibility of overfitting. One common solution is to add a l 2 weight decay term, which is equivalent to sampling the columns of W from a Gaussian prior. Given the connection among fine-grained and coarse classes, BGL provides another natural hierarchical prior for sampling the weights:</p><formula xml:id="formula_7">P (W, {Wj}j) = k i=1 m j=1 k j c j =1 e − λ 2 g j ic j w i −w j c j 2 . = pw.</formula><p>This prior expects w i and w j cj have small distance if i th fine-grained label is connected to coarse class c j of type j. Notice that this idea is a generalized version of the one proposed in <ref type="bibr" target="#b46">[47]</ref>. However, <ref type="bibr" target="#b46">[47]</ref> only discussed a special type of coarse label (big class), while BGL can handle much more general coarse labels such as multiple attributes.</p><p>In summary, given the training data X and the graph label defined by {G j } j , the last layer of CNN with BGL aims to minimize the joint negative log-likelihood with proper regularization over the weights:</p><formula xml:id="formula_8">min W,{W j } j (x,y)∈X − log py − m j=1 log p j φ j y − log pw. (4)</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Optimization</head><p>We optimized BGL using the standard back-propagation with mini-batch stochastic gradient descent. The gradients for each parameter can be computed 2 all in closed-form:</p><formula xml:id="formula_9">∂ log py ∂fi = 1 [i=y] − pi, ∂ log py ∂f j c j = 1 [g j yc j =1] − p j c j , ∂ log p j φ j y ∂fi = pi p j φ j y 1 [g j iφ j y =1] − pi, ∂ log p j φ j y ∂f j c j = 1 [c j =φ j y ] − p j c j , ∂ log p j φ j y ∂f l c l = k i=1 g j iφ j y g l il pi p j φ j y − p l c l , l = j,<label>(5)</label></formula><formula xml:id="formula_10">∂ log pw ∂wi = −λ m j=1 k j c j =1 g j ic j (wi − w j c j ),<label>(6)</label></formula><formula xml:id="formula_11">∂ log pw ∂w j c j = −λ k i=1 g j ic j (w j c j − wi).<label>(7)</label></formula><p>Here we briefly discuss some implementation issues. (1) Computing p i /p j φ j y by independently calculating p i and p j φ j y is not numerically stable because p j φ j y could be very small. It is better to jointly normalize the two terms first. (2) Directly computing Eq. 5 has a quadratic complexity with respect to the number of coarse classes. But it can be reduced to linear because most computations are redundant. See supplementary materials for more details. (3) So far <ref type="figure" target="#fig_1">(Fig. 2b)</ref> we assume the same feature x is used for computing both the fine-grained f = W T x and coarse scores f j = W T j x. In fact, BGL can naturally combine multiple CNNs as shown in <ref type="figure" target="#fig_1">Fig. 2c</ref>. This allows the model to learn different low-level features x j for coarse labels f j = W T j x j .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>This section evaluates BGL's performance for finegrained object recognition on four benchmark datasets. The first two datasets, Stanford cars <ref type="bibr" target="#b29">[30]</ref>, CUB-200-2011 <ref type="bibr" target="#b51">[52]</ref>, contains fine-grained categories sharing one level of coarse attributes. The last two datasets, Car-333 <ref type="bibr" target="#b56">[57]</ref> and a new Food-975 dataset, consist of ultra-fine grained classes and richer class relationships. We wish the proposed BGL approach would be able to improve classification accuracy even with simple BGLs and significantly improve performance when richer class relationships are present.</p><p>BGL was implemented on the off-the-shelf Caffe <ref type="bibr" target="#b23">[24]</ref> platform. We test on three popular CNN frameworks, AlexNet (AN) <ref type="bibr" target="#b30">[31]</ref>, GoogLeNet (GN) <ref type="bibr" target="#b48">[49]</ref>, and VGGNet (VGG) <ref type="bibr" target="#b45">[46]</ref>. For each of them, we compared three settings: SM with the traditional softmax loss; BGL 1 by modifying the softmax layer and the last fully connected layer as the proposed BGL approach; and BGL m by combining multiple networks 3 that generate different features for finegrained and coarse classes.</p><p>Our models were trained for 100 epochs on a single NVIDIA K40 GPU. We adopted the default hyperparameters as used by Caffe. In all experiments, we finetuned from pre-trained ImageNet model as in <ref type="bibr" target="#b24">[25]</ref> because it always achieved better result. During training, we downsampled the images to a fixed 256-by-256 resolution, from which we randomly cropped 224-by-224 patches for training. We also did their horizontal reflection for further data augmentation. During testing, we evaluated the top-1 accuracy using two cropping strategies: (1) single-view (SV) by cropping the center 224-by-224 patch of the testing image, and (2) multi-view (MV) by averaging the center, 4 corners and their mirrored versions. In the first three datasets, we evaluated our methods using two protocols, without (w/o. BBox) and with (w/. BBox) the use of ground-truth bounding box to crop out the object both at training and testing.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Stanford car dataset</head><p>The first experiment validates our approach on the Stanford car dataset <ref type="bibr" target="#b29">[30]</ref>, which contains 16, 185 images of 196 car categories. We adopted the same 50-50 split as in <ref type="bibr" target="#b29">[30]</ref> by dividing the data into 8, 144 images for training and the rest for testing. Each category is typically at the level of maker, model and year, e.g., Audi A5 Coupe 12. Following <ref type="bibr" target="#b26">[27]</ref>, we manually assigned each fine-grained label to one of 9 coarse body types. <ref type="figure" target="#fig_3">Fig. 3a</ref> summarizes the distribution of training images for fine-grained and coarse labels. <ref type="figure" target="#fig_3">Fig. 3b</ref>-e compare between the original GN-SM and the proposed GN-BGL m on a testing example. GN-SM confused the ground-truth hatchback model (Acura Zdx Hatchback) with a very similar sedan one (Acura TI Sedan). By jointly modeling with body type <ref type="figure" target="#fig_3">(Fig. 3c)</ref>, however, GN-BGL m was able to predict the correct fine-grained label. <ref type="figure" target="#fig_3">Fig. 3f</ref> further compares BGL with several previous works using different CNN architectures. Without using CNN, the best published result, 69.5%, was achieved in <ref type="bibr" target="#b29">[30]</ref> by using a traditional LLC-based representation. This number was beaten by ELLF <ref type="bibr" target="#b27">[28]</ref> by learning more discriminative features using CNN. The bilinear model <ref type="bibr" target="#b34">[35]</ref> recently obtained 88.2% by combining two VGG nets. By exploring the label dependency, the proposed BGL further improves all the three CNN architectures using either single-view (SV) or multi-view (MV) cropping. This consistent improvement demonstrates BGLs advantage in modeling structure among fine-grained labels. Our method of VGG-BGL m beats all previous works except <ref type="bibr" target="#b28">[29]</ref>, which leveraged the part information in an unsupervised way. However, we believe BGL can be combined with <ref type="bibr" target="#b28">[29]</ref> to achieve better performance. In addition, BGL has the advantage of predicting coarse label. For instance, GN-BGL m achieved 95.7% in predicting the type of a car image.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">CUB-200-2011 dataset</head><p>In the second experiment, we test our method on CUB-200-2011 <ref type="bibr" target="#b7">[8]</ref>, which is generally considered the most competitive dataset within fine-grained recognition. CUB-200-2011 contains 11, 788 images of 200 bird species. We used the provided train/test split and reported results in terms of classification accuracy. To get the label hierarchy, we adopted the annotated 312 visual attributes associated with the dataset. See <ref type="figure">Fig. 4a</ref> for the distribution of the finegrained class and attributes. These attributes are divided into 28 groups, each of which has about 10 choices. According to the provided confidence score, we assigned each attribute group with the most confident choice for each bird specie. For instance, <ref type="figure">Fig. 4b</ref> shows an example of Scarlet Tanager, most of which own black-color and pointed-shape wings.   bird in <ref type="figure">Fig. 4b</ref> as a Summer Tanager, which is very close to the actual class of Scarlet Tanager. By more closely comparing the color and shape of the wings <ref type="figure">(Fig. 4c)</ref>, however, GN-BGL m decreased its possibility of being Summer Tanager. This challenging example demonstrates the advantages of BGL in capturing the subtle appearance difference between similar bird species. <ref type="figure">Fig. 4f</ref> further compares BGL with state-of-the-arts approaches in different settings. Early works such as DPD <ref type="bibr" target="#b62">[63]</ref> performed poorly when only using hand-crafted features. The integration with CNNbased pose alignment techniques in PN-DCN <ref type="bibr" target="#b6">[7]</ref> and PR-CNN <ref type="bibr" target="#b61">[62]</ref> greatly improve the overall performance. From the experiments, we observed using BGL modules can consistently improved AN-SM, GN-SM and VGG-SM. Without any pose alignment steps, our method GN-BGL m obtained 76.9% without the use of bounding box, improving the recent part-based method <ref type="bibr" target="#b61">[62]</ref> by 3%. In addition, GN-BGL m achieved 89.3% and 93.3% accuracy on predicting attributes of wing color and shape. However, our method still performed worse than the latest methods <ref type="bibr" target="#b34">[35]</ref> and <ref type="bibr" target="#b28">[29]</ref>, which show the significant advantage by exploring part information for bird recognition. It is worth to emphasize that BGL improves the last fully connected and loss layer for attribute learning, while <ref type="bibr" target="#b34">[35]</ref> and <ref type="bibr" target="#b28">[29]</ref> focus on integrating object part information into convolutional layers. Therefore, it is possible to combine these two orthogonal efforts to further improve the overall performance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Car-333 dataset</head><p>In the third experiment, we test our method on the recently introduced Car-333 dataset <ref type="bibr" target="#b56">[57]</ref>, which contains 157, 023 training images and 7, 840 testing images. Compared to the Stanford car dataset, the images in Car-333 were end-user photos and thus more naturally photographed. Each of the 333 labels is composed by maker, model and year range. Notice that two cars of the same model but manufactured in different year ranges are con-sidered different classes. To test BGL, we generated two sets of coarse labels: 10 "type" coarse labels manually defined according to the geometric shape of each car model and 140 "model" coarse labels by aggregating year range labels. Please refer to <ref type="figure">Fig. 5</ref> for the distribution of the training images at each label level. The bounding box of each image was generated by Regionlets <ref type="bibr" target="#b53">[54]</ref>, the state-of-the-art object detection method.  <ref type="figure">Fig. 5e</ref>. However, these two confused classes can be well separated by jointly modeling the type and model probability in GN-BGL m . <ref type="figure">Fig. 5f</ref> summarizes the performance of our method using different CNN architectures. The best published result on this dataset was 83.6% achieved by HAR <ref type="bibr" target="#b56">[57]</ref>, where the authors augmented the original training data with an additional car dataset labeled view point information. We test BGL with three combinations of the coarse labels: using either model or type, and using model and type jointly. In particular, BGL gains much more improvements using the 140 model coarse labels than the 10 type labels. This is because the images of the cars of the same "model" are more similar than the ones in the same "type" and it defines richer relationships among fine-grained classes. Nevertheless, BGL can still get benefit from putting the "type" labels on top of the "model" labels to form a three-level label hierarchy. Finally, GN-BGL m significantly improved the performance of GN-SM from 79.8% to 86.4% without the use of bounding box. For more result on AN and VGG, please refer to the supplementary material.</p><p>Since the Car-333 dataset is now big enough, we provide more comparisons on the size of training data and time cost between GN-SM and GN-BGL. <ref type="figure" target="#fig_7">Fig. 6a</ref> evaluates the performance with respect to the different amounts of training data. BGL is able to provide good improvement especially when training data is relatively small. This is because the   BGL formulation provides a way to regularize CNN training to alleviate its overfitting issue. <ref type="figure" target="#fig_7">Fig. 6b</ref>-c show the time cost for performing forward and backward passing respectively given a 128-image mini-batch. Compared to GN-SM, GN-BGL needs only very little additional computation to perform exact inference in the loss function layer. This demonstrates the efficiency of modeling label dependency in a bipartite graphs. For the last fully connected (FC) layer, BGL performs exactly the same computation as GN in the forward passing, but needs additional cost for updating the gradient (Eq. 6 and Eq. 7) in the backward passing. Because both the loss and last FC layers take a very small portion of the whole pipeline, we found the total time difference between BGL and GN was minor.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Food-975 dataset</head><p>Now, let's come back to the task that we raised in the beginning of the paper: given a food image from a restaurant, are we able to recognize it as "which restaurant which dish"? Apparently, this is an ultra-fine grained image recognition problem and is very challenging. As we mentioned before, such ultra-fine granularity brings along rich relationships among the classes. In particular, different restaurants may cook similar dishes with different ingredients.</p><p>We collected a high quality food dataset. We sent 6 data collectors to 6 restaurants. Each data collector was in charge of one restaurant and took the photo of almost every dish the restaurant had cooked during a period of 1 ∼ 2 months. Finally, we captured 32, 135 high-resolution food photos of 975 menu items from the 6 restaurants for training. We evaluated our method in two settings. To test in a controlled setting, we took additional 4951 photos in different days.</p><p>To mimic a realistic scenario in the wild, we downloaded 351 images from yelp.com posted by consumers visiting the same restaurants. To model the class relationship, we created a three-level hierarchy. In the first level, we have the 975 fine-grained labels; in the middle, we created 781 different dishes by aggregating restaurant tags; at last, we came up a detailed list of 51 ingredient attributes 4 that precisely describes the food composition. <ref type="figure" target="#fig_8">Fig. 7</ref> compared the proposed BGL approach with different baselines. <ref type="figure" target="#fig_8">Fig. 7e</ref> compares our method with AN-SM, GN-SM and VGG-SM in both the controlled and wild settings. We noticed that BGL approach consistently outperformed AN and GN in both settings. This indicates the effectiveness of exploring the label dependency in ultra-fine grained food recognition. Interestingly, by using both the dish and ingredient labels, BGL can gain a much larger improvement than only using one of them. This implies the connections between the dish labels and the ingredient labels have very useful information. Overall, by exploring the label dependency, the proposed BGL approach achieved 6 ∼ 7% improvement from GN baseline at the wild condition.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>This paper proposed BGL to exploit the rich class relationships in the very challenging ultra-fine grained tasks. BGL improves the traditional softmax loss by jointly mod- <ref type="bibr" target="#b3">4</ref> Find ingredient and restaurant list in the supplementary materials. eling fine-grained and coarse labels through bipartite-graph labels. The use of a special bipartite structure enables BGL to be efficient in inference. We also contribute Food-975, an ultra-fine grained food recognition benchmark dataset. We show that the proposed BGL approach improved previous work on a variety of datasets.</p><p>There are several future directions to our work. (1) For the ultra-fine grained image recognition, we may soon need to handle many more classes. For example, we are constructing a large food dataset from thousands of restaurants where the number of ultra-fine grained food classes can grow into hundreds of thousands. We believe that the research in this direction, ultra-fine-grained image recognition (recognizing images almost on instance-level), holds the key for using images as a media to retrieve information, which is often called search by image. (2) Although currently the label structure is manually defined, it can potentially be learned during training (e.g., <ref type="bibr" target="#b46">[47]</ref>). On the other hand, we are designing a web interface to scale up the attribute and ingredient labeling. (3) This paper mainly discusses discrete labels in BGL. It is also interesting to study the application with continuous labels (e.g., regression or ranking). (4) Instead of operating only at class level, we plan to generalize BGL to deal with image-level labels. This can make the performance of BGL more robust in the case when the attribute label is ambiguous for fine-grained class.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>into which restaurant which dish? The challenge arises in two ma-Illustration of three ultra-fine grained classes (middle), Mapo Tofu of Restaurant A, Salt Pepper Tofu of Restaurant B, and Mapo Tofu of Restaurant B.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .</head><label>2</label><figDesc>Comparison of output layers. (a) Softmax (SM). (b) BGL with one feature (BGL1). (c) BGL with multiple features (BGLm).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>Fig. 4d compares the outputs between the baseline GN-SM and the proposed GN-BGL m . GN-SM predicted the</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 3 .</head><label>3</label><figDesc>Comparison on the Stanford car dataset. (a) The number of training images for each fine-grained (top) and coarse (bottom) category. (b) An example of testing images. (c) Type predicted by GN-BGLm. (d) Top-5 predictions generated by GN-SM approach (top) and the proposed BGL approach GN-BGL respectively. (e) Similar training exemplars according to the input feature x. (f) Accuracy.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Fig</head><label></label><figDesc>. 5b shows a testing example of Ford Ranchero 70-72. GN-SM recognized it as Ford Torino 70-71 because of the similar training exemplars as shown in the top of</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 4 .Figure 5 .</head><label>45</label><figDesc>Comparison on CUB-200-2011 dataset. (a) The number of training images for each fine-grained category (top) and attribute (bottom). (b) An example of testing images. (c) 2 attributes predicted by GN-BGLm. (d) Top-5 predictions generated by GN-SM approach (top) and the proposed BGL approach (bottom) respectively. (e) Similar training exemplars. (f) Accuracy. Comparison on the Car-333 dataset. (a) Distribution of training images for each fine-grained (top) and coarse (bottom) category. (b) An example of testing image. (c) Type and model predicted by GN-BGLm. (d) Top-5 prediction generated by GN (top) and the proposed BGL (bottom) respectively. (e) Similar training exemplars according to the input feature x. (f) Accuracy.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 6 .</head><label>6</label><figDesc>More comparison on the Car-333 datasets. (a) Accuracy as a function of the amount of data used in training. (b) Time cost for forward passing given a 128-image mini-batch, where Loss and FC denote the computation of the loss function and the last fully-connected layers respectively. (c) Time cost for backward passing.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_8"><head>Figure 7 .</head><label>7</label><figDesc>Comparison on the Food-975 dataset. (a) Distribution of training images for each fine-grained (top), dish (middle), and ingredient (bottom) category. (b) An example of testing image. (c) 4 ingredients predicted by GN-BGLm. (d) Top-5 predictions generated by GN-SM (top) and the proposed GN-BGLm (bottom) respectively. (e) Similar training exemplars according to the input feature x. (f) Accuracy.</figDesc></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Bold capital letters denote a matrix X, bold lower-case letters a column vector x. All non-bold letters represent scalars. x i represents the i th column of the matrix X. x ij denotes the scalar in the i th row and j th column of the matrix X. 1[i=j]  is an indicator function and its value equals to 1 if i = j and 0 otherwise.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">See supplementary materials for detailed derivation.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">Limited by the GPU memory, we always combined two networks in BGLm, one for fine-grained classes and the other for all coarse labels.</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Efficient object detection and segmentation for fine-grained recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Angelova</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Unsupervised learning of visual taxonomies</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Bart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Porteous</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Menu-Match: Restaurant-specific food logging from images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Beijbom</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Joshi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Morris</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Saponas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Khullar</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">WACV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Learning visual similarity for product design with convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Bala</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Graph</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page">98</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Birdsnap: Large-scale fine-grained visual categorization of birds</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">W</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">L</forename><surname>Alexander</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">W</forename><surname>Jacobs</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">N</forename><surname>Belhumeur</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Food-101 -mining discriminative components with random forests</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bossard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Guillaumin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">V</forename><surname>Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Bird species categorization using pose normalized deep convolutional nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Branson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">V</forename><surname>Horn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">The ignorant led by the blind: A hybrid human-machine vision system for fine-grained categorization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Branson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">V</forename><surname>Horn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wah</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Int. J. Comput. Vis</title>
+		<imprint>
+			<biblScope unit="volume">108</biblScope>
+			<biblScope unit="issue">1-2</biblScope>
+			<biblScope unit="page" from="3" to="29" />
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Multitask learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Caruana</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Machine Learning</title>
+		<imprint>
+			<date type="published" when="1997" />
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="page" from="41" to="75" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Large-scale visual font recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Brandt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shechtman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Agarwala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">X</forename><surname>Han</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">What does classifying more than 10,000 image categories tell us? In ECCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Large-scale object classification using label relation graphs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Ding</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Frome</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Murphy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Neven</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Adam</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Fine-grained crowdsourcing for fine-grained recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Style finder: Fine-grained clothing style detection and retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Di</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wah</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bhardwaj</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Piramuthu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Sundaresan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR Workshop on Mobile Vision</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">The pascal visual object classes challenge: A retrospective</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M A</forename><surname>Eslami</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">V</forename><surname>Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K I</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Int. J. Comput. Vis</title>
+		<imprint>
+			<biblScope unit="volume">111</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="98" to="136" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Regularized multi-task learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Evgeniou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pontil</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">KDD</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Birdlets: Subordinate categorization using volumetric primitives and pose-normalized appearance</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Farrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Oza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">I</forename><surname>Morariu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">S</forename><surname>Davis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Semantic label sharing for learning with many categories</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bernal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Weiss</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Learning visual attributes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ferrari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Smeulders, and T. Tuytelaars. Fine-grained categorization by alignments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Gavves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Fernando</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">G M</forename><surname>Snoek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">W</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">Delving deep into rectifiers: Surpassing human-level performance on ImageNet classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<idno>abs/1502.01852</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Batch normalization: Accelerating deep network training by reducing internal covariate shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<idno>abs/1502.03167</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Spatial transformer networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jaderberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Karayev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Guadarrama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Caffe</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1408.5093</idno>
+		<title level="m">Convolutional architecture for fast feature embedding</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Recognizing image style</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Karayev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Trentacoste</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Agarwala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Hertzmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Winnemoeller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Novel dataset for fine-grained image categorization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Jayadevaprakash</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Yao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR Workshop on Fine-Grained Visual Categorization</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">Collecting a large-scale dataset of fine-grained cars</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Stark</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<pubPlace>Stanford</pubPlace>
+		</imprint>
+	</monogr>
+	<note type="report_type">Technical report</note>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Learning features and parts for fine-grained recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Gebru</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Li-Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Fine-grained recognition without part annotations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">3D object representations for fine-grained categorization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Stark</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV Workshop on 3D Representation and Recognition</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">ImageNet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">LeafSnap: A computer vision system for automatic plant species identification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">N</forename><surname>Belhumeur</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Biswas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">W</forename><surname>Jacobs</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>John</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><forename type="middle">C</forename><surname>Lopez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">V B</forename><surname>Soares</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Describable visual attributes for face verification and image search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">N</forename><surname>Belhumeur</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">K</forename><surname>Nayar</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">10</biblScope>
+			<biblScope unit="page" from="1962" to="1977" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Learning to detect unseen object classes by between-class attribute transfer</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">H</forename><surname>Lampert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Nickisch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Harmeling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Bilinear CNN models for fine-grained visual recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">R</forename><surname>Chowdhury</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Maji</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Jointly optimizing 3D model fitting and fine-grained classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">I</forename><surname>Morariu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">H</forename><surname>Hsu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">S</forename><surname>Davis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Dog breed classification using part localization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kanazawa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">W</forename><surname>Jacobs</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">N</forename><surname>Belhumeur</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Im2Calories: towards an automated mobile vision food diary</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Myers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Johnston</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Rathod</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Korattikara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gorban</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Silberman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Guadarrama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Papandreou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Murphy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Predicting unseen labels using label hierarchies in large-scale multi-label learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Nam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Mencía</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">J</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Fürnkranz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECML</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Automated flower classification over a large number of classes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nilsback</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICVGIP</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Relative attributes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Parikh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Grauman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">The truth about cats and dogs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><forename type="middle">M</forename><surname>Parkhi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">V</forename><surname>Jawahar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Cats and dogs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><forename type="middle">M</forename><surname>Parkhi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">V</forename><surname>Jawahar</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Fine-grained visual categorization via multi-stage metric learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Qian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Jin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Vantage feature frames for fine-grained categorization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">R</forename><surname>Sfar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Boujemaa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Geman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<monogr>
+		<title level="m" type="main">Very deep convolutional networks for large-scale image recognition. CoRR, abs/1409.1556</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Discriminative transfer learning with tree-based priors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Fine-grained categorization for 3D scene understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Stark</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Pepik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Meger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Little</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Koller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<monogr>
+		<title level="m" type="main">Going deeper with convolutions. CoRR, abs/1409</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">4842</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">Learning subcategory relevances for category recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Todorovic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Ahuja</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">Semantic hierarchies for image annotation: A survey</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A.-M</forename><surname>Tousch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Herbin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-Y</forename><surname>Audibert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Pattern Recognit</title>
+		<imprint>
+			<biblScope unit="volume">45</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="333" to="345" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<monogr>
+		<title level="m" type="main">The Caltech-UCSD birds-200-2011 dataset</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wah</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Branson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Welinder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+		<idno>CNS-TR-2011-001</idno>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+		<respStmt>
+			<orgName>California Institute of Technology</orgName>
+		</respStmt>
+	</monogr>
+	<note type="report_type">Technical Report</note>
+</biblStruct>
+
+<biblStruct xml:id="b52">
+	<analytic>
+		<title level="a" type="main">Learning fine-grained image similarity with deep ranking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Leung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rosenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Philbin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b53">
+	<analytic>
+		<title level="a" type="main">Regionlets for generic object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b54">
+	<analytic>
+		<title level="a" type="main">Learning concept embeddings with combined human-machine expertise</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Wilber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kwak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kriegman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b55">
+	<monogr>
+		<title level="m" type="main">Deep image: Scaling up image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Shan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Dang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Sun</surname></persName>
+		</author>
+		<idno>abs/1501.02876</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b56">
+	<analytic>
+		<title level="a" type="main">Hyper-class augmented and regularized deep learning for fine-grained image classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b57">
+	<analytic>
+		<title level="a" type="main">Multi-task learning for classification with Dirichlet process priors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Xue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Carin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Krishnapuram</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J. Mach. Learn. Res</title>
+		<imprint>
+			<biblScope unit="volume">8</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="35" to="63" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b58">
+	<analytic>
+		<title level="a" type="main">Food recognition using statistics of pairwise local features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Pomerleau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sukthankar</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b59">
+	<analytic>
+		<title level="a" type="main">Fine-grained visual comparisons with local learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Grauman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b60">
+	<analytic>
+		<title level="a" type="main">Just noticeable differences in visual attributes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Grauman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b61">
+	<analytic>
+		<title level="a" type="main">Part-based R-CNNs for fine-grained category detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b62">
+	<analytic>
+		<title level="a" type="main">Deformable part descriptors for fine-grained recognition and attribute prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Farrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">N</forename><surname>Iandola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b63">
+	<analytic>
+		<title level="a" type="main">PANDA: Pose aligned networks for deep attribute modeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Paluri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ranzato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">D</forename><surname>Bourdev</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

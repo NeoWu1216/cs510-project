@@ -1,0 +1,1065 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Deep Gaussian Conditional Random Field Network: A Model-based Deep Network for Discriminative Denoising</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Raviteja</forename><surname>Vemulapalli</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Center for Automation Research</orgName>
+								<orgName type="laboratory">Mitsubishi Electric Research Laboratories Cambridge</orgName>
+								<orgName type="institution">UMIACS University of Maryland</orgName>
+								<address>
+									<settlement>College Park</settlement>
+									<region>MA</region>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Oncel</forename><surname>Tuzel</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Center for Automation Research</orgName>
+								<orgName type="laboratory">Mitsubishi Electric Research Laboratories Cambridge</orgName>
+								<orgName type="institution">UMIACS University of Maryland</orgName>
+								<address>
+									<settlement>College Park</settlement>
+									<region>MA</region>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ming-Yu</forename><surname>Liu</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Center for Automation Research</orgName>
+								<orgName type="laboratory">Mitsubishi Electric Research Laboratories Cambridge</orgName>
+								<orgName type="institution">UMIACS University of Maryland</orgName>
+								<address>
+									<settlement>College Park</settlement>
+									<region>MA</region>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Deep Gaussian Conditional Random Field Network: A Model-based Deep Network for Discriminative Denoising</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:39+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We propose a novel end-to-end trainable deep network architecture for image denoising based on a Gaussian Conditional Random Field (GCRF)  model. In contrast to the existing discriminative denoising methods that train a separate model for each individual noise level, the proposed deep network explicitly models the input noise variance and hence is capable of handling a range of noise levels. Our deep network, which we refer to as deep GCRF network, consists of two sub-networks: (i) a parameter generation network that generates the pairwise potential parameters based on the noisy input image, and (ii) an inference network whose layers perform the computations involved in an iterative GCRF inference procedure. We train two deep GCRF networks (each network operates over a range of noise levels: one for low input noise levels and one for high input noise levels) discriminatively by maximizing the peak signal-to-noise ratio measure. Experiments on Berkeley segmentation and PASCALVOC datasets show that the proposed approach produces results on par with the stateof-the-art without training a separate network for each individual noise level.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>In the recent past, deep networks have been successfully used in various image processing and computer vision applications <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b33">34]</ref>. Their success can be attributed to several factors such as their ability to represent complex inputoutput relationships, feed-forward nature of their inference (no need to solve an optimization problem during run time), availability of large training datasets, etc. One of the positive aspects of deep networks is that fairly general architectures composed of fully-connected or convolutional layers have been shown to work reasonably well across a wide range of applications. However, these general architectures do not use problem domain knowledge which could be very helpful in some of the applications.</p><p>For example, in the case of image denoising, it has been recently shown that conventional multilayer perceptrons (MLP) are not very good at handling multiple levels of input noise <ref type="bibr" target="#b2">[3]</ref>. When a single multilayer perceptron was trained to handle multiple input noise levels (by providing the noise variance as an additional input to the network), it produced inferior results compared to the state-of-the-art BM3D <ref type="bibr" target="#b5">[6]</ref> approach. In contrast to this, the EPLL framework of <ref type="bibr" target="#b39">[40]</ref>, which is a model-based approach, has been shown to work well across a range of noise levels. These results suggest that we should work towards bringing deep networks and model-based approaches together. Motivated by this, in this work, we propose a new deep network architecture for image denoising based on a Gaussian conditional random field model. The proposed network explicitly models the input noise variance and hence is capable of handling a range of noise levels.</p><p>Gaussian Markov Random Fields (GMRFs) <ref type="bibr" target="#b28">[29]</ref> are popular models for various structured inference tasks such as denoising, inpainting, super-resolution and depth estimation, as they model continuous quantities and can be efficiently solved using linear algebra routines. However, the performance of a GMRF model depends on the choice of pairwise potential functions. For example, in the case of image denoising, if the potential functions for neighboring pixels are homogeneous (i.e., identical everywhere), then the GMRF model can result in blurred edges and oversmoothed images. Therefore, to improve the performance of a GMRF model, the pairwise potential function parameters should be chosen according to the image being processed. A GMRF model that uses data-dependent potential function parameters is referred to as Gaussian Conditional Random Field (GCRF) <ref type="bibr" target="#b34">[35]</ref>.</p><p>Image denoising using a GCRF model consists of two steps: a parameter selection step in which the potential function parameters are chosen based on the input image, and an inference step in which energy minimization is performed for the chosen parameters. In this work, we propose a novel model-based deep network architecture, which we refer to as deep GCRF network, by converting both the parameter selection and inference steps into feed-forward networks.</p><p>The proposed deep GCRF network consists of two subnetworks: a parameter generation network (PgNet) that generates appropriate potential function parameters based on the input image, and an inference network (InfNet) that performs energy minimization using the potential function parameters generated by PgNet. Since directly generating the potential function parameters for an entire image is very difficult (as the number of pixels could be very large), we construct a full-image pairwise potential function indirectly by combining potential functions defined on image patches. If we use d × d patches, then our construction defines a graphical model in which each pixel is connected to its (2d − 1) × (2d − 1) spatial neighbors. This construction is motivated by the recent EPLL framework of <ref type="bibr" target="#b39">[40]</ref>. Our PgNet directly operates on each d × d input image patch and chooses appropriate parameters for the corresponding potential function.</p><p>Though the energy minimizer can be obtained in closed form for GCRF, it involves solving a linear system with number of variables equal to the number of image pixels (usually of the order of 10 6 ). Solving such a large linear system could be computationally prohibitive, especially for dense graphs (each pixel is connected to 224 neighbors when 8 × 8 image patches are used). Hence, in this work, we use an iterative optimization approach based on Half Quadratic Splitting (HQS) <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b35">36,</ref><ref type="bibr" target="#b39">40]</ref> for designing our inference network. Recently, this approach has been shown to work very well for image restoration tasks even with very few (5-6) iterations <ref type="bibr" target="#b39">[40]</ref>. Our inference network consists of a new type of layer, which we refer to as HQS layer, that performs the computations involved in a HQS iteration.</p><p>Combining the parameter generation and inference networks, we get our deep GCRF network shown in <ref type="figure" target="#fig_0">Figure 1</ref>. Note that using appropriate pairwise potential functions is crucial for the success of GCRF. Since PgNet operates on the noisy input image, it becomes increasingly difficult to generate good potential function parameters as the image noise increases. To address this issue, we introduce an additional PgNet after each HQS iteration as shown in dotted boxes in <ref type="figure" target="#fig_0">Figure 1</ref>. Since we train this deep GCRF network discriminatively in an end-to-end fashion, even if the first PgNet fails to generate good potential function parameters, the later PgNets can learn to generate appropriate parameters based on partially restored images.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Contributions:</head><p>• We propose a new end-to-end trainable deep network architecture for image denoising based on a GCRF model. In contrast to the existing discriminative denoising methods that train a separate model for each individual noise level, the proposed network explicitly models the input noise variance and hence is capable of handling a range of noise levels.</p><p>• We propose a differentiable parameter generation network that generates the GCRF pairwise potential parameters based on the noisy input image.</p><p>• We unroll a half quadratic splitting-based iterative GCRF inference procedure into a deep network and train it jointly with our parameter generation network.</p><p>• We show that the proposed approach produces results on par with the state-of-the-art without training a separate network for each individual noise level</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>Gaussian CRF: GCRFs were first introduced in <ref type="bibr" target="#b34">[35]</ref> by modeling the parameters of the conditional distribution of output given input as a function of the input image. The precision matrix associated with each image patch was modeled as a linear combination of twelve derivative filter-based matrices. The combination weights were chosen as a parametric function of the responses of the input image to a set of oriented edge and bar filters, and the parameters were learned using discriminative training. This GCRF model was extended to Regression Tree Fields (RTFs) in <ref type="bibr" target="#b17">[18]</ref>, where regression trees were used for selecting the parameters of Gaussians defined over image patches. These regression trees used responses of the input image to various hand-chosen filters for selecting an appropriate leaf node for each image patch. This RTF-based model was trained by iteratively growing the regression trees and optimizing the Gaussian parameters at leaf nodes. Recently, a cascade of RTFs <ref type="bibr" target="#b29">[30]</ref> has also been used for image restoration tasks. In contrast to the RTF-based approaches, all the components of our network are differentiable, and hence it can be trained end-to-end using standard gradient-based techniques.</p><p>Recently, <ref type="bibr" target="#b30">[31]</ref> proposed a cascade of shrinkage fields for image restoration tasks. They learned a separate filter bank and shrinkage function for each stage of their cascade using discriminative training. Though this model can also be seen as a cascade of GCRFs, the filter banks and shrinkage functions used in the cascade do not depend on the noisy input image during test time. In contrast to this, the pairwise potential functions used in our GCRF model are generated by our PgNets based on the noisy input image.</p><p>Our work is also related to the EPLL framework of <ref type="bibr" target="#b39">[40]</ref>, which decomposed the full-image Gaussian model into patch-based Gaussians, and used HQS iterations for GCRF inference. Following are the main differences between EPLL and this work: (i) We propose a new deep network architecture which combines HQS iterations with a differentiable parameter generation network. (ii) While EPLL chooses the potential parameters for each image patch as one of the K possible matrices, we construct each potential parameter matrix as a convex combination of K base matrices. (iii) While EPLL learns the K possible potential parameter matrices in a generative fashion by fitting a Gaussian Mixture Model (GMM) to clean image patches, we learn the K base matrices in a discriminative fashion by end-to-end training of our deep network. As shown later in the experiments section, our discriminative model clearly outperforms the generatively trained EPLL.</p><p>Denoising: Image denoising is one of the oldest problems in image processing and various denoising algorithms have been proposed over the past several years. Some of the most popular algorithms include wavelet shrinkage <ref type="bibr" target="#b32">[33]</ref>, fields of experts <ref type="bibr" target="#b27">[28]</ref>, Gaussian scale mixtures <ref type="bibr" target="#b25">[26]</ref>, BM3D <ref type="bibr" target="#b5">[6]</ref>, non-linear diffusion process-based approaches <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b14">15,</ref><ref type="bibr" target="#b24">25]</ref>, sparse coding-based approaches <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b21">22]</ref>, weighted nuclear norm minimization (WNNM) <ref type="bibr" target="#b13">[14]</ref>, and non-local Bayesian denoising <ref type="bibr" target="#b19">[20]</ref>. Among these, BM3D is currently the most widely-used state-of-the-art denoising approach. It is a well-engineered algorithm that combines non-local patch statistics with collaborative filtering.</p><p>Denoising with neural networks: Recently, various deep neural network-based approaches have also been proposed for image denoising <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b36">37,</ref><ref type="bibr" target="#b37">38]</ref>. While <ref type="bibr" target="#b16">[17]</ref> used a convolutional neural network (CNN), <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b37">38]</ref> used multilayer perceptrons, and <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b36">37]</ref> used stacked sparse denoising autoencoders (SSDA). Among these MLP <ref type="bibr" target="#b2">[3]</ref> has been shown to work very well outperforming the BM3D approach. However, none of these deep networks explicitly model the input noise variance, and hence are not good at handling multiple noise levels. In all these works, a different network was trained for each noise level.</p><p>Unfolding inference as a deep network: The proposed approach is also related to a class of algorithms that learn model parameters discriminatively by back-propagating the gradient through a fixed number of inference steps. In <ref type="bibr" target="#b1">[2]</ref>, the fields of experts <ref type="bibr" target="#b27">[28]</ref> MRF model was discriminatively trained for image denoising by unfolding a fixed number of gradient descent inference steps. In <ref type="bibr" target="#b26">[27]</ref>, message-passing inference machines were trained for structured prediction tasks by considering the belief propagation-based inference of a discrete graphical model as a sequence of predictors. In <ref type="bibr" target="#b12">[13]</ref>, a feed-forward sparse code predictor was trained by unfolding a coordinate descent based sparse coding inference algorithm. In <ref type="bibr" target="#b31">[32,</ref><ref type="bibr" target="#b38">39]</ref>, deep CNNs and discrete graphical models were jointly trained by unfolding the discrete mean-field inference. In <ref type="bibr" target="#b15">[16]</ref>, a new kind of nonnegative deep network was introduced by deep unfolding of non-negative factorization model. Recently, <ref type="bibr" target="#b4">[5]</ref> revisited the classical non-linear diffusion process <ref type="bibr" target="#b23">[24]</ref> by modeling it using several parameterized linear filters and influential functions. The parameters of this diffusion process were learned discriminatively by back-propagating the gradient through a fixed number of diffusion process iterations. Though this diffusion process-based approach has been shown to work well for the task of image denoising, it uses a separate model for each noise level.</p><p>In this work, we design our inference network using HQS-based inference of a Gaussian CRF model, resulting in a different network architecture compared to the above unfolding works. In addition to this inference network, our deep GCRF network also consists of other sub-networks used for modeling the GCRF pairwise potentials.</p><p>Notations: We use bold face capital letters to denote matrices and bold face small letters to denote vectors. We use vec(A), A ⊤ and A −1 to denote the column vector representation, transpose and inverse of a matrix A, respectively. A 0 means A is symmetric and positive semidefinite.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Gaussian Conditional Random Field</head><p>Let X be the given (noisy) input image and Y be the (clean) output image that needs to be inferred. Let X(i, j) and Y(i, j) represent the pixel (i, j) in images X and Y, respectively. In this work, we model the conditional probability density p(Y|X) as a Gaussian distribution given by</p><formula xml:id="formula_0">p (Y|X) ∝ exp {−E (Y|X)}, where E (Y|X) = 1 2σ 2 ij [Y(i, j) − X(i, j)] 2 := E d (Y|X) + 1 2 vec(Y) ⊤ Q(X)vec(Y) := E p (Y|X) .<label>(1)</label></formula><p>Here, σ 2 is the input noise variance and Q(X) 0 are the input-dependent parameters of the quadratic pairwise potential function E p (Y|X) defined over the image Y. Note that if the pairwise potential parameters Q are constant, then this model can be interpreted as a generative model with E d as the data term, E p as the prior term and p(Y|X) as the posterior. Hence, our GCRF is a discriminative model inspired by a generative Gaussian model.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Patch-based pairwise potential functions</head><p>Directly choosing the (positive semi-definite) pairwise potential parameters Q(X) for an entire image Y is very challenging since the number of pixels in an image could be of the order of 10 6 . Hence, motivated by <ref type="bibr" target="#b39">[40]</ref>, we construct the (full-image) pairwise potential function E p by combining patch-based pairwise potential functions.</p><p>Let x ij and y ij be d 2 × 1 column vectors representing the d × d patches centered on pixel (i, j) in images X and Y, respectively. Letx ij = Gx ij andȳ ij = Gy ij be the mean-subtracted versions of vectors x ij and y ij , respectively, where G = I − 1 d 2 11 ⊤ is the mean subtraction matrix. Here, 1 is the d 2 × 1 vector of ones and I is the</p><formula xml:id="formula_1">d 2 × d 2 identity matrix. Let V (ȳ ij |x ij ) = 1 2ȳ ⊤ ij (Σ ij (x ij )) −1ȳ ij , Σ ij (x ij ) 0,<label>(2)</label></formula><p>be a quadratic pairwise potential function defined on patch y ij , with Σ ij (x ij ) being the corresponding (input) datadependent parameters. Combining the patch-based potential functions at all the pixels, we get the following full-image pairwise potential function:</p><formula xml:id="formula_2">E p (Y|X) = 1 d 2 ij V (ȳ ij |x ij ) = 1 2d 2 ij y ⊤ ij G ⊤ (Σ ij (x ij )) −1 Gy ij .<label>(3)</label></formula><p>Note that since we are using all d × d image patches, each pixel appears in d 2 patches that are centered on its d × d neighbor pixels. In every patch, each pixel interacts with all the d 2 pixels in that patch. This effectively defines a graphical model of neighborhood size (2d − 1) × (2d − 1) on image Y.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Inference</head><p>Given the (input) data-dependent parameters {Σ ij (x ij )} of the pairwise potential function E p (Y|X), the Gaussian CRF inference solves the following optimization problem:</p><formula xml:id="formula_3">Y * = argmin Y ij d 2 σ 2 [Y(i, j) − X(i, j)] 2 + y ⊤ ij G ⊤ (Σ ij (x ij )) −1 Gy ij .<label>(4)</label></formula><p>Note that the optimization problem <ref type="formula" target="#formula_3">(4)</ref> is an unconstrained quadratic program and hence can be solved in closed form. However, the closed form solution for Y requires solving a linear system of equations with number of variables equal to the number of image pixels. Since solving such linear systems could be computationally prohibitive for large images, in this work, we use a half quadratic splitting-based iterative optimization method, that has been recently used in <ref type="bibr" target="#b39">[40]</ref> for solving the above optimization problem. This approach allows for efficient optimization by introducing auxiliary variables.</p><p>Let z ij be an auxiliary variable corresponding to the patch y ij . In half quadratic splitting method, the cost function in (4) is modified to</p><formula xml:id="formula_4">J(Y, {z ij }, β) = ij      d 2 σ 2 [Y(i, j) − X(i, j)] 2 + β y ij − z ij 2 2 + z ⊤ ij G ⊤ (Σ ij (x ij )) −1 Gz ij      .</formula><p>(5) Note that as β → ∞, the patches {y ij } are restricted to be equal to the auxiliary variables {z ij }, and the solutions of (4) and <ref type="formula">(5)</ref> converge. For a fixed value of β, the cost function J can be minimized by alternatively optimizing for Y and {z ij }. If we fix Y, then the optimal z ij is given by</p><formula xml:id="formula_5">f (y ij ) = argmin zij z ⊤ ij G ⊤ (Σ ij (x ij )) −1 Gz ij + β y ij − z ij 2 2 = G ⊤ (Σ ij (x ij )) −1 G + βI −1 βy ij = I − G ⊤ βΣ ij (x ij ) + GG ⊤ −1 G y ij .<label>(6)</label></formula><p>The last equality in (6) follows from Woodbury matrix identity. If we fix {z ij }, then the optimal Y(i, j) is given by</p><formula xml:id="formula_6">g({z ij }) = argmin Y(i,j)    d 2 σ 2 [Y(i, j) − X(i, j)] 2 + β ⌈ d−1 2 ⌉ p,q=−⌊ d−1 2 ⌋ [Y(i, j) − z pq (i, j)] 2    = X(i, j) 1 + βσ 2 + βσ 2 (1 + βσ 2 )d 2 ⌈ d−1 2 ⌉ p,q=−⌊ d−1 2 ⌋ z pq (i, j),<label>(7)</label></formula><p>where ⌊ ⌋, ⌈ ⌉ are the floor and ceil operators, respectively, and z pq (i, j) is the intensity value of pixel (i, j) according to the auxiliary patch z pq .</p><p>In half quadratic splitting approach, the optimization steps (6) and <ref type="formula" target="#formula_6">(7)</ref> are repeated while increasing the value of β in each iteration. This iterative approach has been shown to work well in <ref type="bibr" target="#b39">[40]</ref> for image restorations tasks even with few (5-6) iterations.  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Deep Gaussian CRF network</head><p>As mentioned earlier, the proposed deep GCRF network consists of the following two components:</p><p>• Parameter generation network: This network takes the noisy image X as input and generates the parameters {Σ ij (x ij )} of pairwise potential function E p (Y|X).</p><p>• Inference network: This network performs Gaussian CRF inference using the pairwise potential parameters {Σ ij (x ij )}} given by the parameter generation network.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Parameter generation network</head><p>We model the pairwise potential parameters {Σ ij } as convex combinations of K symmetric positive semidefinite matrices Ψ 1 , . . . , Ψ K :</p><formula xml:id="formula_7">Σ ij = k γ k ij Ψ k , γ k ij ≥ 0, k γ k ij = 1.<label>(8)</label></formula><p>The combination weights {γ k ij } are computed from the mean-subtracted input image patches {x ij } using the following two layer selection network:</p><formula xml:id="formula_8">Layer 1 -Quadratic layer : For k = 1, 2, . . . , K s k ij = − 1 2x ⊤ ij W k + σ 2 I −1x ij + b k .<label>(9)</label></formula><p>Layer 2 -Softmax layer : For k = 1, 2, . . . , K γ k ij = e s k ij / K p=1 e s p ij .</p><p>(10) <ref type="figure" target="#fig_1">Figure 2</ref> shows the overall parameter generation network which includes a patch extraction layer, a selection network and a combination layer. Here, {(W k 0, Ψ k 0, b k )} are the network parameters, and σ 2 is the noise variance.</p><p>Our choice of the above quadratic selection function is motivated by the following two reasons: (i) Since the selection network operates on mean-subtracted patches, it should be symmetric, i.e., bothx and −x should have the same combination weights {γ k }. To achieve this, we compute each s k as a quadratic function ofx. (ii) Since we are computing the combination weights using the noisy image patches, the selection network should be robust to input noise. To achieve this, we include the input noise variance σ 2 in the computation of {s k }. We choose the particular form W k + σ 2 I −1 because in this case, we can (roughly)</p><p>interpret the computation of {s k } as evaluating Gaussian log likelihoods. If we interpret {W k } as covariance matrices associated with clean image patches, then {W k + σ 2 I} can be interpreted as covariance matrices associated with noisy image patches.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Inference network</head><p>We use the half quadratic splitting method described in Section 3.2 to create our inference network. Each layer of the inference network, also referred to as a HQS layer, implements one half quadratic splitting iteration. Each HQS layer consists of the following two sub-layers:</p><p>• Patch inference layer (PI): This layer uses the current image estimate Y t and computes the auxiliary patches {z ij } using f (y ij ) given in <ref type="bibr" target="#b5">(6)</ref>.</p><p>• Image formation layer (IF): This layer uses the auxiliary patches {z ij } given by the PI layer and computes the next image estimate Y t+1 using g({z ij }) given in <ref type="bibr" target="#b6">(7)</ref>.</p><p>Let {β 1 , β 2 , . . . , β T } be the β schedule for half quadratic splitting. Then, our inference network consists of T HQS layers as shown in <ref type="figure" target="#fig_2">Figure 3</ref>. Here, X is the input image with noise variance σ 2 , and {Σ ij (x ij )} are the (data-dependent) pairwise potential parameters generated by the PgNet.</p><p>Remark: Since our inference network implements a fixed number of HQS iterations, its output may not be optimal for (4). However, since we train our parameter generation and inference networks jointly in a discriminative fashion, the PgNet will learn to generate appropriate pairwise potential parameters such that the output after a fixed number of HQS iterations would be close to the desired output.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">GCRF network</head><p>Combining the above parameter generation and inference networks, we get our full Gaussian CRF network with parameters {(W k 0, Ψ k 0, b k )}. Note that this GCRF network has various new types of layers that use quadratic functions, matrix inversions and multiplicative interactions, which are quite different from the computations used in standard deep networks.</p><p>Additional PgNets: Note that using appropriate pairwise potential functions is crucial for the success of GCRF. Since the parameter generation network operates on the noisy input image X, it is very difficult to generate good parameters at high noise levels (even after incorporating the noise variance σ 2 into the selection network). To overcome this issue, we introduce an additional PgNet after each HQS iteration (shown with dotted boxes in <ref type="figure" target="#fig_0">Figure 1</ref>). The rationale behind adding these additional PgNets is that even if the first PgNet fails to generate good parameters, the later PgNets could generate appropriate parameters using the partially restored images. Our final deep GCRF network consists of T PgNets and T HQS layers as shown in <ref type="figure" target="#fig_0">Figure 1</ref>.</p><p>Training: We train the proposed deep GCRF network endto-end in a discriminative fashion by maximizing the average PSNR measure. We use standard back-propagation to compute the gradient of the network parameters. Please refer to the appendix for relevant derivative formulas. Note that we have a constrained optimization problem here because of the symmetry and positive semi-definiteness constraints on the network parameters {W k } and {Ψ k }. We convert this constrained problem into an unconstrained one by parametrizing W k and Ψ k as</p><formula xml:id="formula_9">W k = P k P ⊤ k , Ψ k = R k R ⊤ k ,</formula><p>where P k and R k are lower triangular matrices, and use limited memory BFGS <ref type="bibr" target="#b20">[21]</ref> for optimization.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experiments</head><p>In this section, we use the proposed deep GCRF network for image denoising. We trained our network using a dataset of 400 images (200 images from BSD300 <ref type="bibr" target="#b22">[23]</ref> training set and 200 images from PASCALVOC 2012 <ref type="bibr" target="#b9">[10]</ref> dataset), and evaluated it using a dataset of 300 images (100 images from BSD300 <ref type="bibr" target="#b22">[23]</ref> test set and 200 images from PASCALVOC 2012 <ref type="bibr" target="#b9">[10]</ref> dataset). For our experiments, we used white Gaussian noise of various standard deviations. For realistic evaluation, all the images were quantized to [0-255] range after adding the noise. The noisy and clean images used for training and testing can be downloaded from http://ravitejav.weebly. com/gcrfdenosing.html. We use the standard PSNR measure for quantitative evaluation.</p><p>Though we use Gaussian noise, due to quantization (clipping to 0-255 range), the noise characteristics deviate from being a Gaussian as the noise variance increases. To cope up with this variation in noise characteristics, we trained two different networks, one for low input noise levels (σ ≤ 25, noise reasonably close to a Gaussian after quantization) and one for high input noise levels (25 &lt; σ &lt; 60, noise far from being a Gaussian after quantization) 1 . For training the low noise network, we used σ = <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b17">18,</ref><ref type="bibr" target="#b24">25]</ref> and for training the high noise network, we used σ = <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b34">35,</ref><ref type="bibr" target="#b39">40,</ref><ref type="bibr">50]</ref>. Note that both the networks were trained to handle a range of input noise levels. For testing, we varied the σ from 10 to 60 in intervals of 5.</p><p>We performed experiments with two patch sizes (5 × 5 and 8 × 8) 2 , and the number of matrices Ψ k was chosen as 200. Following <ref type="bibr" target="#b39">[40]</ref>, we used six HQS iterations with β values given by 1 σ 2 <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b31">32,</ref><ref type="bibr">64]</ref> 3 . To avoid overfitting, we regularized the network, by sharing the parameters {W k , Ψ k } across all PgNets. We initialized the network parameters using the parameters of a GMM learned on clean image patches. <ref type="table">Table 1</ref> compares the proposed deep GCRF network with various image denoising approaches on 300 test images. Here, DGCRF 5 and DGCRF 8 refer to the deep GCRF networks that use 5×5 and 8×8 patches, respectively. For each noise level, the top two PSNR values are shown in boldface style. Note that the CSF <ref type="bibr" target="#b30">[31]</ref> and MLP <ref type="bibr" target="#b2">[3]</ref> approaches train a different model for each noise level. Hence, for these approaches, we report the results only for those noise levels for which the corresponding authors have provided their trained models. As we can see, the proposed deep GCRF network clearly outperforms the ClusteringSR <ref type="bibr" target="#b6">[7]</ref>, EPLL <ref type="bibr" target="#b39">[40]</ref>, BM3D <ref type="bibr" target="#b5">[6]</ref>, NL-Bayes <ref type="bibr" target="#b19">[20]</ref>, NCSR <ref type="bibr" target="#b7">[8]</ref> and CSF approaches on all noise levels, and the WNNM <ref type="bibr" target="#b13">[14]</ref> approach on all noise levels except σ = 10 (where it performs equally well). Specifically, it produces significant improvement in the PSNR compared to the ClusteringSR (0.29 -1.24 dB), EPLL (0.24 -1.18 dB), BM3D (0.18 -0.83 dB), NL-Bayes (0.10 -1.27 dB), NCSR (0.11 -1.07 dB) and WNNM (upto 1.0 dB) approaches. The CSF approach of <ref type="bibr" target="#b30">[31]</ref>, which also uses GCRFs, performs poorly (0.24 dB for σ = 25) compared to our deep network.  When compared with MLP <ref type="bibr" target="#b2">[3]</ref>, which is the state-of-theart deep networks-based denoising approach, we perform better for σ = <ref type="bibr" target="#b9">[10,</ref><ref type="bibr">50]</ref>, worse for σ = 35, and equally well for σ = 25. However, note that while <ref type="bibr" target="#b2">[3]</ref> uses a different MLP for each specific noise level, we trained only two networks, each of which can handle a range of noise levels. In fact, our single low noise network is able to outperform the MLP trained for σ = 10 and perform as good as the MLP trained for σ = 25. This ability to handle a range of noise levels is one of the major benefits of the proposed deep network. Note that though we did not use the noise levels σ = 10, 15, 20, 45 during training, our networks performs very well for these σ. This shows that our networks are able to handle a range of noise levels rather than just fitting to the training σ. Also, our high noise network performs well for σ = 55 and 60 even though these values are out of its training range. This shows that the proposed model-based deep network can also generalize reasonably well for out-of-range noise levels.</p><p>We acknowledge that the comparisons in <ref type="table">Table 1</ref> may be biased since some of the competing methods are not designed for denoising quantized images. However, we believe that, for the denoising problem, using quantized im-ages is a more realistic experimental setting than using unquantized images. Please refer to <ref type="table" target="#tab_2">Table 2</ref> for additional results on a benchmark dataset under the unquantized setting.</p><p>To analyze the sensitivity of the non-model based MLP approach to the deviation from training noise, we evaluated it on noise levels that are slightly (±5) different from the training σ. The authors of <ref type="bibr" target="#b2">[3]</ref> trained separate MLPs for σ = 10, 25, 35, 50 and 65. As reported in <ref type="bibr" target="#b2">[3]</ref>, training a single MLP to handle multiple noise levels gave inferior results. <ref type="figure" target="#fig_3">Figure 4</ref> shows the improvement of the MLP approach over BM3D in terms of PSNR. For each noise level, we used the best performing model among σ = 10, 25, 35, 50, 65. As we can see, while the MLP approach does very well for the exact noise levels for which it was trained, it performs poorly if the test σ deviates from the training σ even by 5 units. This is a major limitation of the MLP approach since training a separate model for each individual noise level is not practical. In contrast to this, the proposed approach is able to cover a wide range of noise levels just using two networks.</p><p>Please note that the purpose of <ref type="figure" target="#fig_3">Figure 4</ref> is not to compare the performance of our approach with MLP on noise levels that were not used in MLP training, which would be an unfair comparison. The only purpose of this figure is to show that, although very powerful, a network trained for a specific noise level is very sensitive.</p><p>Apart from our test set of 300 images, we also evaluated our low noise DGCRF 8 network on a smaller dataset of 68 images <ref type="bibr" target="#b27">[28]</ref> which has been used in various existing works. Tables 2 and 3 compare the proposed deep GCRF network with various approaches on this dataset under the unquantized and quantized settings, respectively. For each noise level, the top two PSNR values are shown in boldface style. As we can see, the proposed approach outperforms all the other approaches except RTF 5 <ref type="bibr" target="#b29">[30]</ref> and MLP <ref type="bibr" target="#b2">[3]</ref> under the quantized setting, and TRD <ref type="bibr" target="#b4">[5]</ref> under the unquantized setting. However, note that while we use a single network for both σ = 15 and σ = 25, the MLP, TRD and RTF 5 approaches trained their models specifically for individual noise levels.   <ref type="table">Table 3</ref>: Comparison of various denoising approaches on 68 images (dataset of <ref type="bibr" target="#b27">[28]</ref>) under the quantized setting.</p><p>Training time: We trained each DGCRF 8 network for three weeks (around 250 limited memory BFGS iterations).</p><p>Denoising time: The proposed DGCRF 8 network takes 4.4s for a 321 × 481 image on an NVIDIA Titan GPU using a MATLAB implementation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusions</head><p>In this work, we proposed a new end-to-end trainable deep network architecture for image denoising based on a Gaussian CRF model. The proposed network consists of a parameter generation network that generates appropriate potential function parameters based on the input image, and an inference network that performs approximate Gaussian CRF inference. Unlike the existing discriminative denoising approaches that train a separate model for each individual noise level, the proposed network can handle a range of noise levels as it explicitly models the input noise variance. We achieved results on par with the state-of-the-art by training two deep GCRF networks, one for low input noise levels and one for high input noise levels. In the future, we plan to use this network for other full-image inference tasks like super-resolution, depth estimation, etc.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>The proposed deep GCRF network: Parameter generation network (PgNet) followed by inference network (InfNet). The PgNets in dotted boxes are the additional parameter generation networks introduced after each HQS iteration.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>Parameter generation network: Mean subtracted patchesxij extracted from the input image X are used to compute the combination weights {γ k ij }, which are used for generating the pairwise potential parameters {Σij}.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 :</head><label>3</label><figDesc>Inference network uses the pairwise potential parameters {Σij(xij)} generated by the PgNet and performs T HQS iterations.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 :</head><label>4</label><figDesc>Sensitivity analysis of the MLP and the proposed approach. The noise levels for which MLP was trained are indicated using a circular marker.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 2 :</head><label>2</label><figDesc>Comparison of various denoising approaches on 68 images (dataset of<ref type="bibr" target="#b27">[28]</ref>) under the unquantized setting.</figDesc><table>Test σ 
+LLSC 
+EPLL 
+opt-MRF 
+ClusteringSR 
+NCSR 
+BM3D 
+NL-Bayes 
+MLP 
+WNNM 
+CSF 
+RTF5 
+DGCRF8 
+[22] 
+[40] 
+[4] 
+[7] 
+[8] 
+[6] 
+[20] 
+[3] 
+[14] 
+[31] 
+[30] 
+
+15 
+31.09 
+31.11 
+31.06 
+30.93 
+31.13 
+31.03 
+31.06 
+-
+31.20 
+-
+-
+31.36 
+
+25 
+28.24 
+28.46 
+28.40 
+28.26 
+28.41 
+28.38 
+28.43 
+28.77 
+28.48 
+28.53 
+28.74 
+28.73 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">When we tried training a single network for all noise levels, our training was mainly focusing on high noise data.<ref type="bibr" target="#b1">2</ref> We did not go beyond 8 × 8 due to memory and computation issues. We believe that bigger patches could further improve the performance.<ref type="bibr" target="#b2">3</ref> Optimizing the β values using a validation set may further improve our performance.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"> <ref type="bibr" target="#b12">(13)</ref> <p>We skip the derivative formulas for other computations such as softmax, extracting mean-subtracted patches from an image, averaging in the image formation layer, etc., as they are standard operations.</p></div>
+			</div>
+
+			<div type="annex">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Appendix</head><p>In this appendix, we show how to back-propagate the loss derivatives through the layers of our deep GCRF network. Please refer to the supplementary material for detailed derivations. Let L be the final loss function.</p><p>Backpropagation through the combination layer: Given the derivatives dL/dΣ ij of the loss function L with respect to the pairwise potential parameters Σ ij , we can compute the derivatives of L with respect to the combination weights γ k ij and the matrices Ψ k using</p><p>Backpropagation through the quadratic layer: Given the derivatives dL/ds k ij of the loss function L with respect to the quadratic layer output s k ij , we can compute the derivatives of L with respect to the selection network parameters (W k , b k ) and the input patchesx ij using:</p><p>ij .</p><p>(12) Backpropagation through the patch inference layer: Given the derivatives dL/dz ij of the loss function L with respect to the output of a patch inference layer, we can compute the derivatives of L with respect to its input patches y ij and the pairwise potential parameters Σ ij using</p></div>			</div>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Adaptive Multi-Column Deep Neural Networks with Application to Robust Image Denoising</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Agostinelli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">R</forename><surname>Anderson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Training an Active Random Field for Real-Time Image Denoising</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Barbu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Image Processing</title>
+		<imprint>
+			<biblScope unit="volume">18</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="2451" to="2462" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Image Denoising: Can Plain Neural Networks Compete with BM3D?</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">C</forename><surname>Burger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">J</forename><surname>Schuler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Harmeling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Revisiting Lossspecific Training of Filter-based MRFs for Image Restoration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pock</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ranftl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">GCPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">On Learning Optimized Reaction Diffusion Processes for Effective Image Restoration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pock</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Image Denoising by Sparse 3-D Transform-Domain Collaborative Filtering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Dabov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Foi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Katkovnik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">O</forename><surname>Egiazarian</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Image Processing</title>
+		<imprint>
+			<biblScope unit="volume">16</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="2080" to="2095" />
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Sparsity-based Image Denoising via Dictionary Learning and Structural Clustering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Dong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Shi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Nonlocally Centralized Sparse Representation for Image Restoration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Dong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Image Processing</title>
+		<imprint>
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="1620" to="1630" />
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Image Denoising via Sparse and Redundant Representations Over Learned Dictionaries</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Elad</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Aharon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Image Processing</title>
+		<imprint>
+			<biblScope unit="volume">15</biblScope>
+			<biblScope unit="issue">12</biblScope>
+			<biblScope unit="page" from="3736" to="3745" />
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">The Pascal Visual Object Classes Challenge: A Retrospective</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M A</forename><surname>Eslami</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">V</forename><surname>Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K I</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">111</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="98" to="136" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Nonlinear Image Recovery with Half-quadratic Regularization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Geman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Yang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Image Processing</title>
+		<imprint>
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<biblScope unit="page" from="932" to="946" />
+			<date type="published" when="1995" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Rich Feature Hierarchies for Accurate Object Detection and Semantic Segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Learning fast approximations of sparse coding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Gregor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Weighted Nuclear Norm Minimization with Application to Image Denoising</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zuo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Feng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">An Anisotropic Fourth-Order Diffusion Filter for Image Noise Removal</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">R</forename><surname>Hajiaboli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">92</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="177" to="191" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Deep unfolding: Model-based inspiration of novel deep architectures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">R</forename><surname>Hershey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">L</forename><surname>Roux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Weninger</surname></persName>
+		</author>
+		<idno>abs/1409.2574</idno>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Natural Image Denoising with Convolutional Networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">S</forename><surname>Seung</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Loss-specific Training of Non-parametric Image Restoration Models: A New State of the Art</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Jancsary</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Nowozin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Fast Image Deconvolution using Hyper-Laplacian Priors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Krishnan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">A Nonlocal Bayesian Image Denoising Algorithm</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Lebrun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Buades</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Morel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">SIAM Journal on Imaging Sciences</title>
+		<imprint>
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="1665" to="1688" />
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">On the Limited Memory BFGS Method for Large Scale Optimization. Mathematical Programming</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">C</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1989" />
+			<biblScope unit="volume">45</biblScope>
+			<biblScope unit="page" from="503" to="528" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Non-local Sparse Models for Image Restoration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Mairal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">R</forename><surname>Bach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ponce</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Sapiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">A Database of Human Segmented Natural Images and its Application to Evaluating Segmentation Algorithms and Measuring Ecological Statistics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Martin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Fowlkes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Scale-Space and Edge Detection Using Anisotropic Diffusion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<biblScope unit="page" from="629" to="639" />
+			<date type="published" when="1990" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Nonlinear Regularized Reaction-Diffusion Filters for Denoising of Images With Textures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Plonka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ma</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Image Processing</title>
+		<imprint>
+			<biblScope unit="volume">17</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1283" to="1294" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Image denoising using scale mixtures of Gaussians in the wavelet domain</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Portilla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Strela</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Wainwright</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">P</forename><surname>Simoncelli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Image Processing</title>
+		<imprint>
+			<biblScope unit="volume">12</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="1338" to="1351" />
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Learning Message-passing Inference Machines for Structured Prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ross</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Munoz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">A</forename><surname>Bagnell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Fields of Experts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">82</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="205" to="229" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">Gaussian Markov Random Fields: Theory and Applications</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Rue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Held</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2005" />
+			<publisher>Chapman &amp; Hall</publisher>
+			<pubPlace>London</pubPlace>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Cascades of Regression Tree Fields for Image Restoration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Schmidt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Jancsary</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Nowozin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note>To appear</note>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Shrinkage Fields for Effective Image Restoration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Schmidt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+		<title level="m" type="main">Fully Connected Deep Structured Networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<idno>abs/1503.02351</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Noise removal via bayesian wavelet coring</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">P</forename><surname>Simoncelli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">H</forename><surname>Adelson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICIP</title>
+		<imprint>
+			<date type="published" when="1996" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">DeepFace: Closing the Gap to Human-Level Performance in Face Verification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Taigman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ranzato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wolf</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Learning Gaussian Conditional Random Fields for Low-Level Vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">F</forename><surname>Tappen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">H</forename><surname>Adelson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">T</forename><surname>Freeman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">A New Alternating Minimization Algorithm for Total Variation Image Reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Yin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">SIAM Journal on Imaging Sciences</title>
+		<imprint>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="248" to="272" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Image denoising and inpainting with deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Chen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Image Denoising Using a Neural Network-based Non-linear Filter in Wavelet Domain</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Salari</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICASSP</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Jayasumana</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">R</forename><surname>Paredes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vineet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Du</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H S</forename><surname>Torr</surname></persName>
+		</author>
+		<title level="m">Conditional Random Fields as Recurrent Neural Networks. In ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">From Learning Models of Natural Image Patches to Whole Image Restoration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Zoran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Weiss</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

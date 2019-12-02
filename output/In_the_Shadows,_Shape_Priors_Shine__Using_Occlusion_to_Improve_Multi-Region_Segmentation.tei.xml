@@ -1,0 +1,898 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">In the Shadows, Shape Priors Shine: Using Occlusion to Improve Multi-Region Segmentation</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yuka</forename><surname>Kihara</surname></persName>
+							<email>yuuka.kihara@nts.ricoh.co.jp</email>
+							<affiliation key="aff0">
+								<orgName type="department">Matvey Soloviev</orgName>
+								<orgName type="institution" key="instit1">Ricoh Co., Ltd. *</orgName>
+								<orgName type="institution" key="instit2">Cornell University</orgName>
+								<orgName type="institution" key="instit3">Cornell University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tsuhan</forename><surname>Chen</surname></persName>
+							<email>tsuhan@cornell.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">Matvey Soloviev</orgName>
+								<orgName type="institution" key="instit1">Ricoh Co., Ltd. *</orgName>
+								<orgName type="institution" key="instit2">Cornell University</orgName>
+								<orgName type="institution" key="instit3">Cornell University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">In the Shadows, Shape Priors Shine: Using Occlusion to Improve Multi-Region Segmentation</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:41+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We present a new algorithm for multi-region segmentation of 2D images with objects that may partially occlude each other. Our algorithm is based on the observation that human performance on this task is based both on prior knowledge about plausible shapes and taking into account the presence of occluding objects whose shape is already known -once an occluded region is identified, the shape prior can be used to guess the shape of the missing part. We capture the former aspect using a deep learning model of shape; for the latter, we simultaneously minimize the energy of all regions and consider only unoccluded pixels for data agreement.</p><p>Existing algorithms incorporating object shape priors consider every object separately in turn and can't distinguish genuine deviation from the expected shape from parts missing due to occlusion. We show that our method significantly improves on the performance of a representative algorithm, as evaluated on both preprocessed natural and synthetic images. Furthermore, on the synthetic images, we recover the ground truth segmentation with good accuracy.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>The objective of multi-region segmentation of an image is to determine the boundaries of a number of regions containing objects of interest. Unlike the single-region case, in which the boundary unambiguously defines a partition of the image domain (and so every pixel can be associated with the object or the background), region membership becomes ambiguous when multiple regions are considered and are allowed to intersect. While several methods for multi-region segmentation have been presented in the past <ref type="bibr" target="#b23">[24,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b30">31]</ref>, most of these algorithms generate a true partition of the image into regions (including the background), so that every image point is assigned to a unique region. * Work done while the first author was visiting Cornell University. The scenario where regions may overlap arises naturally when trying to infer the true outlines of a number of objects in a two-dimensional picture of a 3D scene, which may partially occlude each other. Human observers have been known to vastly outperform known algorithms in this setting <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b28">29]</ref>; folk wisdom and previous studies <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b1">2,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b5">6]</ref> partially attribute this gap to extensive explicit (having seen many objects, familiarity with laws of physics) and implicit (neurovisual tendency towards completing straight lines, constant-curvature curves and many more complex features) prior knowledge about plausible object shapes. Yet, as the following pair of figures demonstrates, this is not the whole story:</p><p>On the right, we clearly see a figure "8", partially obscured by a black circle in front of it. The figure on the left, though, could be resolved either in the same fashion (especially if the background is not a uniform color), or as an unusually-shaped figure "3", with most observers, human or algorithmic, likely to lean towards the latter.</p><p>This suggests that besides prior knowledge about the shape of objects, knowledge of the presence and shape of occluding objects is also relevant to segmentation performance -failure of the image to manifest the expected shape of a figure "8" due to the presence of an overlapping shape counts as weaker evidence against the presence of a figure "8" than failure due to a gap or perhaps noise. In fact, it is precisely in the regions that can be established to be occluded that prior knowledge about shape attains its full significance -in the absence of data on occluded pixels, whether a certain class of object may be identified in a region depends on whether the exposed parts may be extended into an occluded region in a new way that creates a shape considered plausible for that class.</p><p>In this paper, we will explore to what extent taking both presence of other objects and prior knowledge about shapes into account may allow us to improve upon existing multiregion segmentation algorithms. To this end, we shall introduce an algorithm for multi-region segmentation that optimizes both for adherence to a machine-learned prior notion of plausible shapes (the shape prior) and agreement with the image data where it is appropriate -that is, where the object presumed to lie in the region is not occluded by some other object situated in front of it. In particular, this does entail simultaneously evolving multiple partially overlapping region boundaries. To our knowledge, no previous attempts <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b1">2,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b5">6,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b14">15,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b19">20]</ref> at multi-region segmentation attempted to employ shape priors in this fashion.</p><p>Our "plausible shapes" will be drawn from one of a number of classes of familiar objects, each represented using the Shape Boltzmann Machine deep learning model (introduced in Section 4.1). We interpret the problem as an extension of Nitzberg, Mumford and Shiota's Segmentation with Depth <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b7">8]</ref> (Section 3), formulated with a data-driven term that favors uniformly colored regions of the input region and a shape term calculated by the machine learning model from a spectral descriptor representation of the region; we introduce a new way to combine and optimize for both of them simultaneously using the NMS functional in Section 4.2.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>As previously mentioned, the segmentation with depth problem was previously formulated by Nitzberg, Mumford and Shiota in <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b7">8]</ref> using a variational formulation. The NMS model consists of a sum of a data driven term of each region, which favours segmenting curves close to the boundaries of visible parts, and a shape constraint term that constrains the possible shape contour of objects inside the image, including occluded parts. Segmentation with depth thus determines the boundaries of overlapping objects, taking into account the shape and the relative distance(depth) order of the objects, based on intensity distributions in the object regions. Numerical methods for minimizing the NMS model have been presented in <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b9">10,</ref><ref type="bibr" target="#b10">11]</ref>. In <ref type="bibr" target="#b11">[12]</ref>, multiple shape prior segmentation task using graph cuts has been presented. This method is capable of handling overlap by allowing for a pixel to have multiple object memberships (labels) and simultaneously segmenting multiple objects. They define the shape prior energy using a discrete version of the shape distance proposed in <ref type="bibr" target="#b10">[11]</ref> for the level sets framework, and incorporate this energy into the graph via terminal edge weights.</p><p>However, all these works consider very limited shape priors such as contour smoothness or directly known objects, each class consist of only one image. It is not adequate to represent the shape prior encoding more complex shape variation. Recently, deep learning models <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b13">14]</ref> are attractive for their well performance in modeling highdimensional richly structured data. A deep learning model is a machine learning model that considers multiple levels of representation and abstraction that help to make sense of data such as images, sound, and text. One such model, called a Shape Boltzmann Machine (SBM) <ref type="bibr" target="#b13">[14]</ref>, is a particular form of Deep Boltzmann Machine (DBM) <ref type="bibr" target="#b12">[13]</ref> proposed specifically for the task of modeling binary object shapes. An SBM is trained in a generative manner: given a set of shapes, the goal is to learn a probabilistic model that models the given shapes accurately and can generalize to unseen instances of the multiple shape categories. Due to its structure, SBM is successfully reduce the number of first layer parameters and facilitate efficient learning for smaller datasets while preserving its ability.</p><p>We use the SBM to incorporate information about shape in the NMS formulation. The shapes can be a set of different familiar objects, but train without information about image class. The learned model parameters implicitly define a probability distribution over all possible binary shapes in SBM; combining this prior with a variational segmentation model will necessitate a probabilistic rather than level-set representation of shape, which we will introduce in 4.2.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Overview: NMS Segmentation with Depth</head><p>We shall briefly review the formulation of segmentation with depth by Nitzberg, Mumford and Shiota <ref type="bibr" target="#b6">[7]</ref>.</p><p>Let u : Ω → R 1 be a two-dimensional greyscale image defined on image domain Ω ⊂ R 2 .</p><p>We make the following assumptions about the scene:</p><p>1. No object to be recognised is completely occluded.</p><p>2. Every object is of approximately uniform brightness, and any two objects in the scene have different brightness.</p><p>3. The objects are not interlaced, so in particular there is a well-defined ordering by distance from the observer.</p><p>Note that by ignoring invisible objects, all three assumptions are easily satisfied by considering depth images of spatially well-separated objects. Let R 1 , . . . , R n be the regions occupied by objects, ordered by increasing distance from the observer (i.e. depth). Each region R i may be partially occluded by the regions preceding it in the ordering (but not completely so, by assumption 1). We shall denote the visible parts of the above objects as R ′ 1 , . . ., R ′ n respectively; they may be formally defined as</p><formula xml:id="formula_0">R ′ 1 = R 1 R ′ i = R i − j&lt;i R j for i &gt; 1.</formula><p>We may denote the background as R ′ n+1 = Ω − j≤n R j for the sake of consistency.</p><formula xml:id="formula_1">Definition 3.1. (NMS)</formula><p>Given an image f : Ω → R and a number n of recognisable objects, the objective of segmentation with depth is to determine</p><p>• an ordering O 1 &lt; . . . &lt; O n of recognisable objects in the image by distance from the viewer;</p><p>• the average greyscale intensity c i ∈ R of the region occupied by each object O i and</p><formula xml:id="formula_2">• the shape R i ⊆ Ω of the region occupied by each ob- ject O i .</formula><p>The NMS functional provides an objective function for comparing candidate solutions for the third point, given solutions for the first two. In its general form, it may be written as follows:</p><formula xml:id="formula_3">E NMS = n+1 i=1 R ′ i |u(x, y) − c i | 2 dxdy + E shape .<label>(1)</label></formula><p>The E shape term of E N M S serves to penalise implausible shapes of regions. In <ref type="bibr" target="#b6">[7]</ref>, the authors set</p><formula xml:id="formula_4">E shape = N i=1 ∂Ri∩Ω [α + βψ(κ)]ds.</formula><p>As this contour integral is taken along the boundary of the original unoccluded shape, evaluating the function inevitably entails reconstructing invisible parts of regions' boundaries. Depending on the setting of the parameters α and β, one may obtain curvature functions such as Euler's Elastica.</p><p>In our work, instead of a curvature-based boundary energy function, we use the evaluation of a deep learning model trained on global and local features of "good"/"known" shapes, which we shall briefly introduce in the next section, plus a denoising term based on the total variance norm as in <ref type="bibr" target="#b14">[15]</ref>. The top-level segmentation algorithm then takes the following form:</p><p>1. By running k-means on the histogram of the input depth image u, determine the number and average intensity of objects present. As intensity represents depth in the image, this also gives a canonical depth ordering.</p><p>2. For each object i, find a small uniform region of the average colour determined for it initialise R i with it.</p><p>3. Perform gradient descent on a relaxed version of the NMS functional using the Split Bregman method (section 4.3) to find a local minimum for {R i } 1≤i≤n .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Algorithm</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">The Shape Boltzmann Machine</head><p>In our work, we implement the shape energy term using a Shape Boltzmann machine (SBM). (For an in-depth introduction of SBMs and DBMs, we refer the reader to <ref type="bibr" target="#b13">[14]</ref> and <ref type="bibr" target="#b12">[13]</ref> respectively.) Our SBM employs two layers of hidden variables. We shall denote by v the vector of visible units that represents the (input) binary shape image, and by h 1 and h 2 be the lower and higher binary hidden units respectively.</p><p>The first layer h 1 consists of several disjoint subsets h k 1 of same size m. Each of these hidden units has a restricted receptive field and only connects to a subset of the visible units, but sharing weights between the sets of hidden units and visible units</p><formula xml:id="formula_5">W 1 = W 1 k , k ∈ K.</formula><p>The visible units are local square patches having the same size n and overlapping its neighbor by d pixels along the boundaries.</p><p>Similar to DBMs, there are no within-layer connections. The (output) energy of the state {v, h 1 , h 2 } is then defined as follows:</p><formula xml:id="formula_6">E SBM (v, h 1 , h 2 ; θ) = − k∈K v T k W 1 h 1 k −b T v − c 1T h 1 − h 1T W 2 h 2 − c 2T h 2 (2) Here, θ = {W 1 , W 2 , c 1 , c 2</formula><p>, b} are the model parameters.W 1 is defined as follows. The first term can be rewritten in the same form of DBM by some matrix manipulation:</p><formula xml:id="formula_7">k∈K v T k W 1 h 1 k = v TW1 h 1<label>(3)</label></formula><p>The distribution over v is given by marginalizing over the hidden variables.</p><formula xml:id="formula_8">p(v; θ) = 1 Z(θ) h 1 ,h 2 exp(−E(v, h 1 , h 2 ))<label>(4)</label></formula><p>Here, Z(θ) is the partition function. Although exact inference is no longer tractable, an efficient approximate learning can be carried out by using a mean-field procedure based on the property that conditional distributions p(v|h 1 ), p(h 1 |v, h 2 ), and p(h 2 |h 1 ) remain independent, as detailed in <ref type="bibr" target="#b12">[13]</ref>. Each conditional distribution is given by sigmoid function σ(y) = 1/(1 + exp(−y)) as follows.</p><formula xml:id="formula_9">p(h 1 j = 1|v, h 2 ) = σ( iW 1 ij v i + k W 2 jk h 2 k + c 1 j ) (5) p(h 2 k = 1|h 1 ) = σ( j W 2 jk h 1 j + c 2 k )<label>(6)</label></formula><formula xml:id="formula_10">p(v i = 1|h 1 ) = σ( jW 1 ij h 1 j + b i )<label>(7)</label></formula><p>Given a set of aligned binary shape images, we learn the model of SBM for shape prior segmentation which maximize likelihood p(v; θ) with respect to θ. As proposed in <ref type="bibr" target="#b12">[13]</ref>, the model parameters θ can be efficiently pre-trained at each layer greedily layer-by-layer. Joint training is then carried out to fine-tune the parameters and separate learning of local and global shape properties into the two hidden layers.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Incorporating the Shape Prior</head><p>If we were to optimize for only the first term of our objective function 1, we would be solving an instance of a normal multi-region segmentation problem in which we partition the image into disjoint regions R ′ i associated with each object -the possibly overlapping inferred boundaries R i would be playing no role. Since parametric representations of boundaries are typically insufficiently expressive and/or badly behaved for optimization purposes, in the literature, minimization of objective functions of this form is typically handled using the level set method <ref type="bibr" target="#b26">[27]</ref>, where the interior of each region is represented as the positive locus of some continuous function of the image domain and a time parameter. For an overview of the level set method in the context of image processing, see <ref type="bibr" target="#b26">[27]</ref>.</p><p>In the level set framework, region shape is commonly represented using a signed distance function, that is, a function that gives the shortest distance to the nearest point on the boundary inside the region and its negative outside. The SBM used for the shape energy term, however, instead operates on a different continuous relaxation of region membership, namely a function q : Ω → [0, 1] that assigns a probability that each pixel of the image is contained within the region in question. To be able to incorporate the shape energy term, we need to find a common representation, and reformulating the data term in terms of q is comparatively straightforward.</p><p>When working with such a function, a natural approach is to optimize on it directly and pick some cutoff probability if a binary notion of region membership is again required. This was first considered by Cremers, Schmidt and Barthel in <ref type="bibr" target="#b15">[16]</ref> following <ref type="bibr" target="#b14">[15]</ref> with the purpose of convexifying the space that optimization is performed over.</p><p>Recall (1) that for a single region and its complement, the data term of the NMS functional took the following form:</p><formula xml:id="formula_11">E data = R |u − c 1 | 2 dxdy + R c |u − c 2 | 2 dxdy</formula><p>Here, c 1 = c 1 (R) and c 2 = c 2 (R) are the average intensities in R and R c respectively, and so in particular depend on R.</p><p>Suggestively, we may reformulate this expression with a single integral taken over the whole image domain using the characteristic function χ R of the region R as follows:</p><formula xml:id="formula_12">E data = Ω |u − c 1 | 2 χ R + |u − c 2 | 2 (1 − χ R )dxdy.</formula><p>As q can be seen as a relaxation of χ R , this immediately suggests the following relaxed form in terms of q:</p><formula xml:id="formula_13">E data (q) = Ω |u − c 1 | 2 q + |u − c 2 | 2 (1 − q)dxdy. (8)</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Decomposed Objective Function</head><p>We will now show how to integrate the above shape representation with the shape prior model 11 to obtain an objective function for the problem that we may perform optimization on.</p><p>Noting how the data term for one region and the background in equation 8 consist of a part associated with the region and one associated with its complement, we can decompose the data-based energy term to obtain a collection of coupled energy terms for each of the curve boundaries individually following the approach taken in <ref type="bibr" target="#b23">[24]</ref>. We modify the NMS representation to keep track of the probability that each point is part of a given region, instead of the usual binary notion of region membership. Letting q i : Ω → [0, 1] be the membership probability function of the region R i , we set</p><formula xml:id="formula_14">E data (q i ) (9) = Ω i−1 j=1 (1 − q j ) |u − c i | 2 q i + (1 − q i )Φ i dxdy, where Φ i is Φ i = n+1 j=i+1 |u − c j | 2 q j j−1 k=2 (1 − q k )<label>(10)</label></formula><p>with q n+1 understood to be 1 everywhere; the product of q i s and (1−q i )s can be seen to be the natural generalisation of the characteristic function of the visible region R ′ i to the probabilistic relaxation.</p><p>We combine the shape prior term with this data term and reformulate our objective function (1) as follows:</p><formula xml:id="formula_15">E SP SD = N i=1 (E data (q i ) + µE shape (q i )) = N i=1 Ω |u − c i | 2 q i + Φ i (1 − q i )dxdy − µ(q T i W 1 h 1 − q T i b − c 1T h 1 − h 1T W 2 h 2 − c 2T h 2 ) + ν||∇q|| e .<label>(11)</label></formula><p>Note that we consider every region simultaneously while performing gradient descent. In particular, at any step, only the part of a given region that is taken to be unoccluded is compared to its mean luminance for the data agreement term; e.g. a hypothetical completely occluded region would then simply converge to the nearest plausible shape according to the shape prior with no regard for data agreement.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Minimizing the Energy Function</head><p>When the learning model parameters are known, E SP SD has two kind of unknowns: the shapes q i and the SBM related hidden units h 1 and h 2 . Instead of addressing both together, we use an alternating minimization procedure. Each layer of hidden units can be computed by mean-field approximate inference, just as done for DBM <ref type="bibr" target="#b14">[15]</ref>. Observe that energy functional 11 with respect to each shape q i is a convex functional, and hence can be solved using the Split Bregman method to obtain a global minimizer. We apply the Split Bregman method <ref type="bibr" target="#b16">[17]</ref> to solve the minimization problem of step 5 in Algorithm 1, adapting the implementation in <ref type="bibr" target="#b17">[18]</ref> with respect to q, and perform exhaustive search to find the minimizing translation and scaling of W.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Algorithm 1: Multi-region segmentation with depth</head><p>Input: an image u, model parameters</p><formula xml:id="formula_16">θ = {W 1 , W 2 , c 1 , c 2 , b}, and a test image u 1 Initialize {q 0 i } N −1 i=1 repeat 2 k ← k + 1 for i = 1 . . . N − 1 do 3 h 1 ← σ((q k−1 i ) TW 1 + W 2 h 2 + c 1 ) 4 h 2 ← σ(h 1T W 2 + c 2 ) 5 q k i ← arg min q,W (E data (q) − q TW1 h 1 − q T b) until 6 N −1 i=1 q i k − q i k−1 &lt; ǫ; 7 return {q i } N−1 i=1</formula><p>The initialization step in Algorithm 1 is performed by running one iteration of the Split Bregman minimization without a shape prior, i.e. setting E SBM (v, h 1 , h 2 ; θ) = 0. We have a O(n 2 ) dependency on number of regions, as the shape prior is applied independently, and each E data (q i ) in equation <ref type="formula">(9)</ref> takes O(n) to calculate naively. This may easily be improved to O(n) by carrying through partial products. The dependency on image size is also O(n 2 ), as both the Split Bregman iteration and our updates of q are local.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experiments</head><p>All experiments were run in MATLAB on a PC with a 2.30 GHz Intel Core i7-3610QM Processor and 8GB of RAM. To implement the Split Bregman arg min in Algorithm 1, we used the MATLAB native code wrapper to interface with a modified version of the code provided by T.</p><p>Goldstein as a supplement to <ref type="bibr" target="#b17">[18]</ref>.</p><p>We evaluate the effectiveness of our algorithm on several datasets which consist of binary segmentation masks representing an object silhouette ( <ref type="figure">Fig. 1(top)</ref>). Through the evaluation, those binary images are cropped and normalized to the specific size, and about half of the images are used for training, and the rest of them for testing. In the SBM training phase, pre-training requires 3000 and 1000 epochs for the first and second layers. In addition, global training is performed for 1000 epochs.</p><p>As corresponding algorithms using Split Bregman optimization with Markov Random Fields (MRF), Factor Analysis <ref type="bibr" target="#b29">[30]</ref>, and the Restricted Boltzmann Machine (RBM) have been investigated in <ref type="bibr" target="#b13">[14]</ref>, we restrict ourselves to evaluating our algorithm's performance on each input in comparison to that of the single-region shape prior segmentation algorithm of Chen et al. <ref type="bibr">(CVPR 2013)</ref>  <ref type="bibr" target="#b14">[15]</ref>, with the DBM model it employs replaced with our SBM model to ensure that only the effect of treating occlusion differently is captured. We employ this single-region algorithm for multiregion segmentation in a natural way by considering every object separately in turn and treating the rest of the image as the "background". In the tables, this algorithm is referred to as "SP (single)". We also consider the results obtained by an analogous algorithm that does not employ the machinelearned shape priors at all (referred to as "no SP") for perspective.</p><p>We evaluate the algorithms on both synthetic images and real images. The synthetic images are generated by overlapping two or three binary shapes selected uniformly at random from the test set. We also added Gaussian noise to each image. <ref type="figure">Fig. 1</ref> shows some examples of the synthetic images used in the experiment.</p><p>For the synthetic images, the accuracy of the segmentation can be evaluated by comparing it to the ground truth segmentation, i.e. the individual silhouettes that were composed to form the test image. Since each segmented region corresponding to q i has a pixel value in [0, 1], where each value represents the probability that the pixel is in the region, we simply take as the region those pixels having value larger than 0.5 to compare with the binary segmentation mask. We use two common metrics to assess segmentation quality: the average pixel accuracy (AP), of foreground and background classification, and the foreground intersectionover-union score (IoU), defined as O iou (S p , S q ) = Sp∩Sp Sp∪Sp where S p and S q are the sets of ground truth and predicted foreground pixels.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Single-Class Dataset</head><p>We evaluate the basic performances on two datasets. Caltech-101 motorbikes: The first dataset we investigated was 798 motorbike silhouettes from Caltech-101 dataset <ref type="bibr" target="#b21">[22]</ref>, capturing motorbike from side. We used 399 images <ref type="figure">Figure 1</ref>. Some examples of shape dataset (top) and the synthetic images (bottom). The synthetic image is generated by locating two or three resized binary shapes and adding noise. The combinations of the shapes used in the synthetic images are randomly selected.</p><p>for training, and the rest of them for testing. The images are cropped and normalized to 64 × 64 pixels. We trained an SBM with d = 4, and 1200 and 50 units for h 1 and h 2 respectively.</p><p>Weizmann Horses: The second dataset is the Weizmann horse dataset <ref type="bibr" target="#b22">[23]</ref> consisting of 328 images, all of horses facing left, but with a high variety of poses. We created a training set of 164 images from this dataset, cropped and normalized to 32 × 32 pixels. We trained an SBM with d = 4, and 2000 and 100 units for h 1 and h 2 respectively.</p><p>Example images of results for motorbikes and Weizmann horses are shown in <ref type="figure">Fig 2.</ref> The shape prior based algorithms can be seen to benefit from the power of the SBM model: even if one of the main components of the object, such as a handle of the motorbike or a leg of the horse, is missing, the proposed method still determine an proper boundary of the object recovering its plausible shape. Red indicates the pixels within the first object from the front, green indicates the second object from the front, and blue indicates the third object from the front.</p><p>The qualitative and quantitative comparison of our algorithm with "SP (single)" and "no SP" can be seen in <ref type="figure">Fig.  3</ref> and <ref type="table">Table 1</ref>. Testing was performed with 399 motorbike images and 164 horse images.</p><p>We expected the single-region approach to suffer in occluded regions as E data is raised by the mismatch in pixel intensity. The measurements appear to confirm this prediction -our method exhibits significantly improved scores for background regions across the board, and visual inspection confirms that this is largely due to improved accuracy in occluded parts. The keen observer may note that using a shape prior results in slight loss of accuracy for the front-most region. This is unsurprising: without the shape energy term, the contour is free to evolve to exactly match the uniformly colored region, but artifacts of the SBM shape model may lead to slight deviations having lower total energy. </p><formula xml:id="formula_17">(a) (b) (c) (d) (e) (f) (g) (h)</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Multi-Class dataset</head><p>Next, we shows the results of multi region segmentation with multiclass shape prior. We tested how well our method infers highly occluded object shape without any information about the category of each object, leaving it to the shape model to discover the most likely object categories from input image. For this purpose, we trained SBM on a combination of the images of motorbike, revolver, and car of side view from Caltech-101 dataset <ref type="bibr" target="#b21">[22]</ref>. The training dataset contains 60 cars in profile, 40 revolvers, and 300 motor bikes for a total 400 images.    <ref type="figure">Figure 5</ref>. Average runtime per instance for the three synthetic datasets, measured on our test system, in seconds. 1500 and 300 units for h 1 and h 2 was jointly trained without information about image class.</p><p>Example segmentation results can be seen in <ref type="figure" target="#fig_1">Fig. 4</ref>; quantitative results from 599 synthetic images can be found in <ref type="table">Table 2</ref>. We observe that our algorithm largely identifies the right object category and converges to the appropriate shape. There are, however, some cases where the occlusion of the shape is too heavy to determine the plausible object category. In the false example in <ref type="figure" target="#fig_1">Fig. 4</ref>, a partially occluded motorbike is recovered as a revolver.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">Enhanced Real-World Images</head><p>Next, we tested the proposed method on real images. In application, the target object often has similar shapes in different scales. The data set we tested here contains partially occluded cars with different direction, scale, and location. We used 60 side car shapes (out of a total 123) from the Caltech 101 dataset, with all cars facing left but not necessarily being of the same type. In order to segment a car facing the other direction simultaneously, we construct another 60 training shapes by flipping the previous training shapes horizontally. We cropped and normalised all shapes to 64×32 pixels, and trained an SBM with 1200 units in the first and 50 units in the second hidden layer on this extended training set with a total 120 shapes. The initial segmentation of visible part of the object is manually given. Since the aspect ratio of the car shapes is changing in the training phase, we normalized input images so that the size of the car located forward will be ratio of 64:32 in segmentation process. Here, too, we find that our algorithm outperforms the reference in the same way <ref type="figure" target="#fig_2">(Fig. 6)</ref>.</p><p>We have found that the performance depends on the occlusion ratio. If more than half of the shape is occluded, our algorithm often mistakes the the visible part for one belonging to a smaller copy of the object. Some consecutive frames of a video of a moving car have been segmented in <ref type="figure" target="#fig_3">Fig. 7</ref> to show how segmentation performance declines as more and more of an object is occluded.  One possible approach to overcome this limitation is to integrate context, such as scale (objects further away should be smaller), orientation (should be similar each other among existing objects), or physical plausibility, in our algorithm.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>We have presented a variational algorithm for multiregion segmentation of partially overlapping objects. Our algorithm uses prior information about object shapes modeled by a Shape Boltzmann Machine (SBM), and integrates it with a data-driven term. The data-driven term is made to depend only on image pixels assumed to be relevant, based on a probabilistic representation of region membership compatible with the SBM. On one hand, this enables it to deal with noise and damage in visible parts in the usual way; on the other hand, it also freely infers the shape of parts that are missing in the image due to being occluded, without having to compete with irrelevant data originating from occluding objects. The latter enables it to exhibit sig-nificant improvements over a variational algorithm representative of the state of the art, which treats occluding objects as damage.</p><p>We believe that our data supports the thesis that accounting for occluding objects is crucial to approaching human performance at multi-region segmentation. Since many subpar segmentations produced by our algorithm exhibit shapes that get good scores from the SBM but do not actually depict plausible silhouettes of the object in question, performance may likely be improved further by employing a more advanced model for the shape prior.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 2 .Figure 3 .</head><label>23</label><figDesc>Segmentation results with a single object class for two (a-d) and three (e-h) regions. Some input images, together with the respective ground truth shapes, are shown in (a)(c) and (e)(g). The composite segmentation outputs (with the regions being rendered, from front to back, in red, green and blue), along with the recovered shapes, can be seen in (b)(d) and (f)(h). Segmentation comparison of our method (multi-region segmentation) vs. single-region segmentation running several times: Original synthetic images are shown in (a),(d). (b)(e) and (c)(f) show the segmentation results and the corresponding shapes of single-region segmentation, our method, respectively. Our results are encircled by red line.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 4 .</head><label>4</label><figDesc>Segmentation results for multiple object classes. Input images and ground truth segmentations shown in (a),(c), (e) and (g). Segmentation results are in (b),(d), (f) and (h</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 6 .</head><label>6</label><figDesc>Qualitative test results on enhanced real-world images. Top row: Input. Middle row: Results of our algorithm, overlaid onto the original image. Bottom row: Results of the single-region shape prior algorithm.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 7 .</head><label>7</label><figDesc>Qualitative test results on a few subsequent frames of enhanced real-world images of a moving car.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>The images are cropped and normalized to 64×32 pixels. A SBM with d = 4, andTable 1. Results on the single class dataset: bike(top), horse(bottom). All standard deviations are bounded above by ±0.23.Table 2. Results on the multiclass dataset with three object categories from Caltech-101. All std. deviations are bounded above by ±0.<ref type="bibr" target="#b15">16</ref>.</figDesc><table>method 
+
+AP 
+IoU 
+AP 
+IoU 
+region1 region2 region1 region2 region1 region2 region3 region1 region2 region3 
+no SP 
+100 
+88.67 
+100 
+78.76 
+100 
+92.77 
+71.48 
+99.99 
+86.23 
+49.51 
+SP (single) 
+98.94 
+89.35 
+98.27 
+80.95 
+98.79 
+92.88 
+82.87 
+98.08 
+87.24 
+71.39 
+SP (multi) 
+98.86 
+94.04 
+98.13 
+89.52 
+97.88 
+96.25 
+86.98 
+96.64 
+93.24 
+78.41 
+no SP 
+99.92 
+80.95 
+99.83 
+65.70 
+99.97 
+81.98 
+67.46 
+99.94 
+69.27 
+41.94 
+SP (single) 
+98.69 
+82.58 
+97.61 
+69.12 
+98.29 
+82.70 
+69.97 
+96.88 
+70.42 
+47.91 
+SP (multi) 
+98.36 
+87.62 
+97.01 
+77.96 
+97.65 
+86.00 
+71.39 
+95.71 
+75.89 
+50.36 
+
+method 
+AP 
+IoU 
+AP 
+IoU 
+region1 region2 region1 region2 region1 region2 region3 region1 region2 region3 
+no SP 
+100 
+84.35 
+100 
+71.89 
+99.92 
+85.30 
+63.10 
+99.91 
+73.80 
+32.53 
+SP (single) 
+98.56 
+85.88 
+97.93 
+76.74 
+98.43 
+85.59 
+70.58 
+97.59 
+76.96 
+57.96 
+SP (multi) 
+98.22 
+86.39 
+98.22 
+86.39 
+98.03 
+92.04 
+77.96 
+97.00 
+86.76 
+66.35 
+
+(a) 
+(b) 
+(c) 
+(d) 
+
+(e) 
+(f) 
+
+(g) 
+(h) 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>). (h) depicts an instance of segmentation failing: the third object, a partially occluded motorbike, is recovered as a revolver. ±0.81) 5.31(±0.44) 1.45(±1.29) 8.32(±3.37)</figDesc><table>dataset 
+single 
+multi 
+2 regions 
+3 regions 
+2 regions 
+3 regions 
+bike 
+2.39(±0.80) 5.43(±1.00) 3.50(±3.04) 7.63(±3.32) 
+horse 
+1.74(±0.62) 4.03(±1.74) 1.05(±0.73) 4.36(±2.08) 
+Caltech 2.28(</table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgements</head><p>The authors were partially supported by the following grants: NSF CCF-1214844, MURI FA9550-12-1-0040 and ARO W911NF-09-1-0281. We would like to thank the Cornell AMP Lab, Kevin Matzen, Kyle Wilson, the Cornell Graphics and Vision group and the anonymous reviewers for support and helpful comments.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Statistical shape influence in geodesic active contours</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">E</forename><surname>Leventon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">E L</forename><surname>Grimson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Faugeras</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Conf. Comput. Vis. Pattern Recognit</title>
+		<meeting>Conf. Comput. Vis. Pattern Recognit</meeting>
+		<imprint>
+			<date type="published" when="2000" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">316323</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Shape Priors for Level Set Representations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rousson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Paragios</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. Eur. Conf. Comput. Vis</title>
+		<meeting>Eur. Conf. Comput. Vis</meeting>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page">7892</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">A shape-based approach to the segmentation of medical imagery using level sets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Tsai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yezzi</surname><genName>Jr</genName></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Wells</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Tempany</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tucker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">E</forename><surname>Grimson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Willsky</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Med. Imag</title>
+		<imprint>
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page">137154</biblScope>
+			<date type="published" when="2003-02" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Efficient Kernel Density Estimation Of Shape And Intensity Priors For Level Set Segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rousson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. MICCAI</title>
+		<meeting>MICCAI</meeting>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">3750</biblScope>
+			<biblScope unit="page">757764</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Kernel Density Estimation and Intrinsic Alignment for Shape Priors in Level Set Segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">J</forename><surname>Osher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Soatto</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Int. J. Comput. Vis</title>
+		<imprint>
+			<biblScope unit="volume">69</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page">335351</biblScope>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Nonlinear Dynamical Shape Priors for Level Set Segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J. Sci. Comput</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">23</biblScope>
+			<biblScope unit="page">132143</biblScope>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">The 2.1-d Sketch</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nitzberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mumford</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="1990" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Filtering, segmentation and depth</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nitzberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mumford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Shiota</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Lecture Notes in Computer Science</title>
+		<imprint>
+			<biblScope unit="volume">662</biblScope>
+			<date type="published" when="1993" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Segmentation with depth: a level set approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Chan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Esedoglu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">SIAM J. Sci. Comput</title>
+		<imprint>
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="page">19571973</biblScope>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Segmentation with depth but without detecting junctions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Esedoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>March</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J. Mathematical Imaging and Vision</title>
+		<imprint>
+			<biblScope unit="volume">18</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page">715</biblScope>
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Segmentation under Occlusions Using Selective Shape Prior. Scale Space and Variational Methods in Computer Vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sheshadri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tony</forename><forename type="middle">F</forename><surname>Thiruvenkadam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Byung-Woo</forename><surname>Chan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Hong</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+			<publisher>Springer</publisher>
+			<biblScope unit="page" from="191" to="202" />
+			<pubPlace>Berlin Heidelberg</pubPlace>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Shape prior segmentation of multiple objects with graph cuts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nhat</forename><surname>Vu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">S</forename><surname>Manjunath</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Deep Boltzmann machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AISTATS</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">The Shape Boltzmann machine: a Strong Model of Object Shape</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M A</forename><surname>Eslami</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Heess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Deep learning shape priors for object segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zeng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Shape priors in variational image segmentation: convexity, lipschitz continuity and globally optimal solutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Schmidt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Barthel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">The Split Bregman Method for L1-Regularized Problems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Goldstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Osher</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">SIAM J. Image Sciences</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page">323343</biblScope>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Geometric applications of the split Bregman method: segmentation and surface reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Goldstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Bresson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Osher</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J Sci Comput</title>
+		<imprint>
+			<biblScope unit="volume">45</biblScope>
+			<biblScope unit="page">272293</biblScope>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Simultaneous monocular 2D segmentation, 3D pose recovery and 3D reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aleksandr</forename><forename type="middle">V</forename><surname>Victor Adrian Prisacariu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ian</forename><surname>Segal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Reid</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<publisher>Springer</publisher>
+			<biblScope unit="page" from="593" to="606" />
+			<pubPlace>Berlin Heidelberg</pubPlace>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Decomposed contour prior for shape recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhi</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yu</forename><surname>Kong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yun</forename><surname>Fu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Pattern Recognition (ICPR), 2012 21st International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Unsupervised Learning of Distributions on Binary Vectors Using Two Layer Networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Freund</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Haussler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="1992" />
+			<biblScope unit="volume">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">One-shot learning of object categories</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Li</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Rob</forename><surname>Fergus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Pietro</forename><surname>Perona</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="594" to="611" />
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Class-Specific, Top-Down Segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Borenstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ullman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2002" />
+			<publisher>Springer</publisher>
+			<biblScope unit="page" from="109" to="122" />
+			<pubPlace>Berlin Heidelberg</pubPlace>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Multiregion competition: A level set extension of region competition to multiple region image partitioning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Abdol-Reza</forename><surname>Mansouri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Amar</forename><surname>Mitiche</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Carlos</forename><surname>Vzquez</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computer Vision and Image Understanding</title>
+		<imprint>
+			<biblScope unit="volume">101</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="137" to="150" />
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Joint multiregion segmentation and parametric estimation of image motion by basis function representation and level set evolution. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Carlos</forename><surname>Vazquez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Amar</forename><surname>Mitiche</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Robert</forename><surname>Laganiere</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="782" to="793" />
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Polarimetric image segmentation via maximumlikelihood approximation and efficient multiphase level-sets. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Amar</forename><surname>Ismail Ben Ayed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ziad</forename><surname>Mitiche</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Belhadj</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1493" to="1500" />
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">Variational and level set methods in image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Amar</forename><surname>Mitiche</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ismail</forename><surname>Ben Ayed</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+			<publisher>Springer Science and Business Media</publisher>
+			<biblScope unit="volume">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Early completion of occluded objects</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">A</forename><surname>Rensink</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Enns</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Vision Research</title>
+		<imprint>
+			<biblScope unit="volume">38</biblScope>
+			<biblScope unit="page" from="2489" to="2505" />
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Segmentation, attention and phenomenal visual objects</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Drivera</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Cognition</title>
+		<imprint>
+			<biblScope unit="volume">80</biblScope>
+			<biblScope unit="page">95</biblScope>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Factored Shapes and Appearances for Parts-based Object Understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M A</forename><surname>Eslami</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K I</forename><surname>Williams</surname></persName>
+		</author>
+		<idno>18.118.12</idno>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Simultaneous Searching of Globally Optimal Interacting Surfaces with Shape Priors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Qi</forename><surname>Song</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

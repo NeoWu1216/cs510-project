@@ -1,0 +1,1083 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Determining occlusions from space and time image reconstructions</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Juan-Manuel</forename><surname>Pérez-Rúa</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Technicolor</orgName>
+								<address>
+									<settlement>Cesson Sévigné</settlement>
+									<country key="FR">France</country>
+								</address>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="institution" key="instit1">Inria</orgName>
+								<orgName type="institution" key="instit2">Centre Rennes -Bretagne Atlantique</orgName>
+								<address>
+									<country key="FR">France</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tomas</forename><surname>Crivelli</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Technicolor</orgName>
+								<address>
+									<settlement>Cesson Sévigné</settlement>
+									<country key="FR">France</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Patrick</forename><surname>Bouthemy</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="institution" key="instit1">Inria</orgName>
+								<orgName type="institution" key="instit2">Centre Rennes -Bretagne Atlantique</orgName>
+								<address>
+									<country key="FR">France</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Patrick</forename><surname>Pérez</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Technicolor</orgName>
+								<address>
+									<settlement>Cesson Sévigné</settlement>
+									<country key="FR">France</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Determining occlusions from space and time image reconstructions</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:39+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>The problem of localizing occlusions between consecutive frames of a video is important but rarely tackled on its own. In most works, it is tightly interleaved with the computation of accurate optical flows, which leads to a delicate chicken-and-egg problem. With this in mind, we propose a novel approach to occlusion detection where visibility or not of a point in next frame is formulated in terms of visual reconstruction. The key issue is now to determine how well a pixel in the first image can be "reconstructed" from co-located colors in the next image. We first exploit this reasoning at the pixel level with a new detection criterion. Contrary to the ubiquitous displaced-framedifference and forward-backward flow vector matching, the proposed alternative does not critically depend on a precomputed, dense displacement field, while being shown to be more effective. We then leverage this local modeling within an energy-minimization framework that delivers occlusion maps. An easy-to-obtain collection of parametric motion models is exploited within the energy to provide the required level of motion information. Our approach outperforms state-of-the-art detection methods on the challenging MPI Sintel dataset.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Detecting occluded areas at each instant of a video sequence is of utmost interest for many computer vision applications. In fact, even though occlusion detection is mostly associated with the problem of computing inter-image correspondences (optical flow for monocular vision, or disparity map in stereo vision), it is very informative on its own. Among other applications, occlusion-based reasoning has been applied to contour and object tracking <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b43">44]</ref>, segmentation of multiple objects <ref type="bibr" target="#b38">[39]</ref>, action recognition <ref type="bibr" target="#b36">[37]</ref>, pose estimation <ref type="bibr" target="#b35">[36]</ref>, and depth ordering <ref type="bibr" target="#b25">[26]</ref>.</p><p>In spite of the usual association between motion field estimation and occlusion detection, it is worth noting that physical motion within the scene by itself does not deter-mine if an element is hidden at a given instant. An additional factor is needed in the equation, that is, the observer point of view, or in other words, the observed 2D visual representation of the real 3D world, i.e., the image. This is a well-known fact and limitation of the optical flow as a representation of physical motion <ref type="bibr" target="#b34">[35]</ref>. When working with a succession of discrete-in-time and discrete-in-space 2D images, one can define that a point of a given image is occluded in the next (or other) image of the sequence, if it is not visible by the observer in the latter.</p><p>Many state-of-the-art approaches tackle occlusion detection based on the following question: Does an image point have a correspondent in the other image that can be confidently identified as physically identical? In practice, this is indeed evidenced, either implicitly or explicitly, by a wide range of formulations that consider the problem of occlusion detection as inseparable of displacement estimation <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b17">18,</ref><ref type="bibr" target="#b31">32,</ref><ref type="bibr" target="#b40">41]</ref>. This simple question leads however to obstacles in formulating the problem. First, true dense correspondences between images are not easily obtained, especially on occluded pixels where the optical flow (or disparity, likewise) is not well defined. Even in non-occluded areas, rapid changes in appearance and scale make the definition and the estimation of unique correspondences difficult.</p><p>We strive for an alternative, more direct, approach to occlusion detection. We adopt an image reconstruction viewpoint that frees us, to a large extent, from the need of jointly estimating an accurate, dense motion field. Instead, we only make use of "plausible" motions simply extracted from the image pair.</p><p>The main idea is to assess whether or not pixel appearance can be equally well explained by its spatial neighborhood in the same frame and by suitable co-located pixels in the other frame. If not, this point is likely to be occluded in the next image. In this way, occlusion detection can be sought as independent of the knowledge of an accurate, univocal motion field between the two images. It suffices to exploit loosely the spatiotemporal coherency in order to select a suitable spatiotemporal neighborhood. <ref type="figure">Figure 1</ref>. Occlusions from color inconsistencies along true flow. (a-b) Two successive frames of the clean ambush 2 sequence from the MPI Sintel dataset <ref type="bibr" target="#b9">[10]</ref>. (c) Occlusion ground truth with occlusions shown in white; (d) Norm of the color difference between points matched by the true flow (2D projection of the known 3D motions); (e)-(h) Occlusion maps obtained by thresholding at 0.015, 0.050, 0.100 and 0.250 respectively, the min-max normalized (between 0 and 1) color differences along the flow. They are all unsatisfactory (low precision and/or low recall).</p><formula xml:id="formula_0">(a) (b) (c) (d) (e) (f) (g) (h)</formula><p>The paper is organized as follows. In Section 2 we discuss relevant literature and motivate the need for a different approach to occlusion detection. We then devote Section 3 to introducing the ideas behind our novel approach, whose formulation is given in Section 4. We report experimental results, including extensive comparisons to recent occlusion detection methods, in Section 5. We provide concluding remarks in Section 6.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">On true motion and occlusion models</head><p>Seeing occlusion detection as only part of a joint motionocclusion problem requires (1) to model accurately visual motion and (2) to model occlusions in the light of this motion. As we will show, even if the true motion field is known, approaches of this type might fail to produce accurate occlusion maps. As a consequence, we argue that motion should remain an auxiliary variable and not the main object of interest. This idea deeply contrasts with the reasonings one can find in the literature.</p><p>A popular idea is that an occlusion is a violation of the optical flow constraint: "Occlusions generally become apparent when integrated over time because violations of the brightness-constancy constraint of optical flow accumulate in occluded areas" <ref type="bibr" target="#b11">[12]</ref>.</p><p>Other authors make similar claims, without referring to optical flow integration but stating instead that, under Lambertian reflections and the constant illumination assumption, a brightness change between corresponding points indicates an occlusion of the point in the second image <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b39">40]</ref>.</p><p>Another assertion is that flow errors occur in occlusion areas or that an occlusion is an explanation of motion mismatching: ". . . the most probable reasons for such a situation [flow mismatching] is an occlusion problem or an error in the estimated matching" <ref type="bibr" target="#b1">[2]</ref>. This notion has also been exploited by other works <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b42">43]</ref> where forwardbackward flow inconsistency is used to detect occlusions.</p><p>Similarly to the brightness conservation constraint, some authors have proposed that a point is occluded if it switches from one motion layer or segment to another between consecutive frames: "To consistently reason about occlusions, we examine the layer assignments [of two points in consec-utive frames] at locations corresponded by the underlying flow fields" <ref type="bibr" target="#b29">[30]</ref>. In our opinion, this argument falls short for non-planar motions and self-occlusions even when optical flow is allowed to deviate from the assumed parametric motion as in <ref type="bibr" target="#b29">[30]</ref>. Ambiguities on occlusion estimation from layer assignment are alleviated by enforcing temporal layer consistency <ref type="bibr" target="#b30">[31]</ref>.</p><p>Relying on a joint motion-occlusion estimation leads to a chicken-and-egg situation, which is handled in alternation: "[The algorithm] iterates between estimating values for [occlusion map], and optimizing the current optical flow estimates by differential techniques" <ref type="bibr" target="#b27">[28]</ref>.</p><p>Other approaches include the uniqueness criterion <ref type="bibr" target="#b8">[9]</ref>, which is known for producing a large amount of false positives <ref type="bibr" target="#b41">[42]</ref>, and combinations of the criteria explained above. For instance, <ref type="bibr" target="#b14">[15]</ref> considers flow symmetry in combination with the violations of the optical flow brightness constancy constraint. Another example is <ref type="bibr" target="#b31">[32]</ref> which enforces disparity consistency by labeling points that cannot be matched with another point in the second image as occluded, while proposing a sequential approach that computes occlusion and disparity iteratively. Different views on the related problem of finding occlusion borders, but without determining exactly the occlusion regions are found in <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b22">23,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b26">27,</ref><ref type="bibr" target="#b32">33]</ref>.</p><p>Doubtless, the underlying motion is indeed helpful to find occlusions. This is further confirmed by the work of Humayun et al. <ref type="bibr" target="#b13">[14]</ref> where a large amount of features were used to train a random forest, giving a high importance to motion-based features. In the same way, knowing the occlusion labeling of image pixels clearly helps motion estimation. Specifically, it better guides regularization and smoothing. Many optical flow methods try to deal with occlusions by embedding a discrete state into a continuous numerical scheme <ref type="bibr" target="#b4">[5]</ref>, or an aggregation framework <ref type="bibr" target="#b12">[13]</ref>, ending with complex, usually joint formulations that improve motion estimation. Similarly, stereo vision approaches that are formulated as discrete label-selection problems can be naturally extended to handle occlusions by adding a label for the occlusion state <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b17">18]</ref>, relying on efficient discrete energy optimization techniques. In order to pin down our claims, let us assume that we know the true motion field for an image pair 1 and let us analyze the most common underlying reasonings for occlusion detection. <ref type="figure">Figure 1</ref> shows results for the occlusion detection by finding violations of the color constancy assumption along this motion, that is by thresholding the so-called displaced frame difference (DFD). If x and x ′ are locations on image grid Ω of two truly corresponding pixels in color images I 1 and I 2 respectively, x is declared occluded if</p><formula xml:id="formula_1">(a) (b) (c) (d) (e) (f) (g) (h)</formula><formula xml:id="formula_2">I 1 (x) − I 2 (x ′ ) &gt; ε c ,<label>(1)</label></formula><p>where ε c is a threshold, which is proposed with variants in <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b39">40]</ref>. Even though the image sequence in this example does not contain significant illumination changes nor extra post-processing effects like mist or motion blur, the color constancy criterion is not robust enough to detect occlusions even if the true motion is known. This is easily verified visually by looking at regions where the norm of the color difference does not have large enough values even across occluded areas <ref type="figure">(Fig.1)</ref>.</p><p>A similar experiment can demonstrate that surprisingly, even when the true optical flow is available, the forwardbackward flow consistency criteria might fail to accurately capture the real occlusion map <ref type="figure" target="#fig_0">(Fig.2</ref>). This criterion assumes that given corresponding points x and x ′ and their associated forward and backward flows, <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b12">13]</ref>. Implementation-wise, the backward flow at x ′ is obtained by bilinear interpolation, since x ′ is generally not an integer grid position. Such a detail by itself generates erroneous flow mismatching which may be enlarged in different situations such as motion discontinuities or zooming. Even if ground-truth motion is available at image grid points, w b (x ′ ) may introduce a position drift while going backwards to the first image. <ref type="figure" target="#fig_0">Figure 2</ref> shows occlusion maps obtained by this criterion for a syn-thetic zoom. The errors in the occlusion map can be explained by the grid discretization of the flows, making the forward-backward flow difference grow in several zones of the non-occluded area (whiter pixels in <ref type="figure" target="#fig_0">Fig.2)</ref>, and leading to a large number of false positives.</p><formula xml:id="formula_3">w f (x) and w b (x ′ ), x is declared occluded if w f (x) + w b (x ′ ) &gt; ε f , where ε f is a threshold</formula><p>As the aforementioned two criteria are the most commonly used <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b39">40]</ref>, the amount of errors they can lead to should not be neglected. Reducing the dependency of occlusion detection on flow quality, as we propose, is one answer to this problem.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">From image reconstructions to occlusion</head><p>We consider that the property of being occluded is intrinsic to each one of the points of an image. This means that detecting occlusions may be posed as an independent problem, and not necessarily strongly attached to a per-pixel estimation of motion. We start from the standard concept of an occluded point, represented in the image space through the simplified concept of a pixel, as one that is visible in a first image and not visible in a second image.</p><p>A visible to non-visible transition implies a loss of information between the two images. This means that there is a pixel in the first image that cannot be explained using the second image. At a larger scale, to pin things down, suppose a well-defined object present at one instant. The question we ask is: Can the visual information carried by the object be plausibly explained or "reconstructed" by visual data from the second image? Failing to perform this reconstruction implies an absence of information and thus, a disappearing object. Occlusion detection can then be defined as a spatiotemporal reconstruction problem.</p><p>For this problem to be well-posed there are two main issues. First, quality of the visual reconstruction has to be assessed with respect to a reference information. Incidentally, the true reconstruction is available here, and is precisely the same first image! Note that we reason directly on the quality of the reconstruction (with known reference) rather than indirectly on the quality of motion (unknown field). Sec-ond, the reconstruction should be plausible, meaning that the way we pull information from the second image to reconstruct the first, must be consistent with apparent scene changes. Without the latter condition, one can get away with physically improbable information flows.</p><p>We start by focusing first aspect of the problem, that is, how to construct an occlusion criterion able to reason on the basis of image reconstruction. The criterion itself assumes that the reconstruction is plausible and consistent. A plausible reconstruction from a pair of images can be generated given a plausible correspondence motion field between them. This defines a natural way of pulling information from one image towards the other. A non-plausible reconstruction would be one that propagates color information between points that do not physically relate. Such a reconstruction is not necessarily useless, as many problems in image processing are not interested in the interpretation of the correspondence itself, like motion-compensated image compression, nearest neighbor search (e.g. <ref type="bibr" target="#b5">[6]</ref>) or video denoising.</p><p>This puts forward the fact that motion indeed intervenes, leading us to the second aspect of the problem. We propose a complete framework for occlusion map estimation which exploits dynamic idiosyncrasies of the scene of interest. Indeed, the plausibility of the reconstruction (loosely, how probable it is) does not demand accuracy in motion estimation nor a hard decision on which is the optimal correspondence vector.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Proposed occlusion detection</head><p>We start by defining a reconstruction-based criterion for independently detecting occluded pixels (Section 4.1), assuming the knowledge of a correspondence map. In Section 4.2, we then leverage this new local model within an image-wise formulation of occlusion detection, where instrumental correspondences are obtained from a collection of suitable parametric motion models. No accurate optical flow is thus required while searching the best binary occlusion labeling over the image.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">A reconstruction-based criterion</head><p>Let us define two functions ζ(I) and η(I ′ ; I, w) that provide two different reconstructions of the same image I, either from itself (intra-image reconstruction) or from another related image I ′ , a correspondence field between the two, w, being given (inter-image reconstruction under correspondence guidance). Given a pair (I 1 , I 2 ) of successive video frames and some correspondence field w from the first image to the second one, we shall denote in short ζ 1 = ζ(I 1 ) and η 1,2 = η(I 2 ; I 1 , w).</p><p>In essence, η 1,2 = η 1,2 (x) x∈Ω conveys the appearance of image I 1 that is retained by the second image. As such, under the true motion field, η 1,2 is expected to deviate towards the appearance of I 2 for all the occluded points. This particular behavior is clearly visible in <ref type="figure">Fig. 3</ref>, where segments with largest motions appear doubled in a stroboscopic-like effect. On the other hand, ζ 1 captures the intrinsic appearance of I 1 revisited from its own perspective for every x on the image grid Ω.</p><p>This means that, if the two functions are defined in a suitable way, one could deduct whether a pixel at location x in the first image of the pair is visible or not in the second one by comparing ζ 1 and η 1,2 around this location. Experiments showed that this comparison is better conducted in an asymmetric way whereby a local color model g (defined later in Eq. 6) is fitted to ζ 1 in the neighborhood of x and used to assess the likelihood of η 1,2 (x) under visibility hypothesis.</p><p>Reasoning independently at the pixel level for now, point x will be considered as not visible in the second image if:</p><formula xml:id="formula_4">− ln g η 1,2 (x) &gt; ε v ,<label>(2)</label></formula><p>where ε v is a conveniently chosen threshold, and g an exponential density function. The function ζ aims mostly at "simplifying" the first input image I 1 such that robust comparisons can be conducted later on. Yet, it is important to preserve the structure of the input image. A natural choice for this function is the classic bilateral filter <ref type="bibr" target="#b33">[34]</ref>: 2</p><formula xml:id="formula_5">ζ 1 (x) = 1 Z(x; I 1 ) y∈Nx α(x, y; I 1 )I 1 (y),<label>(3)</label></formula><p>where N x is a square window centered at x, Z(x; I 1 ) = y∈Nx α(x, y; I 1 ) is a normalization factor and the weighting function α depends on both appearance and spatial proximity within pixel pair:</p><formula xml:id="formula_6">α(x, y; I 1 ) = f a ( I 1 (y) − I 1 (x) )f s ( y − x ),<label>(4)</label></formula><p>with f a and f s being Gaussian kernels.</p><p>In a similar fashion, η 1,2 will form a structure-preserving reconstruction of the first image I 1 but, this time, using colors from the second image I 2 under the guidance of correspondence map w:</p><formula xml:id="formula_7">η 1,2 (x) = 1 Z(x; I 1 ) y∈Nx α(x, y; I 1 )I 2 y + w(y) . (5)</formula><p>This can be seen as a "displaced cross-bilateral filter", that is, the cross-bilateral filtering <ref type="bibr" target="#b18">[19]</ref> of a warped image. Note that, as previously stated, we make use of a correspondence map only as a tool to find a valid reconstruction of I 1 .</p><p>It is important that the two reconstruction functions share the same filter weights. <ref type="bibr" target="#b2">3</ref> This way, η 1,2 captures as much as possible the local structure of I 1 and both reconstructions are comparable pixel-wise. Intentionally, this  <ref type="figure">Figure 3</ref>. Pipeline for proposed occlusion detection criterion. Given successive images I1 and I2, functions ζ and η generate two "reconstructions" ζ1 and η1,2 of I1. The second reconstruction is obtained from I2, under the guidance of a given motion field and of I1 (to preserve the structures of it). An arbitrary window of an occluded zone is zoomed-in for inspection. The likelihood of the color at each pixel of η1,2 is evaluated under the corresponding local model extracted from ζ1 at the super-pixel level (point-to-local-color-model comparison). This provides a soft-occlusion map that can be either thresholded pixel-wise to obtain a binary occlusion map, or embedded in the unaries of a joint labeling cost function (not shown here). structure-mimicking behavior is not favorable for reconstructing points that are visible only in the first image, i.e., occluded points. The next step in the procedure consists in assessing whether a point x is occluded or not based on the criterion defined in <ref type="bibr" target="#b1">(2)</ref>. In order to conduct this step in practice, we propose here to over-segment the first reconstructed image into homogeneous segments where meaningful local color models can be estimated. In our experiments, these homogeneous segments are SLIC superpixels <ref type="bibr" target="#b0">[1]</ref>, and a Gaussian Mixture Model (GMM) of color is extracted for each of them, defining the density g in (2).</p><p>Image ζ 1 is segmented into J super-pixels and the j-th one, S j ⊂ Ω, is equipped with the mixture:</p><formula xml:id="formula_8">g j = Kj k=1 π j k G(µ j k , Σ j k ),<label>(6)</label></formula><p>where π j k , µ j k and Σ j k are respectively the weight, the mean and the covariance matrix of the k-th component of the mixture. These GMMs provide good local models of ζ 1 in the sense that one can assume that</p><formula xml:id="formula_9">∀x ∈ Ω, ζ 1 (x) ∼ g s(x) ,<label>(7)</label></formula><p>where s(x) ∈ 1, J is the index of super-pixel containing x. This should also hold for η 1,2 (x) provided the point is not occluded in second image. The novel reconstructionbased test for occlusion detection at the pixel level (2) finally reads:</p><formula xml:id="formula_10">x occluded if − ln g s(x) η 1,2 (x) &gt; ε v .<label>(8)</label></formula><p>Contrary to DFD-based test (1), this one is not based on a point-to-point comparison but on a point-to-local-model one. We shall demonstrate experimentally that it is a more powerful alternative. Yet, as DFD-based test, it still assumes that a correspondence map is available to produce the temporal image reconstruction η 1,2 = η(I 2 ; I 1 , w). Next, we explain how to use this novel modeling over the whole image without depending on a single, accurate motion field.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">From motion models to occlusions without stopping by optical flow</head><p>We propose a method for detecting occlusions which uses the image-reconstruction reasoning explained above. In order to be agnostic to optical flow computation, we propose to rely on a collection of motion models that spans the various dynamics of the scene and thus enables plausible image reconstructions. As classically exploited in video segmentation and analysis, the apparent motion at work in natural dynamic scenes can often be decomposed into a set of low-complexity models, typically region-wise affine models. Such a paradigm recently proved useful also to estimate dense optical flows <ref type="bibr" target="#b42">[43]</ref>. In our case, such models will provide candidate correspondences at each pixel, leading to a discrete labeling problem intertwined with the main one of occlusion detection.</p><p>We start by computing a set W = {w k , k = 1 · · · K} of K parametric motion models that are relevant to different sub-regions of the scene. We extract a large number K of overlapping windows of different sizes, starting with a window encompassing the full image support, and subsequently reducing the size by a half and changing position of the windows with a fixed overlap factor of 50%, covering the whole image for every window size. For the image size of the Sintel dataset, with four levels of window sizes we obtain, for instance, K = 115 windows.</p><p>For each window, we robustly estimate a parametric warp that captures at best the motion of corresponding scene fragment. Several classic techniques can be used to this end. In our experiments, we combine semi-dense matching, to handle large displacements, with robust affine motion estimation. We first extract point matches between images I 1 and I 2 with DeepMatching 4 <ref type="bibr" target="#b23">[24]</ref> and fit an initial affine motion to the matches originated from the window of interest. These models are then refined with Motion2D 5 , an M-estimator relying on all support intensities <ref type="bibr" target="#b19">[20]</ref>. This multi-window motion estimation approach arguably provides a partially redundant collection of motion models, but it is simple and it circumvents in particular the intricate problem of motion segmentation. From the set W of K parametric motion models thus obtained, we want to exploit the most plausible at each pixel to achieve occlusion detection. Observe that with this procedure, pixel-wise occlusion modeling is not tied to a single, accurate, dense optical flow, but rather to a region-wise characterization of the scene dynamics.</p><p>The task to solve is now the one of jointly selecting a motion model and deciding on visibility for each pixel. We pose it as an energy minimization problem with respect to a motion model labeling M = m(x) x∈Ω ∈ 1, K Ω and an occlusion map</p><formula xml:id="formula_11">O = o(x) x∈Ω ∈ {0,</formula><p>1} Ω , where 1 means occluded point. For pixel location x, label m(x) indicates which one of the available parametric motion models is relevant, while o(x) establishes if there is an occlusion or not. For m(x) = k, the associated inter-image reconstruction (5) is denoted η k 1,2 (x). The joint energy to minimize is defined as:</p><formula xml:id="formula_12">E(O, M ) = x∈Ω φ x (o(x), m(x)) + DL(M )+ (9) x∼y ψ m x,y (m(x), m(y)) + ψ o x,y (o(x), o(y))</formula><p>where the second sum is taken over all pairs of neighboring pixels. The unary potential reads φ x (0, k) = − ln g s(x) (η k 1,2 (x)), φ x (1, k) = α v , (10) where α v &gt; 0 is the cost of labeling a single pixel as occluded. It is related to ε v in pixel-wise test <ref type="bibr" target="#b7">(8)</ref>. This data term is thus not based on point-wise displaced frame differences as classically done, but on reconstruction-based local modeling. Although this modeling effectively penalizes motions that do not preserve color information up to the precision of the local model, this data-term, as seen from the unknown motion point-of-view, would not be suitable to yield an accurate pixel-wise motion estimation. Again, this is not the intention anyway, the sole aim being to reason locally on as plausible as possible inter-image reconstructions. This is further analyzed in Section 5.</p><p>Since each motion label k corresponds to a specific image window, one could restrict the labeling of pixel x according to the windows it belongs to. We found, however, that this restriction can cause block-like artifacts in the label assignment, with subsequent damage to final occlusion labeling. To capture motion model locality in a less drastic way, we propose instead to double φ x (0, k) (unary potential for visible points) for motion models k stemming from windows x does not belong to.</p><p>The binary potentials share a similar form of contrast-sensitive smoothing:</p><p>ψ a</p><p>x,y (k, k ′ ) = λ a exp (−β a I 1 (x) − I 1 (y) ) [k = k ′ ] (11) with a ∈ {"o", "m"}, where [·] is Iverson bracket and λ o , λ m are positive parameters.</p><p>Finally, the global motion label cost DL(M ) penalizes the complexity of the labeling through its "description length", i.e., the number of labels effectively used:</p><formula xml:id="formula_13">DL(M ) = λ c ♯{k : ∃x ∈ Ω, m(x) = k}.<label>(12)</label></formula><p>The (13) This can be done approximately by using α-expansions with the method of <ref type="bibr" target="#b10">[11]</ref> in order to handle the global label cost term. Subsequently, for a given motion model label map, the occlusion map can be recovered by minimizing w.r.t. O the following function:</p><formula xml:id="formula_14">x∈Ω φ x (o(x), m(x)) + x∼y ψ o x,y (o(x), o(y)),<label>(14)</label></formula><p>with graph-cuts <ref type="bibr" target="#b7">[8]</ref>. The occlusion and label maps are alternatively updated for a small number of iterations. Recall that this process is not oriented at optical flow recovery, but at selecting plausible motion models.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experimental results</head><p>For the quantitative evaluations reported in this section, we rely on the MPI Sintel dataset 6 <ref type="bibr" target="#b9">[10]</ref>. This dataset comprises 69 sequences from the open-source CGI movie Sintel 7 for which ground-truth optical flows and occlusion maps have been computed from the known 3D dynamic structure of the scenes.   For all the experiments, we fixed the number of super-pixels J to 700. We found experimentally that having only 2 components for each GMM provides good results in general. Furthermore, the standard deviation of the Gaussian kernels was set to 1.0, with a window size of 5 pixels. These parameters are related to the local color model variability within the superpixel supports.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Evaluation of the occlusion criterion</head><p>Comparisons are conducted against DFD-based detection, which is at the heart of approaches based on analyzing violations of the brightness constancy assumption <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b39">40]</ref>. For eight sequences of the dataset, we report in <ref type="figure" target="#fig_4">Fig. 4</ref> occlusion detection ROC curves (true-positive-rate (TPR) vs. false-positive-rate (FPR)) and area under the ROC curves (AUC), both varying the threshold ε c in the rule (1) and varying ε v in our own framework <ref type="bibr" target="#b7">(8)</ref>. It can be seen that our reconstruction-based criterion has more discriminative power than classic DFD criterion in the prospect of occlusion detection. In all regimes and on all the sequences the former outperforms the latter, often by a substantial margin. More interestingly, for most of the sequences, i.e., "alley 1", "alley 2", "ambush 4", "ambush 5", "ambush 7" and "bamboo 1", the decrease in occlusion detection performance due to flow inaccuracies (with noisy ground-truth or DeepFlow estimate) is less significant for our method. Remarkably, when used together with DeepFlow, our criterion outperforms on several sequences the DFD criterion based on true motion field.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Full system evaluation</head><p>We now turn to the complete minimization-based method introduced in Section 4.2. We compare it on MPI Sintel sequences to several recent approaches: (1) a learning-based occlusion detection algorithm, which uses a non trivial ensemble of hand-designed features <ref type="bibr" target="#b13">[14]</ref>, including forward-backward flow inconsistencies for several optical flow methods; (2) a method based on layer assignment and depth ordering <ref type="bibr" target="#b29">[30]</ref>; (3) a method that leverages reasoning on local layers relationships <ref type="bibr" target="#b28">[29]</ref>; (4) a sparse occlusion detection method that relies on departures from the optical flow color constancy assumption <ref type="bibr" target="#b3">[4]</ref>.</p><p>In the experiments, we limit the number of iterations of our alternate minimization method to 2, as it converges quickly. Furthermore, we set λ o = 20.0, λ m = 33.3, β o = 0.1, β m = 0.2, and λ c = 10 3 by hand-tuning. Setting critical parameter α v is discussed below. <ref type="table" target="#tab_0">Table 1</ref> summarizes results by the average F-score computed over all 69 ground-truth MPI Sintel sequences, using two ways of setting the main occlusion parameter for each method, e.g., α v for our method. In a first set of experiments ("Global 69" column), it is manually set at once for all sequences. For <ref type="bibr" target="#b28">[29]</ref> and <ref type="bibr" target="#b13">[14]</ref>, the corresponding parameters are set to 0.5, as reported by <ref type="bibr" target="#b28">[29]</ref>; for our method α v is set to 10; finally, for [4] 9 and [30] 10 we set the parameters to the values proposed by the respective authors. In a second round ("Oracle 69" column), we tuned the key parameter of each method so as to maximize the F-scores. As it can be appreciated, our reconstruction-based method outperforms all the other reported methods in both settings. Finally, we also present some results (as available) by tuning the parameters to maximize the F-scores only in the 23 training sequences on the final rendering pass of the Sintel dataset ("Oracle Final" column).</p><p>We provide in <ref type="figure" target="#fig_5">Fig. 5</ref> several samples of our results for visual inspection. Despite the complexity of some of these scenes, occlusion maps of good quality are obtained. In particular, extended occlusions produced by large displacements are very well captured, while retaining some details of smaller occluded regions. It is also interesting to examine associated motion model labelings M = m(x) x∈Ω and associated motion flows w m(x) (x) x∈Ω <ref type="figure" target="#fig_5">(Fig. 5</ref> ef). While motion labels define segments that relate well to actual moving regions (e.g. the arm of the woman in the fourth sequence or the whole person in the first one), the flows are not very accurate for all the sequences. This is not surprising since source motion models have been estimated beforehand over arbitrary image windows. Motion model selection with no further processing cannot produce accurate optical flows. This reveals, as already highlighted in Section 4.2, that the distinctive nature of our framework is to focus on good reconstruction-based modeling of occlusion, with inference requiring only plausible correspondences, not accurate per-pixel optical flow. The local color modeling, however, carries a few problems that somewhat limit the performance of our method. For example, GMMs easily overfit in textureless regions, causing false positives under slight temporal illumination variations. Regarding execution times, for a sample image pair of size 436×1024, our full method takes about 1212 s (29 s for the multi-window motion estimation and 1183 s for the energy minimization) on an Intel i7-3540M CPU @ 3.00GHz. In comparison, <ref type="bibr" target="#b3">[4]</ref> takes 1601 s, while <ref type="bibr" target="#b29">[30]</ref> takes 2201 s on the same machine.</p><p>Finally, we show in <ref type="figure" target="#fig_6">Fig. 6</ref> additional comparative results on real-world image sequences. Qualitative assessment of these results further confirm the merit of our approach: more accurate occlusion maps are produced compared to <ref type="bibr" target="#b3">[4]</ref> and <ref type="bibr" target="#b29">[30]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Concluding remarks</head><p>We have introduced a new approach to detect occlusions that occur from one frame to another in a video sequence. Departing from classic approaches that tightly link this task to the accurate computation of optical flow, we propose a local spatio-temporal reconstruction model that only requires the knowledge of a plausible motion. Given a collection of parametric motion models simply extracted from the scene at hand, we show how this local reconstruction model can be harnessed within a global energy function to deliver high quality occlusion maps.</p><p>Quantitative experiments yielded two important findings: (1) Proposed reconstruction-based modeling provides a detection criterion at the pixel level that is a powerful alternative to classic criterion based on intensity inconsistency along the flow. Even when exploiting the true flow, later criteria perform less well that ours with the output of an off-the-shelf flow estimator. (2) Our complete energybased framework consistently outperforms state-of-the-art approaches on MPI Sintel dataset. More generally, we qualitatively observed the ability of our framework to produce good quality occlusion detection maps, even in scenes comprising large occluded regions and complex motions.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 2 .</head><label>2</label><figDesc>Fictitious occlusions from forward-backward inconsistencies of divergent flows. (a)-(b) Forward-backward divergent flows associated to a zoom-in (classic hue-saturation color coding at the pixel level, and subset of motion vectors superimposed for better visualization). (c) True occlusion map, devoid of occlusions; (d) Norm of the forward-backward flow difference between points matched by the true flow. Because of interpolations required to evaluate backward flows at non-pixel positions, differences are space dependent (e)-(h) Occlusion maps obtained by thresholding at 0.100, 0.333, 0.500 and 0.900, respectively, the normalized forward-backward differences along the flow. For better visualization of the error pattern, we zoom-in the resulting images (bottom-left corner). False positives occur all over the image grid.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>occlusion map O and, as a by-product, the motionmodel label map M , are obtained by minimizing E(O, M ) (Eq. 9) with a block coordinate descent in an alternate way. Given occlusion assignment O, minimizing E(O, M ) w.r.t. M only amounts to minimizing x∈Ω φ x (o(x), m(x)) + x∼y ψ m x,y (m(x), m(y)) + DL(M ).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head></head><label></label><figDesc>Let us first demonstrate the value of the reconstructionbased criterion introduced in Section 4.1 by performing pixel-wise occlusion detection under the guidance of three different correspondence fields: (1) The true optical flow, as accessible in MPI Sintel sequences; (2) The true flow contaminated by independent additive Gaussian noise of standard deviation 2.5; (3) The flow estimated with Deep-Flow 8<ref type="bibr" target="#b37">[38]</ref>, a state-of-art optic flow estimator which does not handle occlusions but solves for long displacements.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 4 .</head><label>4</label><figDesc>Quantitative comparison of proposed reconstruction-based criterion and classic DFD-based criterion. Occlusion detection ROC curves and associated AUC on eight sequences of the MPI Sintel dataset, obtained by varying the threshold of proposed criterion (solid lines) and of DFD criterion (dashed lines). Colors indicate the origin of the motion field: true optical flow (green), true optical flow contaminated by Gaussian noise (blue), DeepFlow estimate (red).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 5 .</head><label>5</label><figDesc>Qualitative results of our occlusion detection method on several MPI Sintel scenes. From left to right: Average of the two input frames; Occlusion ground-truth; Occlusion map with proposed method; Final motion model labeling, where each color loosely represents the size and position of the window linked to the selected motion model through a jet-map colorization (Big to small and from upper-left to bottom-right); Optical flow obtained by evaluating the selected motion model at each pixel (with classic hue-saturation color coding); And true optical flow with same color coding.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 6 .</head><label>6</label><figDesc>Qualitative comparison with state-of-the-art on real images. From left to right: Average of the two input frames, final occlusion map with proposed method, results of<ref type="bibr" target="#b3">[4]</ref>, and of<ref type="bibr" target="#b29">[30]</ref>.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="true"><head>Table 1 .</head><label>1</label><figDesc>Quantitative comparisons on MPI Sintel dataset. For each method, the average F-score (the higher, the better) is computed with two different ways of setting the main detection parameter over all the available training sequences and rendering passes. We also present results on the Final rendering pass.</figDesc><table>Detection method Oracle 69 Global 69 Oracle Final 
+Learning [14] 
+0.535 
+0.448 
+-
+Depth order [30] 0.465 
+0.449 
+0.398 
+Local layers [29] 0.474 
+0.376 
+-
+Sparse method[4] 0.310 
+0.259 
+0.258 
+Ours 
+0.550 
+0.540 
+0.491 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">In the sense of the projection of the true physical motion onto the image plane.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">Any other discontinuity-preserving image filter could be used, provided it possesses a guided version.<ref type="bibr" target="#b2">3</ref> In particular, we have the desirable property ζ(I) = η(I; I, 0).</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="4">http://lear.inrialpes.fr/src/deepmatching/ 5 http://www.irisa.fr/vista/Motion2D/</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="6">http://sintel.is.tue.mpg.de/downloads 7 https://durian.blender.org/download/ 8 http://lear.inrialpes.fr/src/deepflow/</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="9">http://vision.ucla.edu/˜ayvaci/spaocc.html<ref type="bibr" target="#b9">10</ref> We thank authors for providing us with their source code.</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">SLIC superpixels compared to state-of-the-art superpixel methods</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Achanta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Shaji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Smith</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lucchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Susstrunk</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">2012</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="2274" to="2282" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Symmetrical dense optical flow estimation with occlusions detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Alvarez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Deriche</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Papadopoulo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sánchez</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Int. J. of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">75</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="371" to="385" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Learning spatiotemporal t-junctions for occlusion detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Apostoloff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR 2005</title>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Sparse occlusion detection with optical flow</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ayvaci</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Raptis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Soatto</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Int. J. of Computer Vision. 2012</title>
+		<imprint>
+			<biblScope unit="volume">97</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="322" to="338" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">A TV-L1 optical flow method with occlusion detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Ballester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Garrido</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lazcano</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Caselles</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Pattern Recognition</title>
+		<imprint>
+			<biblScope unit="volume">7476</biblScope>
+			<biblScope unit="page" from="31" to="40" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Patchmatch: a randomized correspondence algorithm for structural image editing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Barnes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shechtman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Finkelstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Goldman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics (TOG)</title>
+		<imprint>
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page">24</biblScope>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Variational stereo vision with sharp discontinuities and occlusion handling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ben-Ari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Sochen</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Fast approximate energy minimization via graph cuts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Boykov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Veksler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zabih</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">23</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="1222" to="1239" />
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Advances in computational stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">Z</forename><surname>Brown</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Burschka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">D</forename><surname>Hager</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<date type="published" when="2003" />
+			<biblScope unit="volume">25</biblScope>
+			<biblScope unit="page" from="993" to="1008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">A naturalistic open source movie for optical flow evaluation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Butler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wulff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">B</forename><surname>Stanley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Fast approximate energy minimization with label costs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Delong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Osokin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">N</forename><surname>Isack</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Boykov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Int. J. of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">2012</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="1" to="27" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Detecting occlusions as an inverse problem</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Estellers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Soatto</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1" to="18" />
+		</imprint>
+	</monogr>
+	<note>Journal of Mathematical Imaging and Vision</note>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Aggregation of local parametric candidates with exemplar-based occlusion handling for optical flow. Computer Vision and Image Understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fortun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Bouthemy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Kervrann</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">145</biblScope>
+			<biblScope unit="page" from="81" to="94" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">Learning to find occlusion regions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Humayun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><forename type="middle">Mac</forename><surname>Aodha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">J</forename><surname>Brostow</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Occlusion-aware optical flow estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ince</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Konrad</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Image Processing</title>
+		<imprint>
+			<biblScope unit="volume">17</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1443" to="1451" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">An online learning approach to occlusion boundary detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Jacobson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Freund</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">Q</forename><surname>Nguyen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Image Processing</title>
+		<imprint>
+			<biblScope unit="volume">21</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="252" to="261" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Handling occlusions in dense multi-view stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">B</forename><surname>Kang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Chai</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Computing visual correspondence with occlusions using graph cuts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Kolmogorov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zabih</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Joint bilateral upsampling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kopf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">F</forename><surname>Cohen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lischinski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Uyttendaele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In ACM Transactions on Graphics</title>
+		<imprint>
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="page">96</biblScope>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Robust multiresolution estimation of parametric motion models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-M</forename><surname>Odobez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Bouthemy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Visual Communication and Image Representation</title>
+		<imprint>
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="348" to="365" />
+			<date type="published" when="1995" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Robust occlusion handling in object tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Oosterlinck. Determination of optical flow and its discontinuities using non-linear diffusion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Proesmans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Pauwels</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1994" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Finding temporally consistent occlusion boundaries in videos using geometric context</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">H</forename><surname>Raza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Humayun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Essa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Grundmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anderson</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">DeepMatching: Hierarchical deformable dense matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Revaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Weinzaepfel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Harchaoui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Int. J. of Computer Vision</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note>Submitted in</note>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Probabilistic occlusion boundary detection on spatiotemporal lattices</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">E</forename><surname>Sargin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bertelli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">S</forename><surname>Manjunath</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Rose</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV 2009</title>
+		<imprint>
+			<biblScope unit="page" from="560" to="567" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Layered motion segmentation and depth ordering by tracking edges</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Smith</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Drummond</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cipolla</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="479" to="494" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Occlusion boundaries from motion: Low-level detection and mid-level reasoning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">N</forename><surname>Stein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Int. J. of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">82</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="325" to="357" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">A probabilistic approach to large displacement optical flow and occlusion detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Strecha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fransens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Statistical methods in video processing</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="page" from="71" to="82" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">Local layering for joint motion estimation and occlusion detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Pfister</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Layered image motion with explicit occlusions, temporal consistency, and depth ordering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">B</forename><surname>Sudderth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Layered segmentation and optical flow estimation over time</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">B</forename><surname>Sudderth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2012 IEEE Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1768" to="1775" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+		<title level="m" type="main">Symmetric stereo matching for occlusion handling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">B</forename><surname>Kang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-Y</forename><surname>Shum</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+		<title level="m" type="main">Occlusion boundary detection and figure/ground assignment from optical flow</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sundberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Maire</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Bilateral filtering for gray and color images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Tomasi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Manduchi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Motion field and optical flow: Qualitative properties. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Verri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Poggio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="490" to="498" />
+			<date type="published" when="1989" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+		<title level="m" type="main">Multiple tree models for occlusion and spatial constraints in human pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Mori</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Making action recognition robust to occlusions and viewpoint changes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Weinland</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Özuysal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV 2010</title>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title level="m" type="main">DeepFlow: Large displacement optical flow with deep matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Weinzaepfel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Revaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Harchaoui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">Segmentation of multiple, partially occluded objects by grouping, merging, assigning part detection responses</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Nevatia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<monogr>
+		<title level="m" type="main">Bilateral filtering-based optical flow estimation with occlusion detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Cheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Sawhney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Isnardi</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<monogr>
+		<title level="m" type="main">A segmentation based variational model for accurate optical flow estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Jia</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Motion detail preserving optical flow estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Matsushita</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">2012</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1744" to="1757" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<monogr>
+		<title level="m" type="main">Dense, accurate optical flow estimation with piecewise parametric model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Contour-based object tracking with occlusion handling in video acquired using mobile cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yilmaz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="1531" to="1536" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

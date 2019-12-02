@@ -1,0 +1,1263 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Slow and steady feature analysis: higher order temporal coherence in video</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Dinesh</forename><surname>Jayaraman</surname></persName>
+							<email>dineshj@cs.utexas.edu</email>
+							<affiliation key="aff0">
+								<address>
+									<settlement>Austin, Austin</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kristen</forename><surname>Grauman</surname></persName>
+							<email>grauman@cs.utexas.edu</email>
+							<affiliation key="aff0">
+								<address>
+									<settlement>Austin, Austin</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Slow and steady feature analysis: higher order temporal coherence in video</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:46+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>How can unlabeled video augment visual learning? Existing methods perform "slow" feature analysis, encouraging the representations of temporally close frames to exhibit only small differences. While this standard approach captures the fact that high-level visual signals change slowly over time, it fails to capture how the visual content changes. We propose to generalize slow feature analysis to "steady" feature analysis. The key idea is to impose a prior that higher order derivatives in the learned feature space must be small. To this end, we train a convolutional neural network with a regularizer on tuples of sequential frames from unlabeled video. It encourages feature changes over time to be smooth, i.e., similar to the most recent changes. Using five diverse datasets, including unlabeled YouTube and KITTI videos, we demonstrate our method's impact on object, scene, and action recognition tasks. We further show that our features learned from unlabeled video can even surpass a standard heavily supervised pretraining approach.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Visual feature learning with deep neural networks has yielded dramatic gains for image recognition tasks in recent years <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b36">37]</ref>. While the main techniques involved in these methods have been known for some time, a key factor in their recent success is the availability of large humanlabeled image datasets like ImageNet <ref type="bibr" target="#b5">[6]</ref>. Deep convolutional neural networks (CNNs) designed for image recognition typically have millions of parameters, necessitating notoriously large training databases to avoid overfitting.</p><p>Intuitively, however, visual learning should not be restricted to sets of category-labeled exemplars. Taking human learning as an obvious example, children build up visual representations through constant observation and action in the world. This hints that machine-learned representations would also be well served to exploit long-term video observations, even in the absence of deliberate labels. Indeed, researchers in cognitive science find that temporal coherence plays an important role in visual learning. For <ref type="figure">Figure 1</ref>: From unlabeled videos, we learn "steady features" that exhibit consistent feature transitions among sequential frames. example, altering the natural temporal contiguity of visual stimuli hinders translation invariance in the inferior temporal cortex <ref type="bibr" target="#b25">[26]</ref>, and functions learned to preserve temporal coherence share behaviors observed in complex cells of the primary visual cortex <ref type="bibr" target="#b3">[4]</ref>.</p><p>Our goal is to exploit unlabeled video, as might be obtained freely from the web, to improve visual feature learning. In particular, we are interested in improving learned image representations for visual recognition tasks.</p><p>Prior work leveraging video for feature learning focuses on the concept of slow feature analysis (SFA). First formally proposed in <ref type="bibr" target="#b41">[42]</ref>, SFA exploits temporal coherence in video as "free" supervision to learn image representations invariant to small transformations. In particular, SFA encourages the following property: in a learned feature space, temporally nearby frames should lie close to each other, i.e. for a learned representation z and adjacent video frames a and b, one would like z(a) ≈ z(b). The rationale behind SFA rests on a simple observation: high-level semantic visual concepts associated with video frames typically change only gradually as a function of the pixels that compose the frames. Thus, representations useful for recognizing high-level concepts are also likely to possess this property of "slowness". Another way to think about this is that scene changes between temporally nearby frames are usually small and represent label-preserving transformations. A slow representation will tolerate minor geometric or lighting changes, which is essential for high-level visual recognition tasks. The value of exploiting temporal coherence for recognition has been repeatedly verified in ongoing research, including via modern deep convolutional neural network implementations <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b45">46,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b40">41]</ref>.</p><p>However, existing approaches require only that highlevel visual signals change slowly over time. Crucially, they fail to capture how the visual content changes over time. In contrast, our idea is to incorporate the steady visual dynamics of the world, learned from video. For instance, if trained on videos of walking people, slow feature-based approaches would only require that images of people in nearby poses be mapped close to one another. In contrast, we aim to learn a feature space in which frames from a novel video of a walking person would follow a smooth, predictable trajectory. A learned steady representation capturing such dynamics would be influenced not only by object motions, but also other types of visual transformations. For instance, it would capture how colors of objects in the sunlight change over the course of a day, or how the views of a static scene change as a camera moves around it.</p><p>To this end, we propose steady feature analysis-a generalization of slow feature learning. The key idea is to impose higher order temporal constraints on the learned visual representation. Beyond encouraging temporal coherence i.e., small feature differences between nearby frame pairs, we would like to encourage consistent feature transitions across sequential frames. In particular, to preserve second order slowness, we look at triplets of temporally close frames a, b, c, and encourage the learned represen-</p><formula xml:id="formula_0">tation to have z(b) − z(a) ≈ z(c) − z(b).</formula><p>We develop a regularizer that uses contrastive loss over tuples of frames to achieve such mappings with CNNs. Whereas slow feature learning insists that the features not change too quickly, the proposed steady learning insists that-in whichever way the features are evolving-they continue to evolve in that same way in the immediate future. See <ref type="figure">Figure 1</ref>.</p><p>We hypothesize that higher-order temporal coherence could provide a valuable prior for recognition by embedding knowledge of the rich dynamics of the visual world into the feature space. We empirically verify this hypothesis using five datasets for a variety of recognition tasks, including object instance recognition, large-scale scene recognition, and action recognition from still images. In each case, by augmenting a small set of labeled exemplars with unlabeled video, the proposed method generalizes better than both a standard discriminative CNN as well as a CNN regularized with existing slow temporal coherence metrics <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b29">30]</ref>. Our results reinforce that unsupervised feature learning from unconstrained video is an exciting direction, with promise to offset the large labeled data requirements of current stateof-the-art computer vision approaches by exploiting virtually unlimited unlabeled video.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>To build a robust object recognition system, the image representation must incorporate some degree of invariance to changes in pose, illumination, and appearance. While invariance can be manually crafted, such as with spatial pooling operations or gradient descriptors, it may also be learned. One approach often taken in the convolutional neural network (CNN) literature is to pad the training data by systematically perturbing raw images with label-preserving transformations (e.g., translation, scaling, intensity scaling, etc.) <ref type="bibr" target="#b35">[36,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b7">8]</ref>. A good representation will ensure that the jittered versions originating from the same content all map close by in the learned feature space.</p><p>In a similar spirit, unlabeled video is an appealing resource for recovering invariance. The simple fact that things typically cannot change too quickly from frame to frame makes it possible to harvest sets of sequential images whose learned representations ought not to differ substantially. Slow feature analysis (SFA) <ref type="bibr" target="#b41">[42,</ref><ref type="bibr" target="#b15">16]</ref> leverages this notion to learn features from temporally adjacent video frames.</p><p>Recent work uses CNNs to explore the power of learning slow features, also referred to as "temporally coherent" features <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b45">46,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b40">41]</ref>. The existing methods either produce a holistic image embedding <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b13">14]</ref>, or else track local patches to learn a localized representation <ref type="bibr" target="#b45">[46,</ref><ref type="bibr" target="#b46">47,</ref><ref type="bibr" target="#b40">41]</ref>. Most methods exploit the learned features for object recognition <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b45">46,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b40">41]</ref>, while others employ them for dimensionality reduction <ref type="bibr" target="#b13">[14]</ref> or video frame retrieval <ref type="bibr" target="#b11">[12]</ref>. In <ref type="bibr" target="#b29">[30]</ref>, a standard deep CNN architecture is augmented with a temporal coherence regularizer, then trained using video of objects on clean backgrounds rotating on a turntable. The method of <ref type="bibr" target="#b2">[3]</ref> builds on this concept, proposing the use of decorrelation to avoid trivial solutions to the slow feature criterion, with applications to handwritten digit classification. The authors of <ref type="bibr" target="#b11">[12]</ref> propose injecting an auto-encoder loss and explore training with unlabeled YouTube video. Building on SFA subspace ideas <ref type="bibr" target="#b41">[42]</ref>, researchers have also examined slow features for action recognition <ref type="bibr" target="#b44">[45]</ref>, facial expression analysis <ref type="bibr" target="#b43">[44]</ref>, future prediction <ref type="bibr" target="#b38">[39]</ref>, and temporal segmentation <ref type="bibr" target="#b30">[31,</ref><ref type="bibr" target="#b26">27]</ref>.</p><p>Related to all the above methods, we aim to learn features from unlabeled video. However, whereas all the past work aims to preserve feature slowness, our idea is to preserve higher order feature steadiness. Our learning objective is the first to move beyond adjacent frame neighborhoods, requiring not only that sequential features change gradually, but also that they change in a similar manner in adjacent time intervals.</p><p>Another class of methods learns transformations <ref type="bibr" target="#b28">[29,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b32">33]</ref>. Whereas the above feature learning methods (and ours) train with unlabeled video spanning various unspecified transformations, these methods instead train with pairs of images for which the transformation is known and/or consistent. Then, given a novel input, the model can be used to predict its transformed output. Rather than use learned transformations for extrapolation like these approaches, our goal is to exploit transformation patterns in unlabeled video to learn features that are useful for recognition.</p><p>Aside from inferring the transformation that implicitly separates a pair of training instances, another possibility is to explicitly predict the transformation parameters. Recent work considers how the camera's ego-motion (e.g., as obtained from inertial sensors, GPS) can be exploited as supervision during CNN training <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b1">2]</ref>. These methods also lack the higher-order relationships we propose. Furthermore, they require training data annotated with camera/egopose parameters, which prevents them from learning with "in the wild" videos (like YouTube) for which the camera was not instrumented with external sensors to record motor changes. In contrast, our method is free to exploit arbitrary unlabeled video data.</p><p>Several recent papers <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b39">40,</ref><ref type="bibr" target="#b12">13]</ref> have trained unsupervised image representations targeting specific narrow tasks. <ref type="bibr" target="#b4">[5]</ref> learn efficient generative codes to synthesize images, while <ref type="bibr" target="#b39">[40]</ref> learn features to predict pixel-level optical flow maps for video frames. Contemporary with an earlier version of our work <ref type="bibr" target="#b17">[18]</ref>, <ref type="bibr" target="#b12">[13]</ref> proposed to learn features that vary linearly in time, for the specific task of extrapolating future video frames given a pair of past frames. They report qualitative results for toy video frame synthesis. While our formulation also encourages collinearity in the feature space, our aim is to learn generally useful features from real videos without supervision, and we report results on natural image scene, object, and action recognition tasks.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Approach</head><p>Given auxiliary raw unlabeled video, we wish to learn an embedding amenable to a supervised classification task. We pose this as a feature learning problem in a convolutional neural network, where the hidden layers of the network are tuned not only with the backpropagation gradients from a classification loss, but also with gradients computed from the unlabeled video that exploit its temporal steadiness.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Notation and framework overview</head><formula xml:id="formula_1">A supervised training dataset S = {(x i , y i )} provides target class labels y i ∈ Y = [1, 2, .., C] for images x i ∈ X (represented in pixel space). The unsupervised training dataset U = {x t } consists of ordered video frames, where</formula><p>x t is the video frame at time instant t. <ref type="bibr" target="#b0">1</ref> Importantly, we do not assume that the video U necessarily stems from the same categories or even the same domain as images in S. For example, in results we will demonstrate cases where S and U consist of natural scene images and autonomous vehicle video, respectively; or Web photos of human actions and YouTube video spanning dozens of distinct activities. The idea is that training with diverse unlabeled video should allow the learner to recover fundamental cues about how objects move, how scenes evolve over time, how occlusions occur, how illumination varies, etc., independent of their specific semantic content.</p><p>The full image-pixels-to-class label classifier we learn will have the compositional formŷ θ,W = f W •z θ (.), where z θ : X → R D is a D-dimensional feature map operating on images in the pixel space, and f W : R D → Y takes as input the feature map z θ (x), and outputs the class estimate. We learn a linear classifier f W represented by a C × D weight matrix W with rows w 1 , . . . , w C . At test time, a novel image is classified asŷ θ,W = arg max i w T i z θ (x). To learn the classifierŷ θ,W , we optimize an objective function of the form:</p><formula xml:id="formula_2">(θ * , W * ) = arg min θ,W L s (θ, W, S) + λL u (θ, U ),<label>(1)</label></formula><p>where L s (.) represents the supervised classification loss, L u (.) represents an unsupervised regularization loss term, and λ is the regularization hyperparameter. The parameter vector θ is common to both losses because they are both computed on the learned feature space z θ (.). The supervised loss is a softmax loss:</p><formula xml:id="formula_3">L s (θ, W, S) = − 1 N s Ns i=1 log(σ yi (W z θ (x i )),<label>(2)</label></formula><p>where σ yi (.) is the softmax probability of the correct class and N s is the number of labeled training instances in S.</p><p>In the following, we first discuss how the unsupervised regularization loss L u (.) may be constructed to exploit temporal smoothness in video (Sec 3.2). Then we generalize this to exploit temporal steadiness and other higher order coherence (Sec 3.3). Sec 3.4 then shows how a neural network corresponding toŷ θ,W may be trained to minimize Eq (1) above.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Review: First-order temporal coherence</head><p>As discussed above, slow feature analysis (SFA) <ref type="bibr" target="#b41">[42]</ref> seeks to learn image features that vary slowly over the frames of a video, with the aim of learning useful invariances. This idea of exploiting "slowness" or "temporal coherence" for feature learning has been explored in the context of neural networks <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b45">46,</ref><ref type="bibr" target="#b11">12]</ref>. We briefly review that underlying objective before introducing the proposed higher order generalization of temporal coherence.</p><p>A temporal neighbor pair dataset U 2 is first constructed from the unlabeled video U , as follows:</p><formula xml:id="formula_4">U 2 = { (j, k), p jk :x j , x k ∈ U and p jk = ✶(0 ≤ j − k ≤ T )},<label>(3)</label></formula><p>where T is the temporal neighborhood size, and the subscript 2 signifies that the set consists of pairs. U 2 indexes image pairs with neighbor-or-not binary annotations p jk , automatically extracted from the video. We discuss the setting of T in results. In general, one wants the time window spanned by T to include motions that are small enough to be label-preserving, so that correct invariances are learned; in practice this is typically on the order of a second or less.</p><p>With this dataset, the SFA property translates as z θ (x j ) ≈ z θ (x k ), ∀p jk = 1. A simple formulation of this as an unsupervised regularizing loss would be as follows:</p><formula xml:id="formula_5">R ′ 2 (θ, U ) = (j,k)∈N d(z θ (x j ), z θ (x k )),<label>(4)</label></formula><p>where d(., .) is a distance measure (e.g., ℓ 1 in <ref type="bibr" target="#b29">[30]</ref> and ℓ 2 in <ref type="bibr" target="#b13">[14]</ref>), and N ⊂ U 2 denotes the subset of "positive" neighboring frame pairs i.e. those for which p jk = 1. This loss by itself admits problematic minimizers such as z θ (x) = 0, ∀x ∈ X , which corresponds to R ′ 2 = 0. Such solutions may be avoided by a contrastive <ref type="bibr" target="#b13">[14]</ref> version of the loss function that also exploits "negative" (nonneighbor) pairs:</p><formula xml:id="formula_6">R 2 (θ, U ) = (j,k)∈U2 D δ (z θ (x j ), z θ (x k ), p jk ) = (j,k)∈U2 p jk d(z θj , z θk ) + p jk max(δ − d(z θj , z θk ), 0),<label>(5)</label></formula><p>where z θi denotes z θ (x i ) and p = 1 − p. As shown above, the contrastive loss D δ (a, b, p) penalizes distance between a and b when the pair are neighbors (p = 1), and encourages distance between them when they are not (p = 0), up to a margin δ.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Higher-order temporal coherence</head><p>The slow feature formulation of Eq (5) encourages feature maps that produce small first-order temporal derivatives in the learned feature space: dz θ (x t )/dt ≈ 0. This first-order temporal coherence is restricted to learning to ignore small jitters in the visual signal.</p><p>Our idea is to model higher order temporal coherence in the unlabeled video, so that the features can further capture rich structure in how the visual content changes over time. In the general case, this means we want a regularizer that encourages higher order derivatives to be small: d n z θ (x t )/dt n ≈ 0, ∀n = 1, 2, ..N . Accordingly, we need to generalize from pairs of temporally close frames to tuples of frames.</p><p>In this work, we focus specifically on learning steady features-the second-order case, which can be encoded with triplets of frames, as we will see next. In a nutshell, whereas slow learning insists that the features not change too quickly, steady learning insists that feature changes in the immediate future remain similar to those in the recent past.</p><p>First, we create a triplet dataset U 3 from the unlabeled video U as:</p><formula xml:id="formula_7">U 3 = { (l, m,n), p lmn : x l , x m , x n ∈ U and p lmn = ✶(0 ≤ m − l = n − m ≤ T )}. (6)</formula><p>U 3 indexes image triplets with binary annotations indicating whether they are in-sequence, evenly spaced frames in the video, within a temporal neighborhood T . In practice, we select "negatives" (p lmn = 0) from triplets where m − l ≤ T but n − m ≥ 2T to provide a buffer and avoid noisy negatives.</p><p>We construct our steady feature analysis regularizer using these triplets, as follows:</p><formula xml:id="formula_8">R 3 (θ, U ) = (l,m,n)∈U3 D δ (z θl − z θm , z θm − z θn , p lmn ),<label>(7)</label></formula><p>where z θl is again shorthand for z θ (x l ) and D δ refers to the contrastive loss defined above. For positive tripletsmeaning those occurring in sequence and within a temporal neighborhood-the above loss penalizes distance between the adjacent pairwise feature difference vectors. For negative triplets, it encourages this distance, up to a maximum margin distance δ. Effectively, R 3 encourages the feature representations of positive triplets to be collinear i.e. <ref type="figure">Figure 1</ref>.</p><formula xml:id="formula_9">z θ (x l ) − z θ (x m ) ≈ z θ (x m ) − z θ (x n ). See</formula><p>Our final optimization objective combines the first and second order losses (Eq (5) and <ref type="formula" target="#formula_8">(7)</ref>) into the unsupervised regularization term:</p><formula xml:id="formula_10">L u (θ, U ) = R 2 (θ, U ) + λ ′ R 3 (θ, U ),<label>(8)</label></formula><p>where λ ′ controls the relative impact of the two terms. Recall this regularizer accompanies the classification loss in the main objective of Eq (1).</p><p>Beyond second-order coherence: The proposed framework generalizes naturally to the n-th order, by defining R n analogously to Eq (7) using a contrastive loss over (n − 1)th order discrete derivatives, computed over recursive differences on n-tuples. While in principle higher n would more thoroughly exploit patterns in video, there are potential practical drawbacks. As n grows, the number of samples |U n | would likely need to also grow to cover the space of n-frame motion patterns, requiring more training time, compute power, and memory. Besides, discrete n-th derivatives computed over large n-frame time windows may grow less reliable, assuming steadiness degrades over longer temporal windows in typical visual phenomena. Given these considerations, we focus on second-order steadiness combined with slowness, and find that slow and steady does indeed win the race (Sec 4). The empirical question of applying n &gt; 2 is left for future work. Equivariance-inducing property of R 3 (θ, U ): While first-order coherence encourages invariance, the proposed second-order coherence may be seen as encouraging the more general property of equivariance. z(.) is equivariant to an image transformation g if there exists some "simple" function f g :</p><formula xml:id="formula_11">R D → R D such that z(gx) ≈ f g (z(x)).</formula><p>Equivariance has been found to be useful for visual representations <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b34">35,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b16">17]</ref>. To see how feature steadiness is related to equivariance, consider a video with frames x t , 1 ≤ t ≤ T . Given a small temporal neighborhood ∆t, frames x t+∆t and x t must be related by a small transformation g (small because of first order temporal coherence assumption) i.e. x t+∆t = gx t . Assuming second order coherence of video, this transformation g itself remains approximately constant in a small temporal neighborhood, so that, in particular, x t+2∆t ≈ gx t+∆t . Now, for equivariant features z(.), by the definition of equivariance and the observations above, z(x t+2∆t ) ≈ f g (z(x t+∆t )) ≈ f g • f g (z(x t )). Further, given that g is a small transformation, f g is well-approximated in a small neighborhood by its first order Taylor approximation, so that: (1) z(x t+∆t ) ≈ z(x t ) + c(t), and (2) z(x t+2∆t ) ≈ z(x t ) + 2c(t). In other words, under the realistic assumption that natural videos evolve smoothly, within small temporal neighborhoods, feature equivariance is equivalent to the second order temporal coherence formulated in Eq <ref type="formula" target="#formula_8">(7)</ref>, with l, m, n set to t, t + ∆t, t + 2∆t respectively. This connection between equivariance and the second order temporal coherence induced by R 3 helps motivate why we can expect our feature learning scheme to benefit recognition.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Neural networks for the feature maps</head><p>We use a convolutional neural network (CNN) architecture to represent the feature mapping function z θ (.). The parameter vector θ represents the CNN's learned layer weight matrices. See Sec 4.1 and Supp for architecture choices.</p><p>To optimize Eq (1) with the regularizer in Eq (8), we employ standard mini-batch stochastic gradient descent (as implemented in <ref type="bibr" target="#b18">[19]</ref>) in a "Siamese" setup, with 6 replicas of the stack z θ (.), as shown in <ref type="figure" target="#fig_0">Fig 2,</ref> 1 stack for L s (input: supervised training samples x i ), 2 for R 2 (input: temporal neighbor pairs (x j , x k )) and 3 for R 3 (input: triplets (x l , x m , x n )). The shared layers are initialized to the same random values and modified by the same gradients (sum of the gradients of the 3 terms) in each training iteration, so they remain identical throughout. See Supp for details.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>We test our approach using five challenging public datasets for three tasks-object, scene, and action recognition-spanning 432 categories. We also analyze its ability to learn higher order temporal coherence with a sequence completion task.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Experimental setup</head><p>Our three recognition tasks (specified by the names of the unsupervised and supervised datasets as U → S) are NORB→NORB object recognition, KITTI→SUN scene recognition and HMDB→PASCAL-10 single-image action recognition.   <ref type="table" target="#tab_0">Table 1</ref>), since unsupervised regularization schemes should have most impact when labeled data is scarce <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b29">30]</ref>. This is an important scenario, given the "long tail" of categories lacking ample labeled exemplars.</p><p>Unsupervised datasets U : (1) NORB consists of poseregistered turntable images (not video), but it is straightforward to generate the pairs and triplets for U 2 and U 3 assuming smooth motions in the annotated pose space. We mine these pairs and triplets from among the 648 images per class that are not used for testing. (2) KITTI <ref type="bibr" target="#b9">[10]</ref> has videos captured from a car-mounted camera in a variety of locations around the city of Karlsruhe. Scenes are largely static except for traffic, but there is large and systematic camera motion. (3) HMDB <ref type="bibr" target="#b22">[23]</ref> contains 6849 short Web and movie video clips containing 51 diverse actions. We select 1000 clips at random. While some videos include camera motion (e.g. to follow an athlete running), most have stationary cameras and small human pose-change motions. The time window T is a hyperparameter of both our method as well as existing SFA methods. We fix T = 2 and T = 0.5 seconds for KITTI and HMDB, respectively, based on crossvalidation for best performance by the SFA baselines.</p><p>Baselines: We compare our slow-and-steady feature analysis approach (SSFA) to four methods, including two key existing methods for learning from unlabeled video. The three unsupervised baselines are: (1) UNREG: An unregularized network trained only on the supervised training samples S.</p><p>(2) SFA-1: An SFA approach proposed in <ref type="bibr" target="#b29">[30]</ref> that uses ℓ 1 for d(.) in Eq 5. (3) SFA-2: Another SFA variant <ref type="bibr" target="#b13">[14]</ref> that sets the distance function d(.) to the ℓ 2 distance in Eq 5. The SFA methods train with the unlabeled pairs, while SSFA trains with both the pairs and triplets. These comparisons are most crucial to gauge the impact of the proposed approach versus the state of the art for feature learning with unlabeled video. However, we are also interested to what extent learning from unlabeled video can even start to compete with methods learned from heavily labeled data (which costs substantial human effort). Thus, we also compare against a supervised pretraining and finetuning approach denoted SUP-FT (details in Sec 4.3).</p><p>Network architectures: For the NORB→NORB task, we use a fully connected network architecture: input → 25 hidden units → ReLU nonlinearity → D=25 features. For the other two tasks, we resize images to 32 × 32 to allow fast and thorough experimentation with standard CNN architectures known to work well with tiny images <ref type="bibr" target="#b0">[1]</ref>, producing D=64-dimensional features. Recognition tasks on 32×32 images are much harder than with full-sized images, so these are highly challenging tasks. All networks are optimized with Nesterov-accelerated stochastic gradient descent until validation classification loss converges or begins to increase. Optimization hyperparameters are selected greedily through cross-validation in the following order: base learning rate, λ and λ ′ (starting from λ=λ ′ =0). The relative scales of the margin parameters δ of the contrastive loss D δ (.) in Eq (5) and Eq (7) are validated per dataset. See Supp for more details on the 32×32 architecture, data pre-processing and optimization.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Quantifying steadiness</head><p>First we use a sequence completion task to analyze how well the desired steadiness property is induced in the learned features. We compose a set of sequential triplets from the pool of test images, formed similarly to the positives in Eq <ref type="bibr" target="#b5">(6)</ref>. At test time, given the first two images of each triplet, the task is to predict what the third looks like.</p><p>We apply our SSFA to infer the missing triplet item as follows. Recall that our formulation encourages sequential triplets to be collinear in the feature space. As a result, given z θ (x 1 ) and z θ (x 2 ), we can extrapolate z θ (x 3 ) asz θ (x 3 ) = 2z θ (x 2 ) − z θ (x 1 ). To backproject to the image space, we identify an image closest toz θ (x 3 ) in feature space. Specifically, we take a large pool C of candidate images, map them all to their features via z θ , and rank them in increasing order of distance fromz θ (x 3 ). The rank r of the correct candidate x 3 is now a measure of sequence completion performance. See Supp for details.</p><p>Tab 1 (right) reports the mean percentile rank η = E[r/|C|] × 100 over all query pairs. Lower η is better. Clearly, our SSFA regularization induces steadiness in the feature space, reducing η nearly by half compared to baseline regularizers on NORB and by large margins on HMDB too. Our regularizer R 3 is closely matched to this task, so these gains are expected. Note however that these gains are reported after training to minimize the joint objective, which includes L s and R 2 , apart from R 3 , and with regularization weights tuned for recognition tasks. <ref type="figure" target="#fig_2">Fig 3 shows</ref> sequence completion examples from all 3 video datasets. Particularly impressive results are the third NORB example (where despite a difficult viewpoint, the sequence is completed correctly by the top-ranked candidate), and the third HMDB example, where a highly dynamic baseball pitch sequence is correctly completed by the third ranked image. The top-ranked candidate for this example illustrates a common failure mode-the second image of the query pair is itself picked to complete the sequence. This may reflect the fact that HMDB sequences in particular exhibit very little motion (camera motions rare, mostly small object motions). Usually, as in the third KITTI example, even the top-ranked candidates other than the ground truth frame are highly plausible completions.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Recognition results</head><p>Unlabeled video as a prior for supervised recognition: Now we report results on the 3 unsupervised-to-supervised recognition tasks. <ref type="table" target="#tab_3">Table 2</ref> shows the results. Our SSFA method comprehensively outperforms not only the purely supervised UNREG baseline, but also the popular SFA-1 and NORB KITTI HMDB   SFA-2 slow feature learning approaches, beating the best baseline for each task by 9%, 36% and 9% respectively. The results on KITTI→SUN and HMDB→PASCAL-10 are particularly impressive because the unsupervised and supervised dataset domains are mismatched. All KITTI data comes from a single car-mounted road-facing camera driving through the streets of one city, whereas SUN images are downloaded from the Web, captured by different cameras from diverse viewpoints, and cover 397 scene categories mostly unrelated to roads. PASCAL-10 images are bounding-box-cropped and therefore centered on single persons, while HMDB videos, which are mainly clips from movies and Web videos, often feature multiple people, are not as tightly focused on the person performing the action, and are of low quality, sometimes with overlaid text etc.</p><p>Aside from the diversity of tasks (object, scene, and action recognition), our unsupervised datasets also exhibit diverse types of motion. NORB is generated from planned, discrete camera manipulations around a central object of interest. The KITTI camera moves through a real largely static landscape in smooth motions on roads at varying speeds. HMDB videos on the other hand are usually captured from stationary cameras with a mix of large and small foreground and background object motions. Even the dynamic camera videos in HMDB are sometimes captured from hand-held devices leading to jerky motions, where our temporal steadiness assumptions might be stressed.</p><p>Pairing unsupervised and supervised datasets: Thus far, our pairings of unsupervised and supervised datasets reflect our attempt to learn from video that a priori seems related to the ultimate recognition task, e.g. HMDB human action videos are paired with PASCAL-10 Action still images. However, as discussed above, the domains are only roughly aligned. Curious about the impact of the choice of unlabeled video data, we next try swapping out HMDB for KITTI in the PASCAL action recognition task. On this new KITTI→PASCAL task, we still easily outperform our nearest baseline, although our gain drops by ≈ 0.9% (SFA-2:19.06% vs. our SSFA:20.01%). Despite the fact that the human motion dynamics of HMDB ostensibly match the action recognition task better than the egomotion dynamics of KITTI (where barely any people are visible), we maintain our advantage over the purely slow methods. This indicates that there is reasonable flexibility in the choice of unlabeled videos fed to SSFA. Increasing supervised training sets: Thus far, we have kept labeled sets small to simulate the "long tail" of categories with scarce training samples where priors like ours and the baselines' have most impact. In a preliminary study for larger training pools, we now increase SUN training set sizes from 6 to 20 samples per class for KITTI→SUN. Our method retains a 20% gain over existing slow methods (SSFA: 3.24% vs SFA-2: 2.65%). This suggests our approach is valuable even with larger supervised training sets. Varying unsupervised training set size: To observe the effect of unsupervised training set size, we now restrict SSFA to use varying-sized subsets of unlabeled video on the HMDB→PASCAL-10 task. Performance scales roughly log-linearly with the duration of video observed, 2 suggesting that even larger gains may be achieved simply by training SSFA with more freely available unlabeled video. Purely unsupervised feature learning: We now evaluate the usefulness of features trained to optimize the unsupervised SSFA loss L u (Eq <ref type="formula" target="#formula_10">(8)</ref> Comparison to supervised pretraining and finetuning:</p><p>Recently, a two-stage supervised pretraining and finetuning strategy (SUP-FT) has emerged as the leading approach to solve visual recognition problems with limited training data where high-capacity models like deep neural networks may not be directly learned <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b31">32,</ref><ref type="bibr" target="#b19">20]</ref>. In the first stage ("supervised pretraining"), a neural network "NET1" is first trained on a related problem for which large training datasets are available. In a second stage ("finetuning"), the weights from NET1 are used to initialize a second network ("NET2") with similar architecture. NET2 is then trained on the target task, using reduced learning rates to minimally modify the features learned in NET1. In principle, completely unsupervised feature learning approaches like ours have important advantages over the SUP-FT paradigm. In particular, (1) they can leverage essentially infinite unlabeled data without requiring expensive human labeling effort thus potentially allowing the learning of higher capacity models and (2) they do not require the existence of large "related" supervised datasets from which features may be meaningfully transferred to the target task. While the pursuit of these advantages continues to drive vigorous research, unsupervised feature learning methods still underperform supervised pretraining for image classification tasks, where great effort has gone into curating large labeled databases, e.g., ImageNet <ref type="bibr" target="#b5">[6]</ref>, CIFAR <ref type="bibr" target="#b20">[21]</ref>.</p><p>As a final experiment, we examine how the proposed unsupervised feature learning idea competes with the popular supervised pretraining model. To this end, we adopt the CIFAR-100 dataset consisting of 100 diverse object categories as a basis for supervised pretraining. <ref type="bibr" target="#b2">3</ref> The new base- <ref type="bibr" target="#b2">3</ref> We choose CIFAR-100 for its compatibility with the 32 × 32 images line SUP-FT trains NET1 on CIFAR (see Supp), then finetunes NET2 for either PASCAL-10 action or SUN scene recognition tasks using the exact same (few) labeled instances given to our method. In parallel, our method "pretrains" only via the SSFA regularizer learned with unlabeled HMDB / KITTI video respectively for the two tasks. Our method uses zero labeled CIFAR data. <ref type="figure">Fig 4 shows</ref> the results. On PASCAL-10 action recognition (left), our method significantly outperforms SUP-FT pretrained with all 50,000 images of CIFAR-100! Gathering image labels from the crowd for large multi-way problems can take on average 1 minute per image <ref type="bibr" target="#b33">[34]</ref>, meaning we are getting better results while also saving ∼ 830 hours of human effort. On SUN scene recognition (right), SSFA outperforms SUP-FT with 5K labels and remains competitive even when the supervised method has a 17,500 label advantage. However, SUP-FT-50K's advantage on the SUN task is more noticeable; its gain is similar to our gain over the best slow-feature method.</p><p>The upward trend in accuracy for SUP-FT with more CIFAR-100 labeled data indicates that it successfully transfers generic recognition cues to the new tasks. On the other hand, the fact that it fares worse on PASCAL actions than SUN scenes reinforces that supervised transfer depends on having large curated datasets in a strongly related domain. In contrast, our approach successfully "transfers" what it learns from purely unlabeled video. In short, our method can achieve better results with substantially less supervision. More generally, we view it as an exciting step towards unlabeled video bridging the gap between unsupervised and supervised pretraining for visual recognition.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>We formulated an unsupervised feature learning approach that exploits higher order temporal coherence in unlabeled video, and demonstrated its powerful impact for several recognition tasks. Despite over 15 years of research surrounding slow feature analysis (SFA), its variants and applications, to the best of our knowledge, we are the first to identify that SFA is only the first order approximation of a more general temporal coherence idea. This basic observation leads to our intuitive approach that can be easily plugged into applications where first order temporal coherence has already been found useful <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b45">46,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b40">41,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b44">45,</ref><ref type="bibr" target="#b43">44,</ref><ref type="bibr" target="#b30">31,</ref><ref type="bibr" target="#b26">27]</ref>. To our knowledge, ours are the first results where unsupervised learning from video actually surpasses the accuracy of today's favored approach, heavily supervised pretraining.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 2 :</head><label>2</label><figDesc>"Siamese" network configuration (shared weights for the z θ layer stacks) with portions corresponding to the 3 terms Ls, R2 and R3 in our objective. R2 and R3 compose the unsupervised loss Lu in Eq<ref type="bibr" target="#b0">(1)</ref>. Ls is the supervised loss for recognition in static images.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head></head><label></label><figDesc>Supervised datasets S: (1) NORB [24] has 972 images each of 25 toys against clean backgrounds captured over a grid of camera elevations and azimuths. (2) SUN [43] contains Web images of 397 scene categories. (3) PASCAL-10 [9] is a still-image human action recognition dataset with 10 categories. For all three datasets, we use few labeled training images (see</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 :</head><label>3</label><figDesc>Sequence completion examples from all three video datasets. In each instance, a query pair is presented on the left, and the top three completion candidates as ranked by our method are presented on the right. Ground truth frames are marked with black highlights.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 (</head><label>1</label><figDesc>left) summarizes key dataset statistics.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>TaskImg/frame dims #Classes Recog. Task #Train #Test Unsup. Input Type #Pairs (1:3) #Triplets (1:1)</figDesc><table>NORB→NORB 
+96×96×1 
+25 
+object 
+150 
+8100 pose-reg. images 
+50,000 
+75,000 
+
+KITTI→SUN 
+32×32×1 
+397 
+scene 
+2382 
+7940 car-mounted video 100,000 
+100,000 
+
+HMDB→PASCAL-10 
+32×32×3 
+10 
+action 
+50 
+2000 web video 
+100,000 
+100,000 
+
+Datasets→ NORB KITTI HMDB 
+
+SFA-1 [30] 
+0.95 
+31.04 
+2.70 
+
+SFA-2 [14] 
+0.91 
+8.39 
+2.27 
+
+SSFA (ours) 
+0.53 
+7.79 
+1.78 
+
+Table 1: Left: Statistics for the unsupervised and supervised datasets (U → S) used in the recognition tasks (positive to negative ratios for 
+pairs and triplets indicated in headers). Right: Sequence completion normalized correct candidate rank η. Lower is better. (See Sec 4.2.) 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 2 :</head><label>2</label><figDesc>Recognition results (mean ± standard error of accuracy % over 5 repetitions) (Sec 4.3). Our method outperforms both existing slow feature/temporal coherence methods and the unregularized baseline substantially, across three distinct recognition tasks.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head></head><label></label><figDesc>) alone. Features trained on HMDB are evaluated at various stages of training, on Extra supervision for SUP-FT ×10 4 Figure 4: Comparison to CIFAR-100 supervised pretraining SUP-FT, at various supervised training set sizes. Flat dashed lines reflect that our method (and SFA) always use zero additional labels.the task of k-nearest neighbor classification on PASCAL-10 (k =5, and 100 training images per action). Starting at ≈ 17.8% classification accuracy for randomly initialized networks, unsupervised SSFA training steadily improves the discriminative ability of features to 19.62, 20.32 and 22.14% after 1, 2 and 3 passes respectively over training data (see Supp). This shows that SSFA can train useful image representations even without jointly optimizing a supervised objective.</figDesc><table>0 
+1 
+2 
+3 
+4 
+5 
+
+Accuracy 
+
+14 
+
+16 
+
+18 
+
+20 
+
+22 
+
+PASCAL-10 Actions 
+
+SUP-FT 
+SSFA (ours) 
+SFA-2 
+SFA-1 
+
+Extra supervision for SUP-FT ×10 4 
+
+0 
+1 
+2 
+3 
+4 
+5 
+
+Accuracy 
+
+0.5 
+
+1 
+
+1.5 
+
+2 
+
+2.5 
+
+SUN Scenes 
+
+SUP-FT 
+SSFA (ours) 
+SFA-2 
+SFA-1 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">For notational simplicity, we will describe our method assuming that the unsupervised training data is drawn from a single continuous video, but it is seamless to train instead with a batch of unlabeled video clips.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">At 3, 12.5, 25, and 100% resply. of the full unlabeled dataset (≈32k frames), performance is 18.06, 19.74, 20.36, and 20.95% (see Supp)</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements: We thank Texas Advanced Computing Center for their generous support. This work was supported in part by ONR YIP N00014-15-1-2291. used throughout our results, which let us leverage standard CNN architectures known to work well with tiny images <ref type="bibr" target="#b0">[1]</ref>.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Cuda-Convnet</surname></persName>
+		</author>
+		<ptr target="https://code.google.com/p/cuda-convnet/" />
+		<imprint>
+			<biblScope unit="volume">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Learning to see by moving</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Agrawal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Carreira</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICCV</title>
+		<imprint>
+			<biblScope unit="issue">3</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Slow, decorrelated features for pretraining complex cell-like networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bergstra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Slow feature analysis yields a rich repertoire of complex cell properties</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Berkes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wiskott</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of vision</title>
+		<imprint>
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Importance weighted autoencoders</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Burda</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Grosse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Imagenet: A large-scale hierarchical image database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Dong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Socher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">J</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Decaf: A deep convolutional activation feature for generic visual recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jeff</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yangqing</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Oriol</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Judy</forename><surname>Hoffman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ning</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eric</forename><surname>Tzeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Trevor</forename><surname>Darrell</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1310.1531</idno>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dosovitskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">T</forename><surname>Springenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Riedmiller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<title level="m">Discriminative Unsupervised Feature Learning with Convolutional Neural Networks. NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">The pascal visual object classes (voc) challenge. IJCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Are we ready for autonomous driving? the KITTI vision benchmark suite</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Lenz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">CVPR</title>
+		<imprint>
+			<biblScope unit="issue">5</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Rich feature hierarchies for accurate object detection and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Unsupervised Learning of Spatiotemporally Coherent Metrics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Goroshin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bruna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tompson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Eigen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICCV</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Learning to linearize under uncertainty</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ross</forename><surname>Goroshin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Michael</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yann</forename><surname>Mathieu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Lecun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Dimensionality Reduction by Learning an Invariant Mapping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Hadsell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chopra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">CVPR</title>
+		<imprint>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">D</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Transforming Auto-Encoders. ICANN</title>
+		<imprint>
+			<biblScope unit="issue">5</biblScope>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Simple-cell-like receptive fields maximize temporal coherence in natural video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hurri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Hyvarinen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Computation</title>
+		<imprint>
+			<biblScope unit="volume">15</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Learning image representations tied to ego-motion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Jayaraman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Grauman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Slow and Steady Feature Analysis: Higher Order Temporal Coherence in Video. CoRR, abs/1506.04714</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Jayaraman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Grauman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Caffe: Convolutional architecture for fast feature embedding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Karayev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sergio</forename><forename type="middle">S</forename><surname>Guadarrama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv</note>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Karayev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Trentacoste</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Agarwala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Hertzmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Winnemoeller</surname></persName>
+		</author>
+		<title level="m">Recognizing image style. BMVC</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">Learning multiple layers of features from tiny images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">ImageNet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">HMDB: a large video database for human motion recognition. ICCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Kuehne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jhuang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Garrote</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Poggio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Serre</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Learning methods for generic object recognition with invariance to pose and lighting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">J</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2004" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Understanding image representations by measuring their equivariance and equivalence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karel</forename><surname>Lenc</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrea</forename><surname>Vedaldi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">CVPR</title>
+		<imprint>
+			<biblScope unit="issue">5</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Unsupervised natural experience rapidly alters invariant object representation in visual cortex</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dicarlo</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Science</title>
+		<imprint>
+			<biblScope unit="volume">321</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Incremental slow feature analysis with indefinite kernel for online temporal video segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Liwicki</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zafeiriou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pantic</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Learning to relate images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Memisevic</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Modeling Deep Temporal Dependencies with Recurrent Grammar Cells</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Michalski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Memisevic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Konda</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">NIPS</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Deep Learning from Temporal Coherence in Video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Mobahi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Collobert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Weston</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICML</title>
+		<imprint>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Temporal relations in videos for unsupervised activity analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Nater</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Grabner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Learning and transferring mid-level image representations using convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Oquab</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Laptev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">CVPR</title>
+		<imprint>
+			<biblScope unit="issue">8</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+		<title level="m" type="main">Video (language) modeling: a baseline for generative models of natural videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ranzato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Szlam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bruna</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mathieu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Collobert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chopra</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv</note>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Russakovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Satheesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bernstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note>Imagenet large scale visual recognition challenge. IJCV</note>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Learning rotation-aware features: From invariant priors to equivariant descriptors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Schmidt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">CVPR</title>
+		<imprint>
+			<biblScope unit="issue">5</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Best practices for convolutional neural networks applied to visual document analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Simard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Steinkraus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">C</forename><surname>Platt</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICDAR</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<monogr>
+		<title level="m" type="main">Very deep convolutional networks for large-scale image recognition. ICLR</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Extracting and composing robust features with denoising autoencoders</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Vincent</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Larochelle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">A</forename><surname>Manzagol</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICML</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">Anticipating the future by watching unlabeled video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Vondrick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Pirsiavash</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<idno>abs/1504.08023</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Dense optical flow prediction from a static image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Walker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Unsupervised learning of visual representations using videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICCV</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Slow feature analysis: unsupervised learning of invariances</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wiskott</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">J</forename><surname>Sejnowski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">SUN database: Large-scale scene recognition from abbey to zoo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">A</forename><surname>Ehinger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">CVPR</title>
+		<imprint>
+			<biblScope unit="issue">5</biblScope>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Learning slow features for behaviour analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zafeiriou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nicolaou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zafeiriou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Nikitidis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pantic</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Slow feature analysis for human action recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Deep learning of invariant features via simulated fixations in video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">NIPS</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Unsupervised learning of visual invariance with temporal coherence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Will</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><forename type="middle">Y</forename><surname>Zou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kai</forename><surname>Ng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Yu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS Workshop on Deep Learning</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

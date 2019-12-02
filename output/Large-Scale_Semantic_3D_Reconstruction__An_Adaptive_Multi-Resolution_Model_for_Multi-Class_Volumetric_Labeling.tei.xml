@@ -1,0 +1,976 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Large-Scale Semantic 3D Reconstruction: an Adaptive Multi-Resolution Model for Multi-Class Volumetric Labeling</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Maroš</forename><surname>Bláha</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">ETH Zurich</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christoph</forename><surname>Vogel</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">ETH Zurich</orgName>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="institution">Graz University of Technology</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Audrey</forename><surname>Richard</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">ETH Zurich</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jan</forename><forename type="middle">D</forename><surname>Wegner</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">ETH Zurich</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Thomas</forename><surname>Pock</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="institution">Graz University of Technology</orgName>
+							</affiliation>
+							<affiliation key="aff2">
+								<orgName type="institution">AIT Austrian Institute of Technology</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Konrad</forename><surname>Schindler</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">ETH Zurich</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Large-Scale Semantic 3D Reconstruction: an Adaptive Multi-Resolution Model for Multi-Class Volumetric Labeling</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:42+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We propose an adaptive multi-resolution formulation of semantic 3D reconstruction. Given a set of images of a scene, semantic 3D reconstruction aims to densely reconstruct both the 3D shape of the scene and a segmentation into semantic object classes. Jointly reasoning about shape and class allows one to take into account class-specific shape priors (e.g., building walls should be smooth and vertical, and vice versa smooth, vertical surfaces are likely to be building walls), leading to improved reconstruction results. So far, semantic 3D reconstruction methods have been limited to small scenes and low resolution, because of their large memory footprint and computational cost. To scale them up to large scenes, we propose a hierarchical scheme which refines the reconstruction only in regions that are likely to contain a surface, exploiting the fact that both high spatial resolution and high numerical precision are only required in those regions. Our scheme amounts to solving a sequence of convex optimizations while progressively removing constraints, in such a way that the energy, in each iteration, is the tightest possible approximation of the underlying energy at full resolution. In our experiments the method saves up to 98% memory and 95% computation time, without any loss of accuracy.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Geometric 3D reconstruction and semantic interpretation of the observed scene are two central themes of computer vision. It is rather obvious that the two problems are not independent: geometric shape is a powerful cue for semantic interpretation and vice versa. As an example, consider a simple concrete building wall: the observation that it is vertical rather than horizontal distinguishes it from a road of similar appearance; on the other hand the fact that it is a wall and not a tree crown tells us that it should be flat and vertical. More generally speaking, jointly addressing 3D re- † shared first authorship construction and semantic understanding can be expected to deliver at the same time better 3D geometry, via categoryspecific priors for surface shape, orientation and layout; and better segmentation into semantic object classes, aided by the underlying 3D shape and layout. Jointly inferring 3D geometry and semantics is a hard problem, and has only recently been tackled in a principled manner <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b35">36]</ref>. These works have shown promising results, but have high demands on computational resources, which limits their application to small volumes and/or a small number of images with limited resolution.</p><p>We propose a method for joint 3D reconstruction and semantic labeling, which scales to much larger regions and image sets. Our target application is the generation of interpreted 3D city models from terrestrial and aerial images, i.e. we are faced with scenes that contain hundreds of buildings. Such models are needed for a wide range of tasks in planning, construction, navigation, etc. However, to this day they are generated interactively, which is slow and costly.</p><p>The core idea of our method is to reconstruct the scene with variable volumetric resolution. We exploit the fact that the observed surface constitutes only a 2D manifold in 3D space. Large regions of most scenes need not be modeled at high resolution -mostly this concerns free space, but also parts that are under the ground, inside buildings, etc. Fine discretization and, likewise, high numerical precision are only required at voxels 1 close to the surface.</p><p>Our work builds on the convex energy formulation of <ref type="bibr" target="#b16">[17]</ref>. That method has the favorable property that its complexity scales only with the number of voxels, but not with the number of observed pixels/rays. Starting from a coarse voxel grid, we solve a sequence of problems in which the solution is gradually refined only near the (predicted) surfaces. The adaptive refinement saves memory, which makes it possible to reconstruct much larger scenes at a given target resolution. At the same time it also runs much faster. On the one hand the energy function has a lower number of variables; on the other hand low frequencies of the solution are found at coarse discretization levels, and iterations at finer levels can focus on local refinements.</p><p>The contribution of this paper is an adaptive multiresolution framework for semantic 3D reconstruction, which progressively refines a volumetric reconstruction only where necessary, via a sequence of convex optimization problems. To our knowledge it is the first formulation that supports multi-resolution optimization and adaptive refinement of the volumetric scene representation. As expected, such an adaptive approach exhibits significantly better asymptotic behavior: as the resolution increases, our method exhibits a quadratic (rather than cubic) increase in the number of voxels. In our experiments we observe gains up to a factor of 22 in speed and reduced memory consumption by a factor of 40. Both the geometric reconstruction and the semantic labeling are as accurate as with a fixed voxel discretization at the highest target resolution.</p><p>Our hierarchical model is a direct extension of the fixedgrid convex labeling method <ref type="bibr" target="#b16">[17]</ref> and emerges naturally as the optimal adaptive extension of that scheme, i.e., under intuitive assumptions it delivers the tightest possible approximation of the energy at full grid resolution. Both models solve the same energy minimization, except that ours is subject to additional equality constraints on the primal variables, imposed by the spatial discretization.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>Large-scale 3D city reconstruction is an important application of computer vision, e.g. <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b25">26]</ref>. Research aiming at purely geometric surface reconstruction rarely uses volumetric representations, though, because of the high demands w.r.t. memory and computational resources. In this context <ref type="bibr" target="#b29">[30]</ref> already used a preceding semantic labeling to improve geometry reconstruction, but not vice versa.</p><p>Initial attempts to jointly perform geometric and semantic reconstruction started with depth maps <ref type="bibr" target="#b27">[28]</ref>, but later re-search, which aimed for truly 3-dimensional reconstruction from multiple views, switched to a volumetric representation <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b1">2,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b35">36,</ref><ref type="bibr" target="#b38">39]</ref>, or in rare cases to meshes <ref type="bibr" target="#b8">[9]</ref>. The common theme of these works is to allow interaction between 3D depth estimates and appearance-based labeling information, via class specific shape priors. Loosely speaking, the idea is to obtain at the same time a reconstruction with locally varying, class-specific regularization; and a semantic segmentation in 3D, which is then trivially consistent across all images. The model of <ref type="bibr" target="#b16">[17]</ref> employs a discrete, tight, convex relaxation of the standard multi-label Markov random field problem <ref type="bibr" target="#b41">[42]</ref> in 3D, at the cost of high memory consumption and computation time. Here, we use a similar energy and optimization scheme, but significantly reduce the run-time and memory consumption, while retaining the advantages of a joint model. <ref type="bibr" target="#b24">[25]</ref> also jointly solve for class label and occupancy state, but model the data term with heuristically shortened ray potentials <ref type="bibr" target="#b31">[32,</ref><ref type="bibr" target="#b35">36]</ref>. Yet, the representation inherits the asymptotic dependency on the number of pixels in the input images. <ref type="bibr" target="#b24">[25]</ref> also resort to an octree data structure to save memory, which is fixed in the beginning according to the ray potentials, contrary to our work, where it is adaptively refined. This is perhaps also the work that comes closest to ours in terms of large-scale urban modeling, but (like other semantic reconstruction research) it uses only street-level imagery, and thus only needs to cover the vicinity of the road network, whereas we reconstruct the complete scene.</p><p>Since the seminal work <ref type="bibr" target="#b12">[13]</ref> volumetric reconstruction has evolved remarkably. Most methods compute a distance field or indicator function in the volumetric domain, either from images or by directly merging several 2.5D range scans. Once that representation has been established, the surface can be extracted as its zero level set, e.g. <ref type="bibr" target="#b32">[33,</ref><ref type="bibr" target="#b21">22]</ref>.</p><p>Many volumetric techniques work with a regular partitioning of the volume of interest <ref type="bibr" target="#b42">[43,</ref><ref type="bibr" target="#b40">41,</ref><ref type="bibr" target="#b31">32,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b22">23,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b35">36]</ref>. The data term per voxel is usually some sort of signed distance generated from stereo maps, e.g. <ref type="bibr" target="#b42">[43,</ref><ref type="bibr" target="#b40">41]</ref>. Beyond stereo depth, <ref type="bibr" target="#b11">[12]</ref> propose to also exploit silhouette constraints as additional cue about occupied and empty space.</p><p>Going one step further, <ref type="bibr" target="#b31">[32,</ref><ref type="bibr" target="#b35">36]</ref> model, for each pixel in each image, the visibility along the full ray. Such a geometrically faithful model of visibility, however, leads to higher-order potentials per pixel, comprising all voxels intersected by the corresponding ray. Consequently the memory consumption is no longer proportional to the number of voxels, but depends on the number of ray-voxel intersections, which can be problematic for larger image sets and/or high-resolution images. In contrast, the memory footprint of our method (and of others that include visibility locally <ref type="bibr" target="#b42">[43,</ref><ref type="bibr" target="#b16">17]</ref>) is linear in the number of voxels, and thus can be reduced efficiently by adaptive discretization. <ref type="bibr" target="#b26">[27]</ref> deviate from a regular partitioning of the volume, and instead start from a Delaunay tetrahedralization of a 3D point cloud (from multi-view stereo). The tetrahedrons are then labeled empty or occupied, and the final surface is composed of triangles that are shared by tetrahedrons with different labels. The idea was extended by <ref type="bibr" target="#b19">[20]</ref>, who focus on visibility to also recover weakly supported objects.</p><p>In fact even the well-known PMVS multi-view stereo method <ref type="bibr" target="#b13">[14]</ref> originally includes volumetric surface reconstruction from the estimated 3D points and normals. To that end, the Poisson reconstruction method <ref type="bibr" target="#b20">[21]</ref> was adopted, which aligns the surface with a guidance vector field (given by the estimated normals). The octree representation of <ref type="bibr" target="#b20">[21]</ref>, was later combined <ref type="bibr" target="#b4">[5]</ref> with a cascadic multigrid solver, e.g. <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b15">16]</ref>, leading to a significant speed-up. The framework is eminently suitable for large scale processing, but the least-squares nature inherited from the original Poisson formulation makes it susceptible to outliers. In contrast, our formulation can use robust error functions to handle noisy input. The price to pay is a more involved optimization problem instead of a simple linear system. We furthermore exploit that high precision is only needed at voxels close to the surface; representing large regions, that have a constant semantic label, with many voxels appears wasteful. A similar idea was utilized by <ref type="bibr" target="#b0">[1]</ref> in the context of stitching images in the gradient domain. Contrary to prior work <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b9">10]</ref>, our octree structure is not predetermined by the input data, but refined adaptively, such that we can exploit the per-class probabilities rather than only a minimal energy solution. Compared to refining all voxels with data, we can avoid many unnecessary splits that would otherwise be invoked by noise in the depth maps.</p><p>One can interpret our method as a combination of multigrid (coarse-to-fine) reconstruction on a volumetric pyramid <ref type="bibr" target="#b42">[43,</ref><ref type="bibr" target="#b40">41]</ref>, and adaptive hierarchical refinement, e.g. <ref type="bibr" target="#b18">[19]</ref>. We also refine selectively, and initialize the solver from previous results for faster convergence.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Method</head><p>To address 3D semantic segmentation and geometry reconstruction in a joint fashion, we follow the approach of <ref type="bibr" target="#b16">[17]</ref>. The model employs an implicit volumetric representation, allowing for arbitrary but closed and oriented topology of the resulting surface. One limitation of that model is its huge memory consumption, which we address with our spatially adaptive scheme, without loss in quality.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Discrete Formulation</head><p>In <ref type="bibr" target="#b16">[17]</ref> a bounding box of the region of interest is subdivided into regular and equally sized voxels s ∈ Ω. The model then determines the likelihood that an individual voxel is in a certain state. The scene is described by a set of indicator functions x i s ∈ [0, 1], which are constant per voxel element s. As indicated by the respective function (x i = 1), the voxels can take on a state (i.e. a class) i out of a predefined set C = {0 . . . M − 1}. For our urban scenario we consider a voxel to either be freespace (i = 0), or occupied with building wall, roof, vegetation or ground. Additionally we collect objects that are not explicitly modeled in an extra clutter state. A solution to the labeling problem is found by minimizing the energy:</p><formula xml:id="formula_0">E(x) = s∈Ω i ρ i s x i s + i,j;i&lt;j φ ij (x ij s − x ji s ),<label>(1)</label></formula><p>subject to the following marginalization, normalization and non-negativity constraints:</p><formula xml:id="formula_1">x i s = j x ij s,k , x i s = j x ji s−e k ,k , k ∈ {1, 2, 3} and i x i s = 1, x ij ≥ 0.<label>(2)</label></formula><p>Here, e k ∈ R 3 denotes the k th canonical unit vector. The convex and 1-homogeneous functions φ ij locally penalize the transition from label i to label j. Intuitively, the variables x ij can be interpreted as encoding the probability mass transferred from class i to class j as one moves from voxel s to its neighbor in direction k. Here, φ ij acts as a class-specific geometric prior, which, given the local surface orientation x ij s − x ji s ∈ [−1, 1] 3 , can also take the direction of the boundary surface into account.</p><p>The data cost ρ i s combines evidence from depthmaps and semantic segmentation masks, and encodes the likelihood of label i at a certain voxel s.</p><p>The energy defined by Eqs. (1, 2) is a generalization of the standard primal LP-relaxation of the Markov Random Field energy. As noted in <ref type="bibr" target="#b41">[42]</ref>, the formulation in discrete space relaxes the need for a (w.r.t. the label space) metric regularizer φ, which is mandatory for the continuous case (e.g. <ref type="bibr" target="#b34">[35,</ref><ref type="bibr" target="#b37">38]</ref>).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Data Term</head><p>To define the data cost for a voxel at a certain grid resolution we again follow <ref type="bibr" target="#b16">[17]</ref>. Consider a pixel p in one of the images, and let d denote the pixel's observed depth. The possible semantic classes are indexed with i. Now, let r(p,d) be a function that maps a depth valued to a 3D point on the ray through p. Then the contribution of p to the energy at voxel s is:</p><formula xml:id="formula_2">ρ i s := σ i if r(p, d + δ) ∈ s ∧ i = 0 , and (3a) ρ i s :=      β if ∃d : r(p,d) ∈ s ∧ 0 &lt; d −d &lt; δ ∧ i = 0 −β if ∃d : r(p,d) ∈ s ∧ 0 &lt;d − d &lt; δ ∧ i = 0 0 otherwise. (3b)</formula><p>The situation is depicted in <ref type="figure" target="#fig_1">Fig. 2</ref>. σ i denotes the negative log-likelihoods of observing class i in the pixel. The σ i are obtained from a MultiBoost classifier. Details can be found in the supplementary material. Eq. (3b) is independent of the class label i and only considers voxels close to the surface, as predicted by the depth map. The data term in Eqs. (3a,3b) is given in form of a truncated L 1 norm, which penalizes the deviation of the reconstruction from the observed depth along a pixel's viewing ray. The parameters δ and β encode the truncation point and slope (weight) of the corresponding penalty. In other words, the underlying model assumes the inlier noise of the depthmaps to be exponentially distributed, c.f . <ref type="bibr" target="#b16">[17]</ref>. Because we seek to minimize the energy (Eq. 1), the data cost prefers freespace for voxels in front of the observed depth. Assuming independence of the per-pixel observations, the final data costs per voxel can be accumulated over all rays.</p><p>Discussion. Accounting for visibility only locally near the observed depth is clearly an approximation, but it has the advantage that everything is encapsulated in the unary potentials. Modeling visibility along the full length of the rays leads to higher-order potentials which, for each pixel in each image, relate the depth observation to the occupancy of all voxels passed by the ray (either independently per view <ref type="bibr" target="#b24">[25]</ref> or including multi-view constraints <ref type="bibr" target="#b31">[32]</ref>). For a volume of |Ω| voxels, the less complicated first case already leads to O( 3 |Ω|) voxels per clique. In large-scale applications like ours, with hundreds of images of several Megapixels each, such a model faces serious memory issues. 2 In contrast, breaking the higher-order cliques down to local unary potentials eliminates the dependency on the number and the resolution of the input images, such that the memory consumption scales only with the number of voxels. Hence, the reduced number of voxels in our hierarchical model translates directly to a smaller memory footprint.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Class-Specific Geometric Priors</head><p>The functions φ ij penalize class transitions in the volume, and are modeled as negative log-probabilities of the following form:</p><formula xml:id="formula_3">φ ij (y) = ψ ij (y) + ||y|| 2 T ij .<label>(4)</label></formula><p>The isotropic part T ij contains the neighborhood statistics of the classes. The anisotropic part ψ ij models the likelihood of a transition between classes i and j in a certain direction. Our task-specific choices are detailed in Sec. 5.</p><p>Note that φ ij in Eq. (4) is 1-homogeneous, such that the area of the bounding surface element is implicitly considered in the finite difference scheme. The parametric form of ψ, or rather of its dual ψ * (p) = ι W ψ , is chosen to be the indicator function of a convex set W ψ , the so-called Wulff shape. This choice leads to ψ(y) = sup n∈W ψ n T y.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Hierarchical Algorithm</head><p>The described volumetric model for joint 3D reconstruction and semantic segmentation is rich, but memory-hungry and computationally expensive. To make it more scalable, we embed it in an octree and develop an optimal spatially adaptive refinement scheme. We start at a resolution level l = L 0 with a coarse 3D grid, minimize the energy, and then refine the discretization only close to the surface. We assert that the preliminary result at coarse discretization can not only serve as an initialization for the finer discretization, but also provides a good guess where one can expect surface transitions, and in this way guide the adaptive refinement. Data and regularization terms are updated for refined voxels, and the new energy is minimized, until the smallest voxels in the octree have the target resolution L N . We point out the difference to standard surface refinement: in our volumetric multi-class scheme the connectivity can change at finer resolution levels, for instance a narrow street might open between two formerly connected buildings.</p><p>Loosely speaking, one can interpret our framework as a multi-grid method <ref type="bibr" target="#b7">[8]</ref>, where the solution at a coarse discretization of the domain is used as improved initial guess for the fine-grid relaxation. The multi-grid approach is a good match for our problem. Low frequency components of the solution are already found at coarse resolution. This greatly accelerates the computation, because at full resolution they span many voxels, thus gradient-based optimization would take many iterations to converge, e.g. <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b15">16]</ref>.</p><p>We first describe our data structure and then derive the hierarchical energy and optimization procedure.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Octree-Structure</head><p>In the octree we distinguish inner and leaf nodes. The former hold the parent-child relations of the tree, whereas the latter store the variables needed to minimize the energy. Inner nodes are designed to consume as little memory as possible. They each contain a 32-bit index for the eight children, of which 1 bit is used to indicate whether the child is a leaf or inner node; and one 32-bit index to the parent, of which 5 bits are used to store the depth (octree level). Although more sophisticated implementations exist, e.g. <ref type="bibr" target="#b30">[31]</ref>, this simple structure proved sufficient for our application. A leaf voxel, on the other hand, has to store a number of floats, which is quadratic in the number |C| of classes. In our case (|C| = 6) we need 181 floats. Hence, our octree consumes approximately 99% of the memory in its leafs, which shows that the overhead introduced by the adaptive data structure is negligible.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Discrete Energy in the Octree</head><p>Other than in the regular voxel grid Ω L N := Ω, voxels of different sizes coexist in the refined volume Ω l at resolution level l ∈ {L 0 , . . . , L N }. Our derivation of the corresponding generalized energy starts from three desired properties: (i) Elements form a hierarchy defined by an octree. (ii) Each voxel, independent of its resolution, holds the same set of variables. (iii) The energy can only decrease if the discretization is refined from Ω l to Ω l+1 :</p><formula xml:id="formula_4">E l (x * l ) ≥ E l+1 (A l,l+1 x * l ) ≥ E l+1 (x * l+1 ).<label>(5)</label></formula><p>Here, we have defined the linear operator A l,l+1 to lift the vectorized set of primal variables x l := x(s) s∈Ω l ,</p><formula xml:id="formula_5">x(s) := ((x i (s)) i=0...M −1 , (x ij k (s)) i,j=0...M −1, k=1,2,3 ) T ,<label>(6)</label></formula><p>to the refined discretization at level l + 1. While the second inequality in (5) follows immediately from the optimality of x * , the first one defines the relationship between solutions at coarser and finer levels. In case of equality, we can observe that minimizing our energy w.r.t. the reduced variable set at coarser level corresponds to minimizing the energy of its lifted version in the refined discretization.</p><p>In the light of (i), any proper prolongation must fulfill: A l+1,l+2 A l,l+1 = A l,l+2 . Then, with the choice E l (x l ) := E(A l,L N x l ), equality in the first part of (iii) holds:</p><formula xml:id="formula_6">E(A l,L N x l ) = E l (x l ) ≥ E l+1 (A l,l+1 x l ) = E(A l+1,L N A l,l+1 x l ) = E(A l,L N x l )<label>(7)</label></formula><p>Prolongation Operator. Because of the hierarchical structure it is sufficient to specify mappings only for a single coarse parent voxel s and one of its descendantss. We further assemble the operator from two parts, which individually lift indicator and transition variables:</p><formula xml:id="formula_7">A := (A I ) T ; (A IJ ) T T .<label>(8)</label></formula><p>We start with the former:</p><formula xml:id="formula_8">A I l,L (s,s) := A I l,L |0 , A I l,L ∈ R M×M , 0 ∈ R M×3M 2 , A I l,L (i, j) = 1 iff i = j and 0 else.<label>(9)</label></formula><p>The operator is already specified for general L ≥ l. Then, the data energy of a labeling x i s for a coarse voxel s at level l becomes: s∈Ω L N ∩s, i ρ ī s A I l,L N (s,s)x i s = i ρ i s x i s . In accordance with (1), we abbreviated the data term for the coarse voxel with ρ s , summing over all its descendants.</p><p>To define the prolongation of the transition variables x ij (s), we first analyze the splitting of a single voxel. The situation is illustrated in <ref type="figure" target="#fig_2">Fig. 3</ref>, for simplicity restricted to a 2 label, 2D case. After splitting the coarse voxel <ref type="figure" target="#fig_2">(Fig. 3a)</ref>, its refined version has to fulfill the constraints from (2). All inner constraints <ref type="figure" target="#fig_2">(Fig. 3b</ref>, blue lines) can be fulfilled by setting x ii k = x i and x ij k = 0 else, which also avoids a penalty from the regularizer. Voxel with non-zero transitions are only found at the boundary <ref type="figure" target="#fig_2">(Fig. 3b, pink lines)</ref>. Depending on the location at the border of the coarse voxel, different components of the argument of the regularizer φ can be set to 0 <ref type="figure" target="#fig_2">(Fig. 3b)</ref>. Further, after additional splits <ref type="figure" target="#fig_2">(Fig. 3c)</ref>, the same functional forms occur with different frequency. This motivates the choice of a level-dependent regularizer. For a voxel at level l we use the weighted sum of functions that occur at its border after maximal refinement. Let ∂ e k s be the boundary of s in direction e k . We can now define our lifting of the transition variables from a parent voxel s ∈ Ω l tos ∈ Ω L ∩ s:</p><formula xml:id="formula_9">A IJ l,L (s,s) := B I l,L |B IJ l,L , B I l,L ∈ R 3M 2 ×M , B IJ l,L ∈ R 3M 2 ×3M 2 B I l,L ((i, i, k)</formula><p>, (i)) = 1 iff ∂ e ks ⊂ ∂ e k s and 0 else B IJ l,L ((i, j, k), (i, j, k)) = 1 iff ∂ e ks ⊂ ∂ e k s and 0 else.</p><p>Feasibility is preserved by construction and both conditions for <ref type="formula" target="#formula_6">(7)</ref> are fulfilled (proof in the supplementary material).</p><p>Adaptive regularization. Our regularizer, Φ ij l (x ij s − x ji s ), depends on the resolution of a voxel and is of the form:</p><formula xml:id="formula_11">Φ l (z) := φ(z)+ 3 k=1 w l e φ(z−z T e k e k )+w l f φ(z T e k e k ).<label>(11)</label></formula><p>At faces we measure φ(z T e k e k ), at edges φ(z −z T e k e k ) for some direction e k , k = 1, 2, 3 and in the corner we get φ(z). The weights reflect the occurrence of grid-level voxels at the boundary of the enclosing parent voxel (c.f . <ref type="figure" target="#fig_2">Fig. 3c</ref>):</p><p>w l e := 2 L N −l − 1 and w l f := (w l e ) 2 .</p><p>All our (an-)isotropic regularizers are of the form φ(z) := sup n∈W n T z, since T ij ||n|| 2 = sup n:||n||2≤T ij n T z. Equation (11) is then equivalent to:</p><formula xml:id="formula_13">Φ l (z) := sup n∈W l n T z, with W l := W ⊕ 3 k=1 w l e P H k (W ) ⊕ w l f P L k (W ) ,<label>(13)</label></formula><p>where W l is the Minkowski sum of the respective sets and P denotes a projection onto the plane H k := {x ∈ R 3 |x T e k = 0}, respectively the line L k := {se k |s ∈ R}.</p><p>Numerical scheme. Equipped with prolongation operator, scale-dependent regularizer Φ ij l and data term, our energy for an arbitrary hierarchical discretization Ω l of 3-space becomes:</p><formula xml:id="formula_14">E l (x l ) = s∈Ω l i ρ i s x i s + i,j;i&lt;j Φ ij l (x ij s − x ji s ). (14)</formula><p>Introducing the set N −e k (s) to collect the neighborhood of s in direction −e k , we can denote a new set of constraints:</p><formula xml:id="formula_15">x i s = j x ij s,k , x i s = j x jī s,k , ∀s ∈ N −e k (s), k ∈ {1, 2, 3} and i x i s = 1, x ij ≥ 0.<label>(15)</label></formula><p>The energy <ref type="formula" target="#formula_0">(14)</ref> is convex. To solve it, we introduce Lagrange multipliers for the constraints <ref type="formula" target="#formula_0">(15)</ref>, convert the problem to primal-dual form, and apply the method of <ref type="bibr" target="#b10">[11]</ref>. The prolongation operator defines a weighting of the different constraints. This is helpful for pre-conditioning <ref type="bibr" target="#b33">[34]</ref>, which is essential because of the large size differences between voxels in our hierarchical framework. Our numerical scheme requires us to project onto shapes that are Minkowski sums of convex sets. For that several alternatives exist. In case the Wulff shapes are given explicitly in the form of a triangular mesh, one can pre-compute (13) for each level in polynomial time in an offline step <ref type="bibr" target="#b2">[3]</ref>. In our case the sets are simple, in the sense that the projection onto each Wulff shape can be performed in closed form. Thus, we utilize Eq. 11. If memory consumption is not an issue, a simple way is to maintain separate dual variables for the individual sets. In contrast, a Dykstra-like projection scheme <ref type="bibr" target="#b5">[6]</ref> avoids storing additional variables altogether, at the cost of a small increase in computation time. In the supplementary we give an outline of the numerical scheme, including a derivation of this projection.</p><p>Optimality. The adaptive energy E l as introduced above can be expressed equivalently by augmenting the basic nonadaptive energy (1, 2) with the following constraints:</p><p>∀i, ∀s ∈ Ω l : {x ī s = x i s |∀s ∈ Ω ∩ s} and ∀i, j, ∀s ∈ Ω l : {x ij s,k = x ij s,k |∀s ∈ Ω ∩ s ∧ ∂ e ks ⊂ ∂ e k s}.</p><p>I.e., one can interpret our hierarchical refinement scheme as solving the same problem, subject to additional equality constraints imposed by the variable discretization of the volume. This equivalence proves the optimality of the proposed scheme under the assumptions (i), (ii) and (iii). We point out that the first set of constraints in <ref type="formula" target="#formula_0">(16)</ref> is not sufficient to derive the multi-resolution scheme (counterexample in the supplementary material). Without additional equality constraints on the x ij , the optimality condition (iii) would require the introduction of additional variables for each Wulff shape in <ref type="bibr" target="#b12">(13)</ref>. We abandon that idea at this point, but if memory consumption is not an issue, a tighter bound on the energy can perhaps be achieved.</p><p>Splitting criteria. Ideally our algorithm would in every step refine exactly all those voxels which intersect with the true surface. This is a chicken-and-egg problem, so we have to rely on the preliminary solution at the coarser level to predict these voxels. In practice we simply identify neighboring voxel pairs that are assigned to different classes:</p><formula xml:id="formula_17">∃k,s ∈ N e k (s) : arg max i x i s = arg max i x ī s<label>(17)</label></formula><p>and divide both voxels s ands. Moreover, we also require the resolution of adjacent voxels to differ by at most one level, and split voxels accordingly. After refinement, we use the lifting scheme <ref type="bibr" target="#b7">(8)</ref> to initialize the newly introduced (primal and dual) variables at the finer resolution.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Evaluation</head><p>We test our algorithm on a real world data set from the city of Enschede <ref type="bibr" target="#b36">[37]</ref>. All experiments are run on a machine with 64 GB of RAM and a hexa Intel Core i7 CPU.</p><p>Data Set and Input Data. We follow a current trend in image-based mapping and exploit oblique aerial imagery in addition to classical nadir photographs. This mitigates visibility problems such as foreshortening or occlusion. In total, the data set comprises of 510 images acquired in the Maltese cross configuration (for each position a nadir image and four oblique views to the north, south, east and west).</p><p>Our method requires two types of input data: oriented images in order to generate depthmaps, and training data for statistical learning. The images were oriented with Vi-sualSFM <ref type="bibr" target="#b39">[40]</ref>, and depthmaps were generated with semiglobal matching <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b6">7]</ref>. For semantic labeling we train a MultiBoost classifier <ref type="bibr" target="#b3">[4]</ref> on a few hand-labeled images. Details about the employed image features can be found in the supplementary material. With the classifier we then predict per-pixel log-likelihoods for all possible classes. <ref type="figure" target="#fig_3">Fig. 4</ref> illustrates our input data at a glance.</p><p>Label-Specific Geometric Priors. We employ two forms of Wulff shapes (Sec. 3.3). The first supports flat, horizontal structures in the 3D model and applies to the following label transitions: ground-freespace, ground-building, ground-vegetation, building-roof, roof-freespace. The second one prefers vertical boundaries at the transitions building-freespace and building-vegetation. Parameters for the Wulff shapes are either learned from existing city models or set empirically, see <ref type="bibr" target="#b16">[17]</ref> for details.</p><p>Comparison to Fixed Voxel-Grid. We go on to compare our hierarchical model with a fixed voxel grid of the same   <ref type="table">Table 1</ref>: Quantitative verification of our results with the grid model and the MultiBoost input data from <ref type="bibr" target="#b3">[4]</ref>.</p><p>target resolution. The fixed grid requires 600 iterations to converge. In our multi-resolution procedure, we run 200 iterations at every level, then refine all voxels that fulfill the splitting criterion, and run the next 200 iterations. When the first voxels have reached the target resolution L N we run 100 iterations, conditionally split voxels that are not yet at minimal size, and finally run another 100 iterations. One problem we face is the lack of 3D ground truth. To quantitatively check the correctness of the results, we use the following procedure: we select two representative images from our data set and manually label them to obtain a semantic ground truth. For the corresponding scene parts, we then run semantic 3D reconstruction, back-project the result to the images, and compare them to the ground-truth labeling in terms of overall accuracy and average accuracy.</p><p>Tab. 1 summarizes the outcomes of the comparison. The differences between adaptive and non-adaptive reconstruction are vanishingly small (&lt; 0.7 percent points) and mostly due to aliasing. The comparison for one of the two scenes is illustrated in <ref type="figure" target="#fig_4">Fig. 5</ref>. The classification maps from the octree and the full grid are almost indistinguishable, which underlines that the two methods give virtually the same results. We conclude that our refinement scheme is valid and does not lead to any loss in accuracy compared to the full voxel grid. Labels back-projected from the semantic 3D reconstruction are less noisy than the raw classifier output. However, the reconstruction (both adaptive and non-adaptive) introduces a systematic error at sharp 3D boundaries, best  . Middle right: Back-projected models overlayed on the images. Right: Pure volumetric 3D models <ref type="bibr" target="#b40">[41]</ref>. Note errors such as deformed and fragmented buildings or flattened vegetation.</p><p>visible along transitions between building walls and roofs. This bias originates from our data term, which forces the voxels behind the observed depth (in ray direction) to be occupied. This fattening effect was also observed in <ref type="bibr" target="#b35">[36]</ref>, and it was shown that complete ray potentials can remedy the problem, at the cost of much higher memory consumption. In spite of the fattening, the back-projected 3D models are still (slightly) more correct than the MultiBoost results.</p><p>The gains are larger in the opposite direction, i.e. the semantic information significantly improves the 3D surface shape. <ref type="figure" target="#fig_5">Fig. 6</ref> illustrates exemplary cases where our classspecific priors lead to superior 3D models compared to a generic regularization of the surface area <ref type="bibr" target="#b40">[41]</ref>. Unfortunately that effect is hard to quantify.</p><p>Performance Analysis. We go on to measure how much memory and computation time we save by adaptively refining the reconstruction only where needed. As a baseline, we run the non-adaptive method at full target resolution. Even at 0.4 m voxel size the storage requirements of the baseline limit the comparison to four smaller subsets of our dataset.</p><p>For a fair comparison, we cut the bounding box for the non-adaptive method such that it tightly encloses the data (whereas our octree implementation always covers a cubic volume). Since the city of Enschede is flat, this favors the non-adaptive method. In rough terrain or non-topographic applications the gains will be even higher.    Reconstructions at the corresponding refinement levels. Both shape and semantic labels gradually emerge in a coarse-to-fine manner. Bottom: Vertical slice through the scene, with color-coded voxel size (respectively, depth in the octree).</p><p>The hierarchical scheme starts with voxels of size 13.5 m, and does 5 refinements to reach a target resolution of 0.4 m. The results are summarized in Tab. 2. In all scenes, the adaptive computation saves around 95% of both memory and computation time. To quantify the effect of the proposed splitting criterion (Sec. 4) we further contrast it with a simpler adaptive procedure which naively splits any voxel with non-zero data cost (Tab. 2). Our method, which takes into account the class likelihoods, uses around 2.5× less memory and is more than 2× faster. For the two smaller scenes 3 and 4 we refine one level further to a target resolution of 0.2 m. At that resolution the baseline would require &gt; 108 GB of memory, 33−40× more than our adaptive scheme. We only had 64 GB of RAM available, so we could not compare computation time. Across our experiments, we observe an empirical gain of 1.9 N over N refinements, for both processing time and memory consumption. <ref type="figure" target="#fig_7">Fig. 7</ref> illustrates the evolution of our adaptive scheme over 5 refinement steps. The top row shows the intermediate reconstruction, gradually improving in terms of accuracy and detail. The bottom row shows a vertical slice through the volume, with voxels color-coded according to their size, respectively refinement level. Colors range from blue (coarse, 13.5 m 3 voxels) to yellow (fine, 0.2 m 3 voxels). One can clearly see the splitting near surfaces (class boundaries), while voxels in homogeneous areas like freespace or the inside of buildings remain big.</p><p>Large-Scale City Reconstruction. Finally, we proceed to our target application of large-scale city reconstruction. We process the whole data set of 510 images and reconstruct an extensive semantic model of the city of Enschede (3km 2 ) with a target resolution of 0.8 m, respectively 1 2048 of the bounding volume, see <ref type="figure" target="#fig_0">Fig. 1</ref>. Our adaptive scheme requires a moderate 27.9 GB of memory, and completed the reconstruction in 40 hours on one PC. The same resolution (2048×2048×128) would require 434 GB of memory without a multi-resolution scheme.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>We have proposed an adaptive multi-resolution processing scheme for (joint) semantic 3D reconstruction. The method makes it possible to process much larger scenes than was previously possible with volumetric reconstruction schemes, without any loss in quality of the results.</p><p>In future work, we plan to extend the scheme to irregular discretizations, such as the recently popular Delaunay tetrahedralizations, so as to adapt even better to the data at hand. Moreover, our basic idea is generic and not limited to semantic 3D reconstruction. We would like to explore other applications where it may be useful to embed the convex relaxation scheme in an adaptive multi-resolution grid.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Semantic 3D model of the city of Enschede generated with the proposed adaptive multi-resolution approach.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :</head><label>2</label><figDesc>Contribution to the data term of the ray r through pixel p observing class i and depth d, c.f .Eqs. (3a,3b).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 :</head><label>3</label><figDesc>Adaptive regularizer (2D case).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 :</head><label>4</label><figDesc>Input data for our method: oriented images (top), cutouts from 1 nadir and 2 oblique views (middle), depthmap and class probability map (bottom).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 5 :</head><label>5</label><figDesc>Comparison of the labeling accuracy. Colors indicate ground (gray), building (red), roof (yellow), vegetation (green) and clutter (blue).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 6 :</head><label>6</label><figDesc>Left: Two images from the Enschede dataset. Middle left: Semantic 3D models (Scene 3 &amp; 4)</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>2 :</head><label>2</label><figDesc>Comparison of run-time and memory footprint of our method (Octree), [17] (Grid), and a naive Octree. Maximum gains for processing time and memory consumption per refinement level are shown in bold. The target Grids feature a resolution of 512 x 512 x 256 (Scene 1 and 2) and 256 x 256 x 256 (Scene 3 and 4) at 0.4 m.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 7 :</head><label>7</label><figDesc>Evolution of the multi-scale semantic 3D model over five refinement steps. Top:</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>Runtime@0.4 m [sec]</figDesc><table>Memory@0.4 m [GB] 
+Memory@0.2 m [GB] 
+Scene 
+1 
+2 
+3 
+4 
+1 
+2 
+3 
+4 
+3 
+4 
+Octree 
+19883 
+19672 
+5488 
+4984 
+2.7 
+2.6 
+0.7 
+0.7 
+3.3 
+2.7 
+Grid 
+430545 416771 91982 92893 54.3 54.3 13.6 13.6 
+108.5 
+108.5 
+Octree (naive) 
+43174 
+43845 
+10603 11343 
+6.5 
+6.8 
+1.7 
+1.9 
+-
+-
+Ratio (Grid) 
+21.7 
+21.2 
+16.8 
+18.6 
+20.1 20.9 19.4 19.4 
+32.9 
+40.2 
+Ratio (Octree naive) 
+2.2 
+2.2 
+1.9 
+2.3 
+2.4 
+2.6 
+2.4 
+2.7 
+-
+-
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table</head><label></label><figDesc></figDesc><table></table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Throughout the paper, the term voxel means a cube in any tesselation of 3-space. Different voxels do not necessarily have the same size.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">Note that<ref type="bibr" target="#b24">[25]</ref> propose heuristic ways to limit the influence region of a ray. That alternative could be analyzed in future work.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements. We thank Christian Häne and Marc Pollefeys for source code and discussions. This work was supported by SNF grant 200021_157101.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Efficient gradient-domain compositing using quadtrees</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Agarwala</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Dense object reconstruction using semantic priors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Chandraker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">An efficient algorithm to calculate the Minkowski sum of convex 3d polyhedra</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bekker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Roerdink</surname></persName>
+		</author>
+		<imprint/>
+	</monogr>
+	<note>ICCS&apos;01</note>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">MULTIBOOST: a multi-purpose boosting package</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Benbouzid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Busa-Fekete</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Casagrande</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F.-D</forename><surname>Collin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Kégl</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">13</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Multilevel streaming for out-of-core surface reconstruction. Eurographics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bolitho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kazhdan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Burns</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hoppe</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">A method for finding projections onto the intersection of convex sets in Hilbert spaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">P</forename><surname>Boyle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">L</forename><surname>Dykstra</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Lecture Notes in Statistics</title>
+		<imprint>
+			<date type="published" when="1986" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">The OpenCV Library. Dr. Dobb&apos;s Journal of Software Tools</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Bradski</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2000" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">A Multigrid Tutorial (2nd Ed.)</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">L</forename><surname>Briggs</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">E</forename><surname>Henson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">F</forename><surname>Mccormick</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2000" />
+			<publisher>Society for Industrial and Applied Mathematics</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Semantically-aware aerial reconstruction from multi-modal data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cabezas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Straub</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Fisher</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">SSD: Smooth signed distance surface reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Calakli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Taubin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computer Graphics Forum</title>
+		<imprint>
+			<biblScope unit="volume">30</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">A first-order primal-dual algorithm for convex problems with applications to imaging</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Chambolle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pock</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMIV</title>
+		<imprint>
+			<biblScope unit="volume">40</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Multiview stereo and silhouette consistency via convex functionals over convex domains</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kolev</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">33</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">A volumetric method for building complex models from range images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Levoy</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1996" />
+			<publisher>SIGGRAPH</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">Accurate, dense, and robust multiview stereopsis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Furukawa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ponce</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">32</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Piecewise planar and non-planar stereo for urban scene reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Gallup</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-M</forename><surname>Frahm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Grinspun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krysl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Schröder</surname></persName>
+		</author>
+		<title level="m">CHARMS: A Simple Framework for Adaptive Simulation. SIGGRAPH</title>
+		<imprint>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Joint 3d scene reconstruction and class segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Häne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Cohen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Angst</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Stereo processing by semiglobal matching and mutual information</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hirschmüller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="volume">30</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Hierarchical volumetric multiview stereo reconstruction of manifold surfaces based on dual graph embedding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Hornung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Kobbelt</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title level="m" type="main">Multi-view reconstruction preserving weakly-supported surfaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jancosek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pajdla</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Poisson surface reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kazhdan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bolitho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hoppe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Eurographics</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Unconstrained isosurface extraction on arbitrary octrees. Eurographics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kazhdan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Klein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Dalal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hoppe</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Fast joint estimation of silhouettes and dense 3D geometry from multiple images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kolev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">34</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Probabilistic labeling cost for high-accuracy multi-view reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kostrikov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Horbert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Leibe</surname></persName>
+		</author>
+		<imprint>
+			<biblScope unit="page">14</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">Joint semantic segmentation and 3d reconstruction from monocular video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kundu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Dellaert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Rehg</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Fast and accurate large-scale stereo reconstruction using variational methods. ICCV Workshop on Big Data in 3D Computer Vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Kuschk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">Efficient Multi-View Reconstruction of Large-Scale Scenes using Interest Points, Delaunay Triangulation and Graph Cuts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Labatut</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-P</forename><surname>Pons</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Keriven</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Joint optimisation for object class segmentation and dense stereo reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">&amp;apos;</forename><surname>Ladický</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sturgess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sengupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bastanlar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Clocksin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">BMVC</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">A hybrid multi-view stereo algorithm for modeling urban scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Lafarge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Keriven</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bredif</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">H</forename><surname>Vu</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">35</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Creating large-scale city models from 3D-point clouds: a robust approach with hybrid representation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Lafarge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Mallet</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">99</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Fast generation of pointerless octree duals</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lewiner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Mello</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Peixoto</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Pesco</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lopes</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Symposium on Geometry Processing</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Ray markov random fields for image-based 3d modeling: Model and efficient inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">B</forename><surname>Cooper</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+		<title level="m" type="main">Marching cubes: A high resolution 3d surface construction algorithm</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">E</forename><surname>Lorensen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">E</forename><surname>Cline</surname></persName>
+		</author>
+		<imprint>
+			<biblScope unit="page">87</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+		<title level="m" type="main">Diagonal preconditioning for first order primal-dual algorithms in convex optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pock</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Chambolle</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+		<title level="m" type="main">A convex relaxation approach for computing minimal partitions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pock</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Chambolle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+		<title level="m" type="main">Discrete optimization of ray potentials for semantic 3d reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Savinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">&amp;apos;</forename><surname>Ladický</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Häne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title/>
+		<ptr target="http://www.slagboomenpeeters.com/3d.htm" />
+	</analytic>
+	<monogr>
+		<title level="j">Slagboom en Peeters Aerial Survey</title>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title level="m" type="main">Tight convex relaxations for vector-valued labeling problems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Strekalovskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Goldlücke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">Incremental dense semantic stereo fusion for large-scale semantic scene reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vineet</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note>ICRA</note>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<monogr>
+		<title level="m" type="main">VisualSFM: A visual structure from motion system</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wu</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<monogr>
+		<title level="m" type="main">Fast and high quality fusion of depth maps</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zach</surname></persName>
+		</author>
+		<idno>3DV&apos;08</idno>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<monogr>
+		<title level="m" type="main">What is optimized in convex relaxations for multilabel problems: Connecting discrete and continuously inspired MAP inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Häne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>PAMI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<monogr>
+		<title level="m" type="main">A globally optimal algorithm for robust TV-L1 range image integration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pock</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+		<imprint>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

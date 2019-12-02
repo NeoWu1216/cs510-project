@@ -1,0 +1,823 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">A Text Detection System for Natural Scenes with Convolutional Feature Learning and Cascaded Classification</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Siyu</forename><surname>Zhu</surname></persName>
+							<email>zhusiyu@hotmail.com</email>
+							<affiliation key="aff0">
+								<orgName type="department" key="dep1">Center for Imaging Science</orgName>
+								<orgName type="department" key="dep2">Department of Computer Science</orgName>
+								<orgName type="institution">Rochester Institute of Technology</orgName>
+								<address>
+									<region>NY</region>
+									<country key="US">USA</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Richard</forename><surname>Zanibbi</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="institution">Rochester Institute of Technology</orgName>
+								<address>
+									<region>NY</region>
+									<country key="US">USA</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">A Text Detection System for Natural Scenes with Convolutional Feature Learning and Cascaded Classification</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:37+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We propose a system that finds text in natural scenes using a variety of cues. Our novel data-driven method incorporates coarse-to-fine detection of character pixels using convolutional features (Text-Conv), followed by extracting connected components (CCs) from characters using edge and color features, and finally performing a graph-based segmentation of CCs into words (Word-Graph). For Text-Conv, the initial detection is based on convolutional feature maps similar to those used in Convolutional Neural Networks (CNNs), but learned using Convolutional k-means. Convolution masks defined by local and neighboring patch features are used to improve detection accuracy. The Word-Graph algorithm uses contextual information to both improve word segmentation and prune false character/word detections. Different definitions for foreground (text) regions are used to train the detection stages, some based on bounding box intersection, and others on bounding box and pixel intersection. Our system obtains pixel, character, 90.26%, and 86.77%   respectively for the ICDAR 2015 Robust Reading Focused Scene Text dataset, out-performing state-of-the-art systems. This approach may work for other detection targets with homogenous color in natural scenes.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>In natural scenes, text detection is made difficult by high variation in character color, font, size, and orientation. In addition, light sources introduce highlight, shadow, reflection and color offset in images, while cameras introduce additional noise, blurring, and viewing angle distortion. In the past, many text detection systems addressed this using strong prior knowledge and carefully engineered features <ref type="bibr" target="#b23">[24]</ref>. More recently, machine learning methods are preferred over heuristic rules, with parameters and thresholds inferred automatically from training data. This requires less human intervention, and generally increases the accuracy and robustness of text detection.</p><p>As described by Ye et al. <ref type="bibr" target="#b23">[24]</ref>, step-wise text detection is composed of different components, including localization, verification, segmentation and sometimes recognition. 'Holistic' methods combine results from different stages, often applying OCR results for use in lexicon matching.</p><p>In this paper, we present a highly accurate text detection system for natural scenes utilizing only visual features. <ref type="bibr" target="#b0">1</ref> Our system is composed of the Text-Conv algorithm for character patch detection, region growing to obtain Connected Components (CCs) corresponding to characters, and then word segmentation using the Word-Graph algorithm.</p><p>Contributions. The contributions of this work include: (1) defining ground truth character patches differently for coarse vs. fine character detection, first using constraints on bounding box intersection, and then bounding box and foreground pixel intersection; (2) using 'contextual' detection windows to improve discrimination based on adjacent and/or missing characters; (3) multi-stage generation and validation of character detections using convolutional, geometric and contextual features. Our system also obtains state-of-the-art performance for the challenging 2015 IC-DAR Robust Reading Focused Scene Text dataset <ref type="bibr" target="#b11">[12]</ref>.</p><p>In Section 2, we briefly review state-of-the-art text detection systems, and the ICDAR Robust Reading Competition. In Section 3, we describe our system. In Section 4 we present experimental results, and then conclude and identify ways to accelerate and improve our system in Section 5.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Previous Work</head><p>In recent years, new discriminative features have been proposed for text detection, including the Stroke Width Transform (SWT) <ref type="bibr" target="#b6">[7]</ref> and Maximal Stable Extremal Regions (MSER) <ref type="bibr" target="#b13">[14]</ref>, both of which have been used widely. Most characters have a narrow and uniform stroke width, along with clear edges and homogeneous colors. SWT and MSER are designed to capture these properties.</p><p>A variety of machine learning techniques have been used for text detection, including unsupervised feature learning, Convolutional Neural Networks <ref type="bibr" target="#b12">[13]</ref>, deformable partbased models <ref type="bibr" target="#b7">[8]</ref>, belief propagation <ref type="bibr" target="#b8">[9]</ref>, and Conditional Random Fields <ref type="bibr" target="#b18">[19]</ref>. Bai et al. <ref type="bibr" target="#b0">[1]</ref> identify text regions using gradient local-correlation to find edge pairs and estimate stroke width. The relationship between different CCs, colors and shapes are fed into SVM classifiers to detect text.</p><p>Closely related to our own work, Coates et al. <ref type="bibr" target="#b4">[5]</ref> proposed convolutional feature-based algorithms for text detection and recognition, and increased recognition rates relative to previous state-of-art systems. Wang et al. <ref type="bibr" target="#b21">[22]</ref> extend this convolution-based approach with a lexicon model, which further increases text detection and recognition accuracy. Our text detection algorithm is based on this work; to increase accuracy, we modify the sliding window detector by varying the sliding window shape, rotation and aspect ratio.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">ICDAR Robust Reading Competitions</head><p>Over the last two decades, a number of text recognition competitions have been held as part of the International Conference of Document Analysis and Recognition (IC-DAR) <ref type="bibr" target="#b11">[12]</ref>. In 2015, the task data sets are categorized into: Digital Born, Focused Scene, Text in Videos and Incidental Scene Texts. Each group contains three tasks: localization, segmentation and recognition, and end-to-end performance is also measured. We focus here on the scene text data set.</p><p>At ICDAR 2015, the StradVision corporation obtained the strongest detection results for the Focused Scene Text task. This system is closed, but from the company's web page appears to be based on active ('agile') learning. <ref type="bibr" target="#b1">2</ref> He et al. <ref type="bibr" target="#b9">[10]</ref> placed second, using two main improvements over earlier MSER-based text detection methods. First, they introduce Text-CNN, where a multi-class classifier is defined instead of a conventional binary (text/nontext) classifier. In each layer of a Convolutional Neural Network, specific labels and locations for text pixels define targets alongside binary foreground/background labels. The trained classifier is adapted to specific text types, and achieves higher accuracy as a result. Objects like bricks, windows and bars that can be easily confused with text may be filtered, as they tend not to have a high classification confidence for a character class. Second, Contrast-Enhanced MSER is proposed to find text regions, using a data-driven contrast enhancement method before MSER, allowing text regions to be extracted in complex backgrounds and uneven lighting conditions. Jaderberg et al. <ref type="bibr" target="#b10">[11]</ref> placed third. To train their system, a large corpus of labeled text images is generated using a font 2 http://www.stradvision.com/ rendering engine. Noise and variations are added, including border, color, composition, distortion, and background blending, mimicking texts in natural scenes. For detection, they use a deep Neural Network with three different encodings, including dictionary, character sequence and bag-of-N-gram encodings. The dictionary encoding method provides the best performance, as lexical constraints improve precision by pruning invalid word detections.</p><p>For the 2013 ICDAR Robust Reading task, USTB TexStar developed by Yin et al. <ref type="bibr" target="#b24">[25]</ref> obtained 1st place <ref type="bibr" target="#b25">[26,</ref><ref type="bibr" target="#b26">27]</ref>. This system introduces an MSER pruning algorithm to improve precision, with single-link clustering to group candidate regions instead of empirically selecting a threshold, and character classification used to filter non-text candidates in the final step. In second place, Neumann et al. used an MSER-based algorithm <ref type="bibr" target="#b14">[15]</ref>. In <ref type="bibr" target="#b15">[16]</ref>, they compared filtering methods considering isolated CCs, CC pairs, and CC triples, and find the additional context available in features extracted from CC triples provide the best performance. In follow-on work <ref type="bibr" target="#b16">[17]</ref> they propose cascaded filtering of MSER regions. Simple features are computed at first to remove easily detected backgrounds, after which more complex features are used with an AdaBoost classifier. In <ref type="bibr" target="#b17">[18]</ref>, multiple recognition and character sequence candidates are used to improve recall, along with improved handling for varying character sizes using a Gaussian scale-space pyramid.</p><p>In our work we use a modified Convolutional k-meansbased sliding window detection performed in two passes, using first a coarse resolution, and then regions of interest with higher resolution matching and variations in the rotation and aspect ratio of the detection window. We consider multiple scales using direct subsampling of the input image, to which we apply convolution masks for detection. Character hypotheses are formed from the 'fine' (higher resolution) detectors, and then regions are grown based on color gradients, with multiple edge hypotheses used to generate character candidates which are then validated. Characters are then both merged into words and validated again in a final pass, using the complete graph over detected characters. Details of our approach are described in the next section.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Methodology</head><p>An illustration of our system is shown in <ref type="figure">Figure 1</ref>, and example outputs from each stage are shown in <ref type="figure">Figure 2</ref>. The system is a cascade, with each step designed to address a specific aspect of natural scene text, initially generating and then validating hypotheses passed on to the next step. Similar to a design strategy used in the Viola-Jones face detector <ref type="bibr" target="#b20">[21]</ref>, recall in the coarse detector, fine detector and region growing steps is kept high by choosing a threshold producing a fixed level of recall in the training data (possibly sacrificing precision to some degree), in order to avoid  <ref type="figure">Figure 1</ref>: System Architecture. The main stages localize text pixels, generate and verify connected components as characters, and finally segment words. <ref type="figure">Figure 2</ref>: Detection Examples. From left-to-right inputs are shown followed by their results for: i) coarse detection, ii) fine detection and region growing, and iii) word segmentation. In word detection results, words are in blue boxes, and characters in green boxes. For simplicity, we represent word segmentation results using a Minimum Spanning Tree (MST) over character pairs (yellow lines) defining character merges (blue lines) and word separations (red lines). In actual fact, all character pairs are labeled as 'merge' or 'split.' false negatives.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Text-Conv Detection System</head><p>We propose a feature learning-based convolutional detector called Text-Conv. It is composed of a coarse-to-fine two step scanning scheme, mimicking glancing and focused attention by the human visual system.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.1">Feature Learning Using Convolutional K-means</head><p>Feature learning algorithms were developed using restricted Boltzmann machines (rBM) <ref type="bibr" target="#b5">[6]</ref> or auto-encoders <ref type="bibr" target="#b19">[20]</ref>, etc. However, these algorithms are computationally expensive and not suitable for large images or real-time applications. Coates et al. <ref type="bibr" target="#b4">[5]</ref> proposed the convolutional k-means feature learning algorithm, using simple k-means clustering to learn feature banks. Convolutional k-means considers the angular distance between training sample patches, and generates cluster center vectors (i.e. convolution masks) through iterative learning. The cluster centers represent typical patterns, including horizontal and vertical bars, corners, sloping bars, zebra textures etc. These patterns are learned automatically from data, without elaborate modeling. The only hyperparameter that needs tuning is the number of clusters. These learned features are very similar to those acquired by an auto-encoder or rBM, and lead to very similar performance <ref type="bibr" target="#b5">[6]</ref>.</p><p>For sample matrix X containing m samples with n features, we make the matrix size n × m. Each column is a sample vector, and each row corresponds to a feature, X ∈ R n×m . For initialization, we randomly pick k samples (initial cluster centers) from the sample matrix X and then normalize each vector, so cluster center matrix D ∈ R n×k . Our goal is to minimize Equation 1 (see Coates et al. <ref type="bibr" target="#b4">[5]</ref>):</p><formula xml:id="formula_0">i ||Ds i − x i || 2<label>(1)</label></formula><p>Each column of D is the normalized basis vector. s i is a bit vector (hot encoding) with exactly one non-zero element representing the cluster center (column of D) training sample x i belongs to. Its magnitude is the dot product between the sample and closest cluster center. To find a matrix D that minimizes the total distance from samples to cluster centers, we alternatively minimize D and s i . In our experiments, k = 1000 convolution masks (cluster centers) are learned for both the coarse and fine detectors. We found empirically that fewer than 1000 masks reduce accuracy, while additional masks lead to only minor improvements in accuracy.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.2">Coarse-to-Fine Character Detection</head><p>Conventionally in a CNN, the system is trained using algorithms such as back-propagation. Instead, we use confidence-rated AdaBoost to classify patches as foreground (text) and background (non-text). Unlike the original AdaBoost which provides discrete labels in {−1, 1}, a confidence-weighted AdaBoost classifier produces both a label and confidence value. Applying our detector to windows across the image, we obtain a detection hotmap (saliency map). This is computationally very expensive. To reduce computation, we implement a coarse-to-fine scan.</p><p>The Text-Conv system is trained and applied to testing images after color Sobel edge detection has been applied. Edge images are used so that the influence of luminance inhomogeneity can be reduced. Our coarse-to-fine scanning divides the raster scanning patch generation and classification into two stages. In the coarse stage, the image is scanned using a larger step size, i.e. with lower resolution but faster execution. The saliency map of the coarse detector will then be used as a reference for fine detection. In the fine scan, only regions of interest found by the coarse detector are considered. The fine scan uses a very small step size (1 pixel) to ensure high recall.</p><p>The coarse detector patch size is 32 by 32 pixels, with a step size of 16 pixels. Therefore, two consecutive patches have 50% area overlap. We found that using a standard window such as shown in <ref type="figure">Figure 3</ref>(a) to capture local information gives poor performance. However, neighboring pixels provide discriminative information (see <ref type="figure">Figure 3</ref> (c)-(f)). To consider neighboring patches during detection, we design the image patch as shown in <ref type="figure">Figure 3</ref>(b). The center block contains a 3 × 3 grid containing the target region at center. The eight neighboring blocks around the center block provide contextual information.</p><p>Coarse detection produces a hotmap representing the likelihood of text. An example of a coarse detection hotmap with and without contextual features is shown in <ref type="figure">Figure 4</ref>. As seen in the example, a substantial increase in discriminative power is provided by the surrounding blocks. To define regions of interest for the fine detector, the hotmap is thresholded. The threshold is defined as the value obtaining the highest f-measure on a validation sample taken from the training data, as shown in <ref type="figure">Figure 5(a)</ref>.</p><p>For fine-grained character detection, the scan step size is reduced to 1 pixel, and so it is less important to consider partial overlap with characters, and surrounding pixels are ignored. The fine detector is trained using patches containing fully overlapped characters as foreground. To handle different text aspect ratios caused by perspective transformations and improve detection for very narrow and wide characters, we compute multiple window aspect ratios and image rotation angles. A grid search is performed over aspect ratios and rotational angles, with output values maximal pooled. We compute aspect ratios from 0.6 to 1.4, using step size 0.2. We also consider small rotations from −6 • to 6 • , using a step size of 2 • .</p><p>These transformations and a smaller scan step size make fine detection much more computationally expensive. However, these computations are performed only in regions of interest. The fine hotmap is then thresholded to maximize the f-measure (see <ref type="figure">Figure 5</ref>(b)). Surviving pixels provide seeds for the subsequent region growing step.</p><p>Scales. In order to catch texts in different sizes, the coarse detector considers multiple scales. However, for fine detection, only scales containing regions of interest remaining after thresholding the coarse detection are considered, along with the next-largest and next-smallest scales. We iteratively decrease the image size by 10%, obtaining 30 different scales. The detector will cover texts with a size variation of about 23.59 times. The definition of character bounding box overlap for foreground patches is based upon the scanning step size and scale ratio. If a patch is less than 10% smaller in width or height of a character bounding box, and the overlapping area is greater than 0.75 2 = 0.56, then it is considered a foreground patch. This defines a minimal target overlap, to help insure detections only when a substantial portion of a character is seen in the detection window.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Region Growing</head><p>The thresholded fine detection saliency map provides seeds for a flood-filling type of region growing, in order to form CCs. For each position that was classified as text from Text-Conv, we start to grow regions iteratively until they reach an edge or a large shift in color. Some small false CCs might appear, due to small homogeneous regions around character edges. We implement a surrounding suppression technique to remove these easy negative regions. When a text region is detected, its surrounding area is suppressed. The surrounding area is defined as 5 pixels in our experiments.</p><p>Consider image I as a mapping: D ∈ Z 2 → S. Region growing will add new pixels into foreground regions iteratively by considering two criteria: 1) the edge intensity along the growing direction is small, and 2) the color difference between a newly added pixel and a region seed pixel is small.</p><p>If q = (i q , j q ) is a pixel immediately adjacent to the contour of CC Q (while not in Q), and p = (i p , j p ) a pixel in Q, then the growing direction is defined as Θ = atan2(i q − i p , j q − j p ). If multiple pixels p 1 , p 2 , ..., p n ∈ Q in D are adjacent to q, the growing direction is defined as the average of all directions for p 1 , p 2 , ..., p n ∈ Q.</p><p>Edge images are computed from the intensity gradient in each color channel, in the horizontal and vertical directions. For three color channels R, G, B, the color gradient map of the image can be computed by the Laplacian Matrix L:</p><formula xml:id="formula_1">L = D T D, where D =    ∂R ∂x ∂R ∂y ∂G ∂x ∂G ∂y ∂B ∂x ∂B ∂y   <label>(2)</label></formula><p>The gradient amplitude can be computed using the largest eigenvalues of the Laplacian matrix λ, and gradient direction can be computed using the eigenvector corresponding to λ. Intensities of the gradient, ∂R ∂x etc. are computed discretely using Sobel kernels. The angle between the growing direction and gradient direction is computed by δΘ = Θ e − Θ g , where Θ e is the gradient (edge) direction and Θ g is the growing direction. Notice that δΘ is regularized, therefore its range is between (−π/2, π/2). The region growing criterion C is as follows:</p><formula xml:id="formula_2">C = cos(δΘ) λ + c∈R,G,B (|I c,q − I c,seed |) Z<label>(3)</label></formula><p>where the first term represents the edge intensity along the growing direction, and the second term represents the color difference between boundary pixel q and the region's seed pixel. Z is a normalization factor. Regions grow from seeds iteratively, adding valid boundary pixels into the foreground region based on C. Initially, seed pixels and region boundaries are labeled as foreground/background respectively. Unlabeled pixels with minimal cost are labeled iteratively. Region growing stops when no unlabeled pixels exist between foreground and background.</p><p>Validating Character CCs. After growing candidate CCs for characters, an AdaBoost classifier is trained to prune CCs that are invalid. To accommodate the high variation in colors and intensities in natural scenes, using the input image we generate multiple Canny edge maps, by using multiple Gaussian smoothing kernels with sizes from 3 to 11 pixels, with variance equal to half the kernel size.</p><p>Edge point thresholds are defined from 50% up to 90% of the maximum gradient value.</p><p>We train the verification classifier using the pixel level ground truth provided in the ICDAR data set. We count overlapping pixels between generated CCs and true characters, and use CCs whose area overlapping area is greater than 90% as foreground. The fine-grained AdaBoost detector used for Text-Conv is applied. Precision and recall values can be tuned by choosing different cut-off thresholds. As we need to keep as many true positives as possible for later processing, we select the threshold so that recall is higher than 95% (see <ref type="figure">Figure 5</ref>(c)). A similar thresholding technique was used in the Viola-Jones face detector <ref type="bibr" target="#b20">[21]</ref>. In a cascaded system, hypotheses are eliminated stage by stage. To keep final recall within a reasonable range, recall in each stage should be kept high. However, precision in each stage may be relatively low. As false positive samples are filtered in cascaded stages, the final precision of the system may also be high.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Word-Graph</head><p>Characters within a word usually have similar color and size, with relatively small and equally distributed distances. For English, natural scene text usually appears in horizontal text lines with small rotation, with some exceptions. For example, isolated characters may be a word (e.g. 'a'), and text lines might not be straight, or may be curved. Objects with regular textures like windows and bricks share some patterns with text, making it difficult for them to be removed using spatial relationship information alone. And so, to reliably merge characters into words, one needs to group CCs based on both their appearance and spatial relationships.</p><p>The Word-Graph algorithm groups detected character CCs into words, and then uses context to prune false positive CCs. It uses a graph model G(V, E), where characters are vertices V and their relationships are edges E. Two Random Forest classifiers are used in Word-Graph; the first for character merge/split classification, and the second filters invalid characters after forming words. Instead of designing features and predefined thresholds for linking characters as in <ref type="bibr" target="#b22">[23]</ref>, Word-Graph is data-driven, with little human intervention.</p><p>Twenty-nine features are defined for Word-Graph edges, including greyscale intensity differences and seven bounding box features: three centroid distances (horizontal, vertical, and Euclidean), the smallest bounding box vertical or horizontal distance, differences in width and height, and the angle of the main axis orientation (via PCA). Raw bounding box features are used along with three normalizations (by minimum, maximum, and mean). For example, minimum normalization of center distance in the x direction for CCs i and j is given by:</p><formula xml:id="formula_3">|x c,i − x c,j | min(width i , width j )<label>(4)</label></formula><p>When merging characters into words, challenges include distant characters belonging to the same word, and adjacent characters belonging to separate words. One strategy for tackling this problem is to examine only neighboring characters for word segmentation. In the training data, a minimum spanning tree based on spatial distance is used to select training edges. This insures that only edges between neighboring characters are used to define positive (merge) and negative (split) examples, increasing training speed, and increasing the separability of the classes (vs. using all pairs of characters).</p><p>To increase recall, words are located by applying the Random Forest classifier to all edges in the complete graph over detected character CCs. A transitive relation over 'merge' edges is then used to locate words.</p><p>Second Stage Character Validation. A second random forest is used to remove spurious 'characters' from the word graph. Visual features for characters are combined with features on edges (see above) connected to a character in the word graph. CCs are characterized by 900 convolutional features generated on a 3 × 3 spatial pooling grid using 100 codebooks learned by convolutional k-means. Along with this, we include features from the highest and lowest confidence edges, along with average feature values for 1) all connected edges, and 2) connected MST edges. Characters from ground truth are used to define complete and MST graphs over characters, and these ideal graphs are then used in training the random forest.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>We tested our system using the ICDAR 2015 Focused Scene Text dataset (Challenge 2, Task 1), containing 258 training images and 251 testing images. The evaluation metric checks the overlapping area for each word detection with ground truth and computes the final precision, recall and f-measure based on the total number of words that are correctly detected. To be considered a valid detection, the bounding box of a word hypothesis must have a precision of 40% and a recall of 80%. Many-to-one and one-to-many matching is implemented to accommodate merged and split words, using a 20% accuracy scaling as a penalty <ref type="bibr" target="#b11">[12]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Training</head><p>Coarse-to-Fine Character Pixel Detection. The set of 1000 cluster centers (convolution masks) obtained via Convolutional k-means are learned from training images, with each feature 8×8 in size. These features are then convolved with the image to form 32 × 32 patches. For coarse detection, each 32 × 32 patch is spatial pooled into 3 × 3 grids. Including context blocks, 9 × 9 grids are generated. In total, 72588 (36294 foreground and 36294 background) training samples are generated using ICDAR training images for coarse detection. To train the fine detector, 50,000 randomly selected foreground images from Wang's synthetic dataset <ref type="bibr" target="#b21">[22]</ref> are used, along with 50,000 randomly selected background samples generated from ICDAR images. The AdaBoost classifier is trained towards minimum error, but by utilizing the confidence-rated classifier, we can select a final threshold confidence value to maximize the f-measure. This is crucial when foreground and background samples are highly unbalanced. Precision, recall and f-measures are provided in <ref type="figure">Figure 5a</ref> and 5b, where we pick the maximal fmeasure point as the threshold to finally cut the foreground regions. Examples of coarse detection after thresholding are shown in <ref type="figure">Figure 2</ref>  Region Growing. In total, 4721 foreground and 7835 background samples are used for training. To tune the final threshold for the confidence-rated classifier, we focus on higher recall rather than precision. The highest f-measure point for this classifier has a recall value less than 95% on our validation set. This is lower than we would prefer, and so we set the threshold to the point where we obtain 96% recall (see <ref type="figure">Figure 5c</ref>). Experiments show that this configu-ration produces the highest accuracy for the entire system. Some examples of region growing results after verification are shown in <ref type="figure">Figure 2</ref> column 3.</p><p>Word-Graph <ref type="figure">Figure 2 column 4</ref> shows examples of edge classification results for segmentation. To train the Random Forest classifier for edges, an important issue is that the foreground and background training samples are unbalanced. Experiments show that balancing samples is very important for reliable segmentation and character verification (increasing f-measure from 95% without balancing to 99% with balancing). As non-neighboring edges are removed from the training set, within-word edge samples are far fewer than between-word samples. To deal with the class imbalance, we considered different sampling methods, including using the original distribution, oversampling to balance the classes (using SMOTE <ref type="bibr" target="#b3">[4]</ref>) and random subsampling. Surprisingly, we found that subsampling could produce better accuracy for testing samples than over-sampling. We were able to train an accurate segmenter using just 4557 foreground and 4557 background samples. 929 features are used to train the random forest with 100 trees and a maximum depth of 10, and each node split considering √ 929 ≈ 30 features. After Word-Graph has completed our text detector has finished, and word bounding box coordinates are extracted and saved into a text file.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Results</head><p>We evaluated our system using the ICDAR 2015 Robust Reading evaluation website, by uploading our word coordinate files onto their system. Examples of correct detections are shown in <ref type="figure">Figure 6</ref>. The online evaluation system checks the overlapping area for each detection with ground truth and computes the final precision, recall and f-measure based on the total number of words that are correctly detected. In the competition, systems were compared based on their word detection results; our system obtained stronger recall, precision and f-measure than the winning system from StradVision Corporation, as shown in <ref type="table" target="#tab_2">Table 1</ref>.</p><p>It is worth noting that including differing rotations and aspect ratios during fine-grained character detection had a dramatic effect on accuracy. Without these, the f-measure for word detection decreases from 86.77% to 64.72%.</p><p>Although our system achieved state-of-the-art performance for word detection, there is still room for improvement. The system failed to deal with some overlapped text lines properly, missing words in some images as shown in <ref type="figure">Figure 7a</ref> and 7b. Isolated characters are more likely to be missed by our detector. Some words have large within-word distance between characters (see <ref type="figure">Figure 7c</ref>). Some specular highlights wash out characters, and there is no way to retrieve the information using image data alone, as in <ref type="figure">Figure 7d</ref>. Some handwritten characters are also missed due to  lack of training data, in <ref type="figure">Figure 7e</ref>. In some cases, we found valid words, but they were recognized as false positives. For example in <ref type="figure">Figure 7f</ref>, the red regions contain digits (0/1), but they are considered to be background decorations of the book cover in ground truth. As seen in <ref type="table" target="#tab_2">Table 1</ref>, character bounding box level accuracy is higher than word bounding box accuracy (f-measure of 90.26%), suggesting that word segmentation rates may be increased through improving Word-Graph. Pixel level accuracy is even higher, with an f-measure greater than 93%. As seen in <ref type="figure">Figure 2</ref>, our system often creates pixelaccurate masks for characters, even in complex scenes.</p><p>Our system is implemented in Python. As seen in Table 2, convolutional feature generation and fine detection consume most of the execution time. This is because we apply convolution at different scales and use a grid search over aspect ratios and rotation angles for fine detection, requiring a very large number of convolutions. Convolution and AdaBoost classification may both be accelerated utilizing a GPU. Using Theano <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b2">3]</ref>, average execution time is reduced from about 20 minutes to 2.5 minutes.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>We have proposed a relatively simple cascaded text detection system that is accurate at the pixel, character and word levels, and produces state-of-the-art performance on a challenging dataset. Contextual features, a coarse-to-fine detection strategy, and using greater visual detail to define targets in later stages help improve sliding window-based character detection. Character detection is cascaded with multiple validation steps, culminating in detected words providing contextual constraints at the final detection stage.</p><p>Faster execution can be obtained by re-implementing in C and using multiple GPUs or dedicated hardware for convolution. Over-segmenting input images into 'super-pixels' based on color and edge information could also significantly reduce the number of detection windows we need to consider, at which point the system might even run in real-time.</p><p>It is important to note that we obtain high accuracy using only visual features, without the use of a language model or dictionary. However, detection can probably be improved by integrating character recognition and models for a specified language.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 3 :Figure 4 :Figure 5 :</head><label>345</label><figDesc>Local 3x3 (a) and Contextual 9x9 (b) detection windows. Contextual windows are a standard 3x3 window surrounded by features from an 8 neighborhood. Panels (c)-(f) illustrate resolving ambiguous local features by context. For the ICDAR 2015 test image in (a), differences in coarse character detection maps for a standard 3x3 sliding window (b) vs. a contextual 9x9 widow (c) are shown. Recall, Precision and F-Measures at Different Classification Confidence Thresholds for (a) Coarse Detection, (b) Fine Detection and (c) Verification. Training image samples are divided into 80% training and 20% validation. Validation set results are shown.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 6 :Figure 7 :</head><label>67</label><figDesc>Correct Word Detection Errors. Red boxes are false positives, yellow boxes are under-segmented words, and blue boxes are over-segmented words.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>performance in patch level in terms of Area Under Curve of Precision / Recall. Our detection hotmap has 71.2% AUC, while Coates et. al obtain 62%.</figDesc><table>column 2. 
+Comparing the hotmap we have generated to Coates' 
+et al.'s results for the ICDAR 2013 dataset [5], we have 
+achieved higher </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="true"><head>Table 1 :</head><label>1</label><figDesc>ICDAR 2015 Focused Scene Text Results.</figDesc><table>Recall (%) 
+Precision (%) 
+F-Score (%) 
+StradV. (Word-bb) [12] 
+80.15 
+90.93 
+85.20 
+Our System 
+Word-bb 
+81.02 
+93.39 
+86.77 
+Char-bb 
+87.51 
+93.20 
+90.26 
+Pixels 
+92.75 
+93.53 
+93.14 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 2 :</head><label>2</label><figDesc>Mean Execution Time (seconds/image). System: Intel Xenon CPU w. 24 processors (2.93GHz), 96GB RAM, GeForce GTX 480 w. 1GB GPU memory.</figDesc><table>CPU 
+GPU 
+Convolution 
+503.4 
+77.3 
+Coarse Detection 
+10.9 
+2.7 
+Fine Detection 
+744.2 
+55.7 
+Region Growing 
+15.1 
+10.9 
+Word Seg. 
+2.3 
+2.611 
+TOTAL 
+1275.9 
+149.3 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Source code: https://www.cs.rit.edu/˜dprl/Software.html.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0" />
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Scene text localization using gradient local correlation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Bai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Yin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Int&apos;l Conf. Document Analysis and Recognition (ICDAR)</title>
+		<imprint>
+			<date type="published" when="2013-08" />
+			<biblScope unit="page" from="1380" to="1384" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Bastien</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Lamblin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Pascanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bergstra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><forename type="middle">J</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bergeron</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Bouchard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<title level="m">Theano: new features and speed improvements. Deep Learning and Unsupervised Feature Learning Workshop (NIPS)</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Theano: a CPU and GPU math expression compiler</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bergstra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Breuleux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Bastien</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Lamblin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Pascanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Desjardins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Turian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Warde-Farley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Python for Scientific Computing Conference (SciPy)</title>
+		<meeting>the Python for Scientific Computing Conference (SciPy)</meeting>
+		<imprint>
+			<date type="published" when="2010-06" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Smote: synthetic minority over-sampling technique</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">V</forename><surname>Chawla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">W</forename><surname>Bowyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">O</forename><surname>Hall</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">P</forename><surname>Kegelmeyer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Artificial Intelligence Research</title>
+		<imprint>
+			<biblScope unit="page" from="321" to="357" />
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Text detection and character recognition in scene images with unsupervised feature learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Coates</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Carpenter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Case</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Satheesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Suresh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Int&apos;l Conf on Document Analysis and Recognition (ICDAR)</title>
+		<imprint>
+			<date type="published" when="2011-09" />
+			<biblScope unit="page" from="440" to="445" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">An analysis of singlelayer networks in unsupervised feature learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Coates</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Artificial Intelligence and Statistics</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="215" to="223" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Detecting text in natural scenes with stroke width transform</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Epshtein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Ofek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wexler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010-06" />
+			<biblScope unit="page" from="2963" to="2970" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Object detection with discriminatively trained partbased models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Felzenszwalb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1627" to="1645" />
+			<date type="published" when="2010-09" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Efficient belief propagation for early vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Felzenszwalb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Huttenlocher</surname></persName>
+		</author>
+		<idno>I-261-I- 268</idno>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2004-06" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Qiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yao</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1510.03283</idno>
+		<title level="m">Text-Attentional Convolutional Neural Networks for Scene Text Detection</title>
+		<imprint>
+			<date type="published" when="2015-10" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Synthetic data and artificial neural networks for natural scene text recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jaderberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<idno>abs/1406.2227</idno>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Karatzas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Gomez-Bigorda</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Nicolaou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ghosh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bagdanov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Iwamura</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Neumann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">R</forename><surname>Chandrasekhar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lu</surname></persName>
+		</author>
+		<title level="m">Icdar 2015 competition on robust reading. Int&apos;l Conf. Document Analysis and Recognition (ICDAR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+		<title level="m" type="main">Gradientbased learning applied to document recognition. Proceedings of the IEEE</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Haffner</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1998-11" />
+			<biblScope unit="volume">86</biblScope>
+			<biblScope unit="page" from="2278" to="2324" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">Robust widebaseline stereo from maximally stable extremal regions. Image and Vision Computing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Urban</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pajdla</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="page" from="761" to="767" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">A method for text localization and recognition in real-world images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Neumann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision (ACCV)</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="770" to="783" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Text localization in real-world images using efficiently pruned exhaustive search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Neumann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Int&apos;l Conf. Document Analysis and Recognition (ICDAR)</title>
+		<imprint>
+			<date type="published" when="2011-09" />
+			<biblScope unit="page" from="687" to="691" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Real-time scene text localization and recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Neumann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012-06" />
+			<biblScope unit="page" from="3538" to="3545" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">On combining multiple segmentations in scene text recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Neumann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Int&apos;l Conf. Document Analysis and Recognition (ICDAR)</title>
+		<imprint>
+			<date type="published" when="2013-08" />
+			<biblScope unit="page" from="523" to="527" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Text localization in natural scene images based on conditional random field</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-F</forename><surname>Pan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Hou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-L</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Int&apos;l Conf. Document Analysis and Recognition (ICDAR)</title>
+		<imprint>
+			<date type="published" when="2009-07" />
+			<biblScope unit="page" from="6" to="10" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Stacked denoising autoencoders: Learning useful representations in a deep network with a local denoising criterion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Vincent</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Larochelle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Lajoie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P.-A</forename><surname>Manzagol</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J. Mach. Learn. Res</title>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="page" from="3371" to="3408" />
+			<date type="published" when="2010-12" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Rapid object detection using a boosted cascade of simple features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Viola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jones</surname></persName>
+		</author>
+		<idno>I- 511-I-518</idno>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2001" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">End-to-end text recognition with convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Coates</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Int&apos; l Conf. on Pattern Recognition (ICPR)</title>
+		<imprint>
+			<date type="published" when="2012-11" />
+			<biblScope unit="page" from="3304" to="3308" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Detecting texts of arbitrary orientations in natural images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Yao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Bai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Tu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012-06" />
+			<biblScope unit="page" from="1083" to="1090" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Text detection and recognition in imagery: A survey</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Ye</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Doermann</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">37</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<biblScope unit="page" from="1480" to="1500" />
+			<date type="published" when="2015-07" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Effective text localization in natural scene images with mser, geometrybased grouping and adaboost</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X.-C</forename><surname>Yin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-W</forename><surname>Hao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Iqbal</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Int&apos;l Conf. on Pattern Recognition (ICPR)</title>
+		<imprint>
+			<date type="published" when="2012-11" />
+			<biblScope unit="page" from="725" to="728" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Accurate and robust text detection: A step-in for text retrieval in natural scene images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X.-C</forename><surname>Yin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-W</forename><surname>Hao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACM Conference on Research and Development in Information Retrieval (SIGIR), SIGIR &apos;13</title>
+		<meeting><address><addrLine>New York, NY, USA</addrLine></address></meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1091" to="1092" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Robust text detection in natural scene images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X.-C</forename><surname>Yin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-W</forename><surname>Hao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="970" to="983" />
+			<date type="published" when="2014-05" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

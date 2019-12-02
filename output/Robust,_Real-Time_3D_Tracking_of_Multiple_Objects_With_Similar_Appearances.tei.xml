@@ -1,0 +1,751 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Robust, Real-Time 3D Tracking of Multiple Objects with Similar Appearances</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Taiki</forename><surname>Sekii</surname></persName>
+							<email>sekii.taiki@jp.panasonic.com</email>
+							<affiliation key="aff0">
+								<orgName type="laboratory">Panasonic System Networks R&amp;D Lab. Co</orgName>
+								<address>
+									<region>Ltd</region>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Robust, Real-Time 3D Tracking of Multiple Objects with Similar Appearances</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:45+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>This paper proposes a novel method for tracking multiple moving objects and recovering their three-dimensional (3D) models separately using multiple calibrated cameras. For robustly tracking objects with similar appearances, the proposed method uses geometric information regarding 3D scene structure rather than appearance. A major limitation of previous techniques is foreground confusion, in which the shapes of objects and/or ghosting artifacts are ignored and are hence not appropriately specified in foreground regions. To overcome this limitation, our method classifies foreground voxels into targets (objects and artifacts) in each frame using a novel, probabilistic two-stage framework. This is accomplished by step-wise application of a track graph describing how targets interact and the maximum a posteriori expectation-maximization algorithm for the estimation of target parameters. We introduce mixture models with semiparametric component distributions regarding 3D target shapes. In order to not confuse artifacts with objects of interest, we automatically detect and track artifacts based on a closed-world assumption. Experimental results show that our method outperforms state-of-the-art trackers on seven public sequences while achieving real-time performance.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Multiple object tracking has long been an important task in computer vision research. It has broad applications such as surveillance, sports analysis, and human-computer interaction and is available in various types, depending on the final goal and the assumptions made:</p><p>• Track objects from one or more cameras.</p><p>• Track objects offline or online. This paper focuses on online tracking of multiple objects and takes advantage of multiple cameras to deal with crowded scenes exhibiting objects and occlusions with significant density. In such a scenario, we pursue real-time performance for separately recovering three-dimensional (3D)  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.1.">Related works</head><p>We review not only existing multiple object trackers using multiple cameras but also previous works that involve separately recovering 3D models of multiple objects. In the initial tracking steps (TSs), most conventional works extract foreground information regarding foreground moving objects, e.g., foreground voxels, foreground point crowds, and object presence likelihood maps at discretized locations. This information is typically obtained by projecting or accumulating detection responses from each camera in a common 3D space <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b14">15,</ref><ref type="bibr" target="#b17">18,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b25">26]</ref> or twodimensional (2D) plane <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b9">10,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b20">21]</ref> in which objects move. These detection responses are generally acquired using either object detectors or standard background subtraction techniques <ref type="bibr" target="#b24">[25]</ref>. Foreground information defined in a 2D space (2DFI) tends to generate more artifacts than that defined in a 3D space (3DFI), owing to the absence of altitude; hence, such information induces low robustness in crowded scenes in most cases <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b23">24]</ref>.</p><p>Previous work using 3DFI can be divided into two approaches: one exploits appearances as primary cues for distinguishing objects <ref type="bibr" target="#b10">[11,</ref><ref type="bibr" target="#b17">18,</ref><ref type="bibr" target="#b25">26]</ref> and the other is based on geometric information regarding 3D scene structure <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b14">15,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b23">24]</ref>. In the former methods, visual hulls are created by a volume-based shape-from-silhouette technique. Appearance models, which are trained based on their silhouettes for each object over time, are used to resolve occlusions in certain contexts, e.g., voxel classification into objects <ref type="bibr" target="#b10">[11]</ref> and tracking using Kalman filtering <ref type="bibr" target="#b17">[18]</ref> or meanshift <ref type="bibr" target="#b25">[26]</ref>. These algorithms achieve very good results for objects whose appearances are discriminative but do not perform as well for those with the similar appearances.</p><p>In contrast, geometry-based methods handle occlusions using schemes that rely less on the appearances of objects and are hence not affected by the similarity of their appearances. Some of these separately recover 3D models of objects in each frame, for exsample, the level set method <ref type="bibr" target="#b14">[15]</ref>, human body model fitting <ref type="bibr" target="#b18">[19]</ref>, or the iterative closed point algorithm <ref type="bibr" target="#b21">[22]</ref>. These methods can handle occlusions caused by two or three objects moving twodimensionally on the ground-plane.</p><p>Some researchers have proposed geometry-based methods using particle filter frameworks in the context of multiple-object tracking and introduced the local mass density scores of voxel-based visual hulls for computing the posterior probabilities of particles <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b23">24]</ref>. Most notably, Possegger et al. <ref type="bibr" target="#b23">[24]</ref> achieved state-of-the-art performance by resolving occlusions using Voronoi partitioning of the hypothesis space.</p><p>Another approach to our scenario is to apply dataassociation methods that do not require appearance models <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b26">27]</ref>. These formulate tracking as an optimization problem in the space of all possible families of trajectories and solve this problem using optimization algorithms, e.g., the k-shortest path algorithm <ref type="bibr" target="#b1">[2]</ref>.</p><p>A major limitation of such previous techniques, illustrated in <ref type="figure">Fig. 2</ref>, is foreground confusion, in which the shapes of objects and/or ghosting artifacts are ignored and are hence not appropriately specified in foreground regions. This causes accumulated drifts and results in low robustness in crowded scenes.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.2.">Contributions and outline</head><p>In this paper, we propose a geometry-based method to track multiple objects of which the appearances are not discriminative. Similar to certain previous works, foreground regions, which represent connected components of foreground voxels created by a volume-based shape-fromsilhouette technique, are used as inputs. We assume here <ref type="bibr">(a)</ref> (b) (c) <ref type="figure">Figure 2</ref>: Examples of foreground confusion in two types of approaches (particle filter-based approaches using Voronoi partitioning (b) and typical data-association approaches using discretized maps (c)). Foreground regions, in which objects and ghosting artifacts can exist in scenes, are partially contained in a common region (e.g., each side separated by a boundary of Voronoi cells (the blue line) in (b) and the central grid in (c)) and are handled as regions of a common target.</p><p>that silhouettes of moving objects are detected using standard background subtraction techniques in multiple static cameras calibrated and distributed in scenes. Thus, appearance information other than silhouettes is not used at all. To overcome foreground confusion, we classify foreground voxels into objects and artifacts, which we call targets, using a novel, probabilistic two-stage framework. In the first stage, a candidate(s) for targets to which each foreground region can belong is extracted by constructing a track graph that describes events in which targets are isolated or interact with one another <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b22">23]</ref>. In the second stage, each foreground voxel is classified into any one of the candidates, as specified in the first stage, by applying the maximum a posteriori expectation-maximization (MAP-EM) algorithm for the estimation of target parameters. Here, we introduce mixture models with semiparametric probabilistic density functions (PDFs) representing 3D target shapes. In order to not confuse artifacts with objects, we automatically detect and track artifacts using a closedworld assumption, in which an unknown object cannot suddenly appear at an arbitrary position <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b23">24]</ref>  <ref type="figure" target="#fig_2">(Fig. 3)</ref>. In contrast to some previous studies <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b26">27]</ref> that introduce graph structures to region-wisely model object interactions, our framework has the capabilities to voxel-wisely handle foreground confusion.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Overview of the method</head><p>Targets are tracked in each frame using the following TSs:</p><p>1. Obtain foreground segmentations from input images in each camera. 2. Perform shape-from-silhouette using foreground segmentations obtained in TS 1 and extract foreground regions.</p><p>3. Detect foreground regions constructed from newly appearing objects either manually or using a detector.</p><p>4. Construct the track graph and obtain indices (labels) of candidate targets to which each foreground region might belong.</p><p>5. Classify foreground voxels into any one of the candidate(s), obtained in TS 4, using MAP-EM. <ref type="bibr" target="#b5">6</ref>. Update the track graph with the results in TS 5.</p><p>In these TSs, we assume the following:</p><p>• Moving distances of targets are sufficiently short that their foreground regions overlap with those in the previous frame.</p><p>• Shape changes of targets are sufficiently small to be ignorable in tracking.</p><p>• Foreground regions, which are not labeled in TS 3 and do not interact with those in the previous frame, can be regarded as ghosting artifacts based on the closedworld assumption.</p><p>The construction and updating of the track graph are described in §3. These correspond to TSs 4 and 6, respectively.</p><p>§4 presents foreground voxel classification using MAP-EM, which corresponds to TS 5. In addition, the set of symbols is listed in the supplementary material.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Classification of foreground regions into targets</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Construction of track graph</head><p>Given foreground regions at current time t, in order to obtain candidate(s) to which they (and their voxels) can belong, we label them by a set of labels L = {1, . . . , m}, which indicate indices of targets. m is the number of targets. This is achieved by constructing the track graph as follows.</p><p>The track graph is given by G = (V, E), where V and E represent a set of foreground region nodes and a set of edges, respectively. Here, V is updated as follows:</p><formula xml:id="formula_0">V = V t + V t−1 ,<label>(1)</label></formula><p>where V t and V t−1 represent foreground region nodes given at t and at (t − 1), respectively. Each random variable v ∈ V t can take on one of the indices of foreground regions. E consists of temporal relations between foreground regions given at t and at (t − 1), i.e.,</p><formula xml:id="formula_1">E = {(i, j)|Area(i ∩ j) &gt; 0},<label>(2)</label></formula><p>where i ∈ V t and j ∈ V t−1 . Then, the node information of i is represented as (X i , L i ). X i and L i are the set of 3D coordinates of the foreground voxels constructing i and the set of labels of the candidates to which i can belong, respectively. L i is initialized as ∅ in the first frame at t = 0 and is computed at t &gt; 0 as follows:</p><formula xml:id="formula_2">L i = j ′ ∈V t−1 i L j ′ ,<label>(3)</label></formula><p>where V t−1 i is the temporal neighboring nodes of i in the neighborhood system on the track graph, i.e.,</p><formula xml:id="formula_3">V t−1 i = {j ′ |(i, j ′ ) ∈ E}.</formula><p>(4) <ref type="figure" target="#fig_3">Fig. 4</ref>(b) shows an example of track-graph construction. Let i s denote a foreground region detected as a newly tracked object in TS 3 and let i u denote one that is still not labeled (i.e., artifact regions that appear without being identified and thus satisfy L iu = ∅). Here, s and u are a new object index and a new artifact, respectively, and are oneby-one created as (m + 1), following which m is increased. We label their nodes by s and u, initializing L is and L iu with {s} and {u}, respectively. Then, s and u are added to L.</p><p>We group L into subsets of labels of targets interacting with each other at t, and we call them merging groups because their foreground regions merge when they interact. Let the k th merging group be denoted by T k ⊆ L and let T = {T k } k∈K , where K is a set of indices of merging groups. T k is defined as follows:</p><formula xml:id="formula_4">T k = i ′ ∈V ′ L i ′ ,<label>(5)</label></formula><p>where</p><formula xml:id="formula_5">V ′ ⊆ V t : i ′ ∈V ′ L i ′ = ∅.<label>(6)</label></formula><p>Finally, if one object and one or more artifacts with small volume interact with each other or if two or more artifacts interact with each other, we merge them. This leads to a reduction in the interactions of targets, which need to be resolved in MAP-EM, and results in a significant reduction in computational complexity of MAP-EM. This is achieved by removing merging groups based on several constraints. Incrementally, if the number of object indices in T k is one and the volume of an artifact in T k is less than a thresh-</p><formula xml:id="formula_6">old volume v, its artifact index is removed from {L i } i∈V t . Then, T k is removed from T if |T k | = 1.</formula><p>On the other hand, if all labels in T k are artifact indices, the labels (excluding the oldest artifact index) and T k are removed from {L i } i∈V t and T , respectively.</p><p>Based on the track graph, a function for obtaining candidates of targets to which a foreground voxel x can belong is defined as follows:</p><formula xml:id="formula_7">C(x) = L i if ∃i : x ∈ X i , ∅ otherwise.<label>(7)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Update of track graph</head><p>We assume that each foreground voxel is labeled by any one of the labelsl ∈ L in TS 5. First, all of the nodes and edges in G are removed, i.e., V = ∅, E = ∅. In connected components of foreground voxels labeled by a common labell, we regard the component with maximum volume as the foreground region created byl and denote the set of nodes of such foreground regions byV t . Then, the set of nodesV t is added to V and their node information is computed. <ref type="figure" target="#fig_3">Fig. 4(c)</ref> shows an example of an update of the track graph.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Classification of foreground voxels into targets</head><p>In this section, PDFs used in MAP-EM are described first. Subsequently, an algorithm to classify foreground voxels into targets using MAP-EM is described.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">PDFs</head><p>We consider the classification of foreground voxels into targets as the inference problem of determining the joint distribution p(x, l). Here, x represents the 3D coordinates of a foreground voxel and l ∈ L. This distribution can be expressed in the form</p><formula xml:id="formula_8">p(x, l) = p(l)p(x|l),<label>(8)</label></formula><p>where p(l) is the prior. This prior is used as the mixing coefficient in the EM framework and is given by</p><formula xml:id="formula_9">p(l) = π l ,<label>(9)</label></formula><p>where π l must satisfy</p><formula xml:id="formula_10">l∈L π l = 1 ∧ 0 ≤ π l ≤ 1, ∀l ∈ L.<label>(10)</label></formula><p>Let µ t l denote the 3D position of l at t. The posterior distribution on the right-hand side of (8) is defined as the classconditional likelihood function that is the probability of x given µ t l and is given by</p><formula xml:id="formula_11">p(x|l) ∼ p(x|µ t l ).<label>(11)</label></formula><p>Here, we represent p(x|µ t l ) as a semiparametric PDF representing the 3D shape of a target. If the shape of l does not change (or can be ignored in tracking) from a particular previous timet &lt; t to t and x belongs to l at t, then x corresponds to any of the dense foreground voxels belonging to l att. Thus, we first represent a likelihood function, where x belongs to any of a set of voxels Y, using the local mass density <ref type="bibr" target="#b23">[24]</ref> as follows:</p><formula xml:id="formula_12">f (x|Y) = S M |R x,Y |,<label>(12)</label></formula><p>where R x,Y is a subset of Y, which are contained in an r x × r y × r z cuboid R centered at x and is given by</p><formula xml:id="formula_13">R x,Y = {(x ′ , y ′ , z ′ ) T | |x ′ − x| ≤ r x /2 ∧ |y ′ − y| ≤ r y /2 ∧ |z ′ − z| ≤ r z /2 ∧ (x ′ , y ′ , z ′ ) T ∈ Y},<label>(13)</label></formula><p>where x = (x, y, z) T . S and M are the normalizing constant and the volume of R, respectively. Then, we define p(x|µ t l ) using f as a likelihood function, where a foreground voxel x − µ t l + µt l , to which x is shifted along the moving direction of l from t tot, belongs to any of the foreground voxels constructed from l att:</p><formula xml:id="formula_14">p(x|µ t l ) = f (x − µ t l + µt l |X j l ),<label>(14)</label></formula><p>(a) 3D models of tracked targets.</p><p>(b) Projected semiparametric PDFs. where X j l is the set of 3D coordinates of the voxels in the foreground region that are constructed from l att. Here, µt l and X j l on the right-hand side of (14) are determined att and are constant at t. In addition, there is no assumption regarding the form of the distribution of p(x|µ t l ), which depends on the arbitrary shape of l. Thus, we see that p(x|µ t l ) is the semiparametric PDF of which the parameters are nothing but µ t l . <ref type="figure" target="#fig_4">Fig. 5</ref> shows an example of this PDF. In our implementation, p(x|µ t l ) is preserved as a lookup table for every target and is updated when l is isolated, since the shape of a target recovered is unstable while interacting with the others.</p><p>For the MAP estimate of µ t l in MAP-EM, assuming that positions of targets at t are near those at (t − 1), we define the prior for µ t l as the multivariate Gaussian distributions</p><formula xml:id="formula_15">p(µ t l ) ∼ N (µ t l |µ t−1 l , Σ),<label>(15)</label></formula><p>where Σ denotes the covariance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">MAP-EM</head><p>In the following, we first adapt MAP-EM to our problem and then classify foreground voxels into targets using the track graph and MAP-EM. Here, we explain the EM algorithm based on its description in <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b19">20]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.1">Overview of MAP-EM</head><p>Let X denote the set of 3D coordinates of all foreground voxels. Our goal in using MAP-EM is to find the maximum a posteriori solution for our mixture models with the abovementioned PDFs when the incomplete-data set X is given. This is achieved using the iterative framework with p(x, l) ( §4.1).</p><p>We first initialize the set of all model parameters Θ = {π l , µ t l } l∈L <ref type="bibr" target="#b15">(16)</ref> and then iteratively compute the revised estimate Θ new from the current estimate Θ old through the E and M steps. In the E step, we use Θ old to find the posterior distribution p(l|x, Θ old ) (∀x ∈ X ) of the latent variables (labels in our case). In the M step, we determine Θ new by maximizing the sum of the expectation of the complete-data log likelihood Q(Θ, Θ old ) and the logarithm of the prior p(Θ) with respect to Θ as follows:</p><formula xml:id="formula_16">Θ new = arg max Θ S(Θ, Θ old ),<label>(17)</label></formula><p>where S(Θ, Θ old ) = Q(Θ, Θ old ) + ln p(Θ).</p><p>This expectation Q(Θ, Θ old ), which we describe later, is sometimes called the Q-function. Assuming that the µ t l 's are independent of each other, we approximate ln p(Θ) in (18) using the prior p(µ t l ) given by (15) as follows:</p><formula xml:id="formula_18">ln p(Θ) ∼ l∈L ln p(µ t l ).<label>(19)</label></formula><p>Q-function. As mentioned above, the Q-function is the expectation of the complete-data log likelihood and is expressed in the form Q(Θ, Θ old ) = l∈L p(l|X , Θ old ) ln p(X , l|Θ).</p><p>Here, if the x's are independent, then p(l|X , Θ) and ln p(X , l|Θ) can be respectively written using (8), (11), (15), <ref type="bibr" target="#b15">(16)</ref>, and Bayes' theorem as follows:</p><formula xml:id="formula_20">p(l|X , Θ) = p(l)p(X |l, Θ) p(X ) = p(l) x∈X p(x|l) x∈X p(x)</formula><p>. </p><p>Then, the Q-function can be consequently rewritten by making use of (8), (9), (11), (20) − (22), and Bayes' theorem as follows:</p><formula xml:id="formula_22">Q(Θ, Θ old ) = l∈L x∈X γ x,l ln π l + ln p(x|µ t l ) ,<label>(23)</label></formula><p>where γ x,l is called the responsibility that component l takes for "explaining" the observation x and is given by</p><formula xml:id="formula_23">γ x,l = p(l|x, Θ old ).<label>(24)</label></formula><p>Here, p(l|x, Θ) is derived by making use of (8), (9), (11), <ref type="bibr" target="#b15">(16)</ref>, and Bayes' theorem as follows:</p><formula xml:id="formula_24">p(l|x, Θ) = p(l)p(x|l) p(x) = π l p(x|µ t l ) l ′ ∈L π l ′ p(x|µ t l ′ ) ,<label>(25)</label></formula><p>where p(x|µ t l ) is given by <ref type="bibr" target="#b13">(14)</ref>.</p><p>MAP estimates of parameter Θ. In the M step, we estimate Θ new to maximize S(Θ, Θ old ). We obtain π new l ∈ Θ new by solving the constrained extremal problem with (10) using Lagrange's multiplier method as follows:</p><formula xml:id="formula_25">π new l = 1 |X | x∈X γ x,l .<label>(26)</label></formula><p>In addition, the steepest descent method is used to estimate µ t l new ∈ Θ new . Letμ t l be the current estimate of µ t l and let Θ = {π old l ,μ t l } l∈L , where π old l ∈ Θ old . µ t l is initialized by µ t l old ∈ Θ old and is updated as follows:</p><formula xml:id="formula_26">µ t l =μ t l + ǫ ∂S(Θ, Θ old ) ∂µ t l ,<label>(27)</label></formula><p>where ǫ is the value of the step size.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.2">MAP-EM based on track graph</head><p>If straightforwardly adapting only MAP-EM to our problem, we are faced with loss of efficiency and redundant calculations to a certain extent. For example, when two foreground regions are sufficiently distant, it is impossible for their voxels to be labeled by a common label. Thus, such foreground voxels must be separately handled. In our EM framework, this can be naturally achieved by using prior knowledge about the relationships between foreground regions and targets, which are obtained from the track graph. Before applying MAP-EM, we first specify targets, which are isolated and do not interact with the others, using the track graph. Letľ denote the index of such a target.</p><formula xml:id="formula_27">l =ľ, if l / ∈ T k , ∀k ∈ K. Then, each foreground voxel x is labeled byľ if C(x) = {ľ}.</formula><p>We subsequently apply MAP-EM to the remaining targets, except for those mentioned above. LetL ⊆ L be the set of labelsl =ľ and let il ∈ V t be a foreground region node that satisfiesl ∈ L il . The target parameter Θ = {πl, µ t l }l ∈L is first initialized using {πl, µ t−1 l }l ∈L .πl indicates the ratio of the volume ofl to the total volume of L at (t − 1). In the E step, revising (25) using the track graph, we compute γ x,l as follows:</p><formula xml:id="formula_28">γ x,l = p(l|x,Θ old ) ∼ πlp(x|µ t l ) l′ ∈C(x) πl′ p(x|µ t l ′ ) ifl ∈ C(x), 0 otherwise.<label>(28)</label></formula><p>In the M step, we revise (23) by substituting Θ =Θ, L =L, and X = X il and revise <ref type="bibr" target="#b18">(19)</ref> by substituting Θ =Θ and L =L. Then, we estimateΘ new , which maximizes S(Θ,Θ old ), as mentioned in §4.2.1. In addition, each foreground voxel x is labeled by arg max l γ x,l . Finally, the 3D position of targetľ and that ofl are computed as the averages of the 3D coordinates of foreground voxels labeled by l andl, respectively.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experiments</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Datasets</head><p>We evaluate our approach on seven challenging video sequences contained in two publicly available datasets (APIDIS 1 and ICG-Lab-6 <ref type="bibr" target="#b23">[24]</ref>), for which the performance of some baselines has been provided by their original authors. In these datasets, 2D ground truth object positions in the ground-plane are distributed. Thus, it must be noted that our method is designed for 3D tracking, but is validated with respect to only 2D coordinates of objects without the altitude (height). The technical characteristics of the datasets are summarized in <ref type="table" target="#tab_0">Table 1</ref>. In the following, we explain the datasets based on the descriptions in <ref type="bibr" target="#b23">[24]</ref>.</p><p>APIDIS. This dataset provides a one-minute sequence of a basketball game. This sequence contains various challenges, e.g., the similar appearance of all players in a common team, many occlusions, and the degradations of foreground segmentations caused by strong shadows and reflections on the floor. Similar to <ref type="bibr" target="#b23">[24]</ref>, we evaluate the performance on the left half of the court (15 × 15 m 2 ) and use the imageries from cameras covering that side, i.e., cameras 1, 2, 4, 5, and 7.</p><p>ICG-Lab-6. This dataset provides six sequences that show various situations. These correspond to CHAP,  <ref type="table" target="#tab_0">LEAF-1, LEAF-2, MUCH, POSE, and TABLE in Table 1</ref>.</p><p>In this dataset, the appearance of people is discriminative since people wear clothes of different colors. Thus, the proposed method is compared with only the geometry-based methods.</p><p>The CHAP sequence shows a standard surveillance scenario in which five people move close to each other twodimensionally on the floor and imposes additional challenges to the appearance-based tracking approaches, because people change their appearance throughout the scene by putting on jackets with significantly different colors than their sweaters.</p><p>The LEAF-1 and LEAF-2 sequences show leapfrog games in which players move three-dimensionally by leaping over each other's stooped backs. These scenarios impose several challenges, such as difficult poses, out-of-plane motion, and frequent collisions between players.</p><p>The MUCH sequence shows musical chairs (also known as Going to Jerusalem), in which players race to sit down in one of the chairs. This sequence exhibits specific challenges owing to the nature of this game. Players move quickly, and there are dynamic background items, viz., a chair is removed after each round.</p><p>In the POSE sequence, six people show various poses, such as kneeling, crawling, and sitting. In addition to these poses, e.g., the upright standing pose and movement on the common ground-plane, which violate the assumptions for pedestrians, the background illumination changes, thereby causing further challenges to robust foreground segmentation.</p><p>The TABLE sequence shows five people walking and jumping over a table. While people are moving, dense crowding creates additional challenges.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Evaluation metrics</head><p>For quantitative evaluation, we rely on the standard CLEAR multiple-object tracking (MOT) performance metric <ref type="bibr" target="#b2">[3]</ref>, viz., MOT accuracy (MOTA). The MOTA score is computed from three error ratios, false negatives (FNs), false positives (FPs), and identity switches (IDSs). Higher MOTA values indicate better robustness, with its maximum value being one, representing a perfect tracking result. To compute the MOTA score, similar to <ref type="bibr" target="#b23">[24]</ref>, we set the distance threshold between the ground truth and tracking results to 50 cm in all the sequences.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">Implementation details</head><p>We use a standard background subtraction method using Gaussian mixture models <ref type="bibr" target="#b27">[28]</ref> in the foreground segmentation step. It is implemented using OpenCV <ref type="bibr" target="#b0">[1]</ref> and its parameters are changed to not chip silhouettes for each camera. Foreground regions extracted in TS 2 are represented as a 3D binary image. This image is smoothed and binarized before being used for the track graph, because the visual hull reconstruction is sensitive to noise, i.e., missing foreground segmentations cause holes in the volume and its separations. In addition, foreground regions, which appear at the defined entry areas and are bigger than half the size of an average human, are detected as regions constructed from newly appearing objects in TS 3.</p><p>The reference parameters used in this paper are presented as follows. The volume threshold v for merging objects and artifacts ( §3.1) is set to half the volume of an average human. Voxel sizes are set to 6 × 6 × 6 cm 3 in the APIDIS dataset and to 4 × 4 × 4 cm 3 in ICG-Lab-6. The sizes of the cuboids used to compute semiparametric PDFs representing 3D shapes of targets ( §4.1) are set to 5 × 5 × 5 voxel 3 in the APIDIS dataset and to 7 × 7 × 7 voxel 3 in the ICG-Lab-6 dataset. The kernel sizes used to smooth foreground regions in TS 2 are set to 3 × 3 × 5 voxel 3 in the APIDIS dataset and to 5 × 5 × 9 voxel 3 in the ICG-Lab-6 dataset. We consider a prior for a target position p(µ t l ) in (15) as an isotropic Gaussian governed by a single precision parameter α (i.e., Σ = α 2 I), and α is set to 30 cm for objects and to voxel sizes for artifacts.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.4.">Results and discussion</head><p>Illustrative results of our method are shown in <ref type="figure" target="#fig_1">Fig. 1</ref>, while <ref type="table" target="#tab_1">Table 2</ref> lists the performance metrics on the individual sequences 2 . The baselines <ref type="bibr" target="#b23">[24,</ref><ref type="bibr" target="#b1">2]</ref> correspond to two methods whose foreground confusion is explained in <ref type="figure">Fig. 2(b)</ref> and <ref type="figure">Fig. 2(c)</ref>, respectively; the results of <ref type="bibr" target="#b23">[24]</ref> are taken from its original paper and those of <ref type="bibr" target="#b1">[2]</ref> are taken from <ref type="bibr" target="#b23">[24]</ref>. We found that our method is more reliable than other state-ofthe-art trackers based on the MOTA scores and the IDS in both standard visual surveillance scenarios (e.g., CHAP and LEAF-1) and more complex ones (e.g., APIDIS, LEAF-2, MUCH, POSE, and TABLE). Considering the high number of FP scores, baselines suffer from missed detections of objects and drifts to artifacts over all the sequences, in contrast to our method specifying artifacts. This is one of the sources of their lower MOTA scores.</p><p>On the other hand, for the LEAF-1 and LEAF-2 sequences, in which players three-dimensionally contact each other, our IDS scores are clearly better than those of the baselines, even when considering our higher FN score for LEAF-2 (actually several contacts by two objects occurred during our FNs). In addition, our method outperforms the appearance-based method ( <ref type="bibr" target="#b23">[24]</ref> w/ color) for the APIDIS dataset, in which players wearing similar jerseys interact with each other. These show the utility of using geometric information regarding 3D target shapes in such complex situations, e.g., the contact by two players in <ref type="figure" target="#fig_1">Fig. 1(b)</ref>. However, in several sequences, our method sometimes could not resolve insignificant occlusions that previous trackers could by using appearance information such as a discriminative visual classifier <ref type="bibr" target="#b23">[24]</ref>. <ref type="table" target="#tab_3">Table 3</ref> lists the performance metrics of some different versions of the proposed method. First, when artifacts are ignored in our approach (reported as w/o artifact), i.e., when suddenly appearing foreground regions are not tracked, the performance deteriorates from that of the full implementation (reported as Full.). This shows that tracking of artifacts in our approach is effective in improving foreground confusion between objects and artifacts. Second, when we use the multivariate Gaussian distribution as a PDF representing 3D target shapes (reported as w/ Gaus.), the performance similarly deteriorates. This shows that our proposed semiparametric PDF expresses more realistic target shapes. Third, when the track graph is not used (reported as w/o track graph), i.e., all targets can be subject to candidates to which foreground voxels can belong in MAP-EM, the performance similarly deteriorates. This shows that the track graph works effectively as prior knowledge for classification of foreground voxels into objects in MAP-EM.  <ref type="bibr" target="#b23">[24]</ref> is conducted with and without the appearance models in the APIDIS dataset (reported as w/ color and w/o color, respectively). For each evaluated dataset, we report the accuracy metric MOTA (higher is better), as well as the total number of TPs, FPs, FNs, and IDSs. The best values for each evaluation and each criterion are highlighted. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.5.">Runtime performance</head><p>Our approach is implemented in C++ without any code optimization and is conducted on a standard desktop PC with a 3.4 GHz Intel CPU, 32 GB RAM, and a GeForce GTX970. The average speeds are 26 FPS and 25 FPS on the APIDIS sequence and the ICG-Lab-6 dataset, respectively. We achieved frame rates greater than those at which each sequence is actually recorded, although only background subtraction in the foreground segmentation step is processed on the GPU, exploiting inherent parallelism. On the other hand, when the track graph is not used in our method (w/o track graph in <ref type="table" target="#tab_3">Table 3</ref>), its average speeds decrease to 13 FPS and 11 FPS on the APIDIS dataset and ICG-Lab-6, respectively. This shows that the track graph can accelerate MAP-EM and increases its range of realworld applicability.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>We proposed a method for tracking multiple objects and separately recovering their 3D models using multiple calibrated cameras. Our principal innovations for robustly tracking objects with similar appearances are to incorporate geometric information regarding 3D scene structure and a track graph describing how objects and artifacts interact in the MAP-EM framework and to probabilistically classify foreground voxels into any of them. In the experiments, we confirmed that our method outperforms state-of-the-art trackers on seven public sequences while achieving realtime performance. In future work, to improve performance in cases where objects are discriminative, we plan to explore a tracking framework in which appearance information of targets is incorporated into our proposed approach as additional tracking cues. </p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 1 :</head><label>1</label><figDesc>3D models of objects separately recovered using the proposed method (cf. § 5). models of multiple objects on a standard desktop PC, as shown inFig. 1.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 :</head><label>3</label><figDesc>A ghosting artifact detected and tracked in our framework.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 :</head><label>4</label><figDesc>Construction and update of a track graph. A rectangular foreground region and the node corresponding to it are shown in a common color. Alphabets in nodes indicate labels to which their foreground regions can belong. The track graph updated at (t − 1) (a) is constructed (b) ( § 3.1) and updated (c) at t ( § 3.2).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 5 :</head><label>5</label><figDesc>As a class-conditional likelihood function for each target, we use a semiparametric PDF (b) computed from a 3D model of a target (a). In (b), each class colors every target, and a shade of a color displays a likelihood value projected.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head></head><label></label><figDesc>p(l) + ln p(x|l)}.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="true"><head>Table 1 :</head><label>1</label><figDesc>Sequence characteristics indicating the number of cameras N C , the maximum number of simultaneously visible objects N O , the total number of frames, the frame rate (FPS), and the resolution of the video streams.</figDesc><table>Sequence NC NO Frames FPS 
+Resolution 
+APIDIS 
+7 
+12 
+1500 
+25 
+800 × 600 
+CHAP 
+4 
+5 
+3760 
+20 
+1024 × 768 
+LEAF-1 
+4 
+4 
+1800 
+20 
+1024 × 768 
+LEAF-2 
+4 
+5 
+2400 
+20 
+1024 × 768 
+MUCH 
+4 
+5 
+2400 
+20 
+1024 × 768 
+POSE 
+4 
+6 
+1820 
+20 
+1024 × 768 
+TABLE 
+4 
+5 
+1760 
+20 
+1024 × 768 
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 2 :</head><label>2</label><figDesc>Quantitative comparison results of the proposed method with other state-of-the-art trackers. Tracking in</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 3 :</head><label>3</label><figDesc>Quantitative comparison results of different versions of the proposed method, averaged over all seven sequences. Three error ratios for computing the MOTA scores are indicated by FPR, FNR, and IDSR (FP, FN, and IDS ratios, respectively).</figDesc><table>Method 
+MOTA 
+FPR 
+FNR IDSR 
+w/o artifact 
+0.858 
+0.024 0.108 0.009 
+w/ Gaus. 
+0.878 
+0.060 0.052 0.010 
+w/o track graph 
+0.864 
+0.033 0.094 0.009 
+Full. 
+0.898 
+0.021 0.073 0.007 
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">http://sites.uclouvain.be/ispgroup/index.php/ Softwares/APIDIS</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">For the supplementary material and videos, please visit: http:// taikisekii.com</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">OpenCV: Open Source Computer Vision</title>
+		<ptr target="http://opencv.org.7" />
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Multiple object tracking using k-shortest paths optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Berclaz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Fleuret</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Türetken</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="page" from="1806" to="1819" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Evaluating multiple object tracking performance: The CLEAR MOT metrics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Bernardin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Stiefelhagen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JIVP</title>
+		<imprint>
+			<biblScope unit="issue">7</biblScope>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Pattern recognition and machine learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">M</forename><surname>Bishop</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+			<publisher>Springer</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Efficient spatio-temporal data association using multidimensional assignment for multi-camera multi-target tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Byeon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Oh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Yoo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">Y</forename><surname>Choi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Multi-camera multi-object voxel-based monte carlo 3D tracking strategies</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Canton-Ferrer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">R</forename><surname>Casas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pardàs</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Monte</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">EURASIP JASP</title>
+		<imprint>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="issue">114</biblScope>
+			<biblScope unit="page" from="1" to="15" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Maximum likelihood from incomplete data via the EM algorithm (with discussion)</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dempster</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Laird</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Rubin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of the Royal Statistical Society Series B</title>
+		<imprint>
+			<biblScope unit="volume">39</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="1" to="38" />
+			<date type="published" when="1977" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Tracking in a dense crowd using multiple cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Eshel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Moses</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">88</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page">1</biblScope>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Tracking soccer players using the graph representation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Figueroa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Leite</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Barros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Cohen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Medioni</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICPR</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Multi-camera people tracking with a probabilistic occupancy map</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Fleuret</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Berclaz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Lengagne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="volume">30</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="267" to="282" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Probabilistic multiview dynamic scene reconstruction and occlusion reasoning from silhouette cues</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Guan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">S</forename><surname>Franco</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">90</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="283" to="303" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Hypergraphs for joint multi-view reconstruction and multi-object tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hofmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wolf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Rigoll</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Multicamera correspondence based on principal axis of human body</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICIP</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Visual tracking using closedworlds</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">S</forename><surname>Intille</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">F</forename><surname>Bobick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="1995" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Robust motion capture system against target occlusion using fast level set method</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Iwashita</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kurazume</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Hara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Hasegawa</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Tracking multiple occluding people by localizing on multiple scene planes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Khan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">31</biblScope>
+			<biblScope unit="page" from="505" to="519" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Multi-camera tracking and segmentation of occluded people on ground plane using searchguided particle filtering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">S</forename><surname>Davis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Joint multi-person detection and tracking from overlapping cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">C</forename><surname>Liem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">M</forename><surname>Gavrila</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">128</biblScope>
+			<biblScope unit="page" from="36" to="50" />
+		</imprint>
+		<respStmt>
+			<orgName>CVIU</orgName>
+		</respStmt>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Human pose estimation for multiple persons based on volume reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Berendsen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">T</forename><surname>Tan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">C</forename><surname>Veltkamp</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title level="m" type="main">The EM algorithm and extensions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Mclachlan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Krishnan</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+			<publisher>Wiley</publisher>
+		</imprint>
+	</monogr>
+	<note>second edition</note>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">M2Tracker: A multi-view approach to segmenting and tracking people in a cluttered scene</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mittal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">S</forename><surname>Davis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">51</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="189" to="203" />
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Taking mobile multi-object tracking to the next level: People, unknown objects, and carried items</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mitzel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Leibe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Multi-target tracking -linking identities using bayesian network inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Nillius</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sullivan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Carlsson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Robust real-time tracking of multiple objects by volumetric mass densities</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Possegger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sternig</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mauthner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">M</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">A comprehensive review of background subtraction algorithms evaluated with synthetic and real videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Sobral</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vacavant</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">122</biblScope>
+			<biblScope unit="page" from="4" to="21" />
+		</imprint>
+		<respStmt>
+			<orgName>CVIU</orgName>
+		</respStmt>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Kernelbased 3D tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Tyagi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Keck</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Potamianos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Workshop on Visual Surveillance</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Coupling detection and data association for multiple object tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Thangali</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sclaroff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Betke</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Improved adaptive gaussian mixture model for background subtraction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zivkovic</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICPR</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

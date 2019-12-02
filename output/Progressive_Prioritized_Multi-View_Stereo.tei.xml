@@ -1,0 +1,621 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Progressive Prioritized Multi-view Stereo</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alex</forename><surname>Locher</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="laboratory">Computer Vision Laboratory</orgName>
+								<orgName type="institution">ETH Zurich</orgName>
+								<address>
+									<country key="CH">Switzerland</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michal</forename><surname>Perdoch</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="laboratory">Computer Vision Laboratory</orgName>
+								<orgName type="institution">ETH Zurich</orgName>
+								<address>
+									<country key="CH">Switzerland</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Luc</forename><forename type="middle">Van</forename><surname>Gool</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="laboratory">Computer Vision Laboratory</orgName>
+								<orgName type="institution">ETH Zurich</orgName>
+								<address>
+									<country key="CH">Switzerland</country>
+								</address>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="laboratory">VISICS</orgName>
+								<address>
+									<settlement>Leuven</settlement>
+									<region>KU</region>
+									<country key="BE">Belgium</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Progressive Prioritized Multi-view Stereo</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:44+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>This work proposes a progressive patch based multiview stereo algorithm able to deliver a dense point cloud at any time. This enables an immediate feedback on the reconstruction process in a user centric scenario. With increasing processing time, the model is improved in terms of resolution and accuracy. The algorithm explicitly handles input images with varying effective scale and creates visually pleasing point clouds. A priority scheme assures that the limited computational power is invested in scene parts, where the user is most interested in or the overall error can be reduced the most. The architecture of the proposed pipeline allows fast processing times in large scenes using a pure open-source CPU implementation. We show the performance of our algorithm on challenging standard datasets as well as on real-world scenes and compare it to the baseline.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Accurate 3D reconstruction from calibrated cameras is a long studied topic in computer vision. Multi-view stereo reconstruction offers an inexpensive alternative to costly laser scans, while providing highly accurate results <ref type="bibr" target="#b15">[16]</ref>. Despite the many proposed solutions, none of it fully addresses the usage of Multi-View Stereo (MVS) in a user centric scenario. Systems like Arc3D <ref type="bibr" target="#b11">[12]</ref>, MVE <ref type="bibr" target="#b3">[4]</ref>,VisualSFM <ref type="bibr" target="#b20">[21]</ref>, Agisoft Photoscan <ref type="bibr" target="#b0">[1]</ref> or Acute 3D <ref type="bibr" target="#b13">[14]</ref> provide a user friendly interface to algorithms, allowing non-scientific users to reconstruct a large variety of objects and scenes from a set of images. The availability of new hardware platforms such as smartphones and Micro Aerial Vehicle (MAV) opened up whole new possibilities in 3D content acquisition <ref type="bibr" target="#b19">[20,</ref><ref type="bibr" target="#b17">18]</ref>. Highly dynamic and flexible Simultaneous Localization and Mapping (SLAM) systems deal with view selection and pose tracking in real-time and deliver a sparse point cloud for navigation or coarse visualization purposes. Unfortunately, when it comes to more accurate dense reconstructions, algorithms offer very low flexibility. Existing MVS methods were not developed with the interactiveness of a real-time system in mind, but rather as after 2 s after 12 s after 56 s after 579 s a batch processing step with a single resulting point cloud shown to the user at the end of processing. An immediate user feedback of the reconstruction's current state, which would be necessary for possible interventions such as taking additional pictures, is not available and the user has to run the algorithm to the very end in order to see his/her success. Coarse visualization methods such as triangulation of the Structure-from-Motion (SfM) points (e.g. Bodis et al. <ref type="bibr" target="#b1">[2]</ref>) or low resolution filter based methods (e.g. <ref type="bibr">Pizzoli et</ref> al. <ref type="bibr" target="#b12">[13]</ref>) give a good insight into the currently reconstructed scene. But they are not able to cover fine details, and more importantly, do not reflect the status of the actual accurate dense reconstruction (which may give totally different results). In contrast, we propose a MVS algorithm delivering a highly accurate and complete dense point cloud. The output point cloud can be visualized at any timepoint and improves with increasing runtime. As a user centric scenario is addressed, intermediate point clouds are "visually pleasing". A scene, where e.g. the door handle is reconstructed in every fine detail but the house around it is not covered at all, would not only look awkward, but also the algorithm might waste its resources on details, the user might not even be interested in. Therefore, we explicitly analyse the effective scale of input images and maintain a homogeneous resolution within the 3D point cloud. In order to optimize the available resources, complex and important scene parts are prioritized over trivial regions. Moreover, the algorithm allows prioritization of regions based on an explicit or implicit user input (e.g. current user's viewpoint).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.1.">Related Work</head><p>In the following section we discuss the most related work, focussing on progressive and hierarchical reconstruction and the handling of the effective input image scale.</p><p>MVS algorithms can be roughly classified into three categories, depth map-, voxel-and patch based approaches. Algorithms in the first category, estimate a pairwise dense depth map from the input images and create a global model. Voxel based approaches represent the scene in a regular 3D grid and are able to incorporate and accumulate measurements. The geometry is either expressed as an occupancy function or as a signed distance function to the closest surface. Finally, patch based approaches represent the surface as a set of oriented patches.</p><p>One of the best known patch based MVS algorithms is PMVS <ref type="bibr" target="#b5">[6]</ref>. Starting from the calibrated scene, it generates an initial set of oriented patches by guided matching. The scene's geometry is successively grown by multiple iterations of expansion and filtering steps. PMVS delivers highly accurate scene representations, at the cost of computation time. The follow-up work CMVS <ref type="bibr" target="#b4">[5]</ref> clusters the scene to multiple independent sub-problems, which can be processed by PMVS individually. While being able to reconstruct a lot of details, the algorithm does not handle the effective scale of input images and is not progressive.</p><p>Jancosek et al. <ref type="bibr" target="#b10">[11]</ref> presented a system capable of reconstructing large scenes with a patch based algorithm similar to PMVS. The scene is built gradually by growing patches and only images with similar scale and scene coverage are considered. In a final step, a filtered mesh is recovered by Markov Random Field optimization <ref type="bibr" target="#b2">[3]</ref>. While the algorithm handles input image scale variation, it strictly reconstructs on a single selected scale level.</p><p>Goesele et al. <ref type="bibr" target="#b6">[7]</ref> presented a MVS algorithm for scene reconstruction out of community photos by creating individual depth maps out of which a mesh is extracted. The algorithm implicitly handles input image scale in the view selection, but can not be used in a progressive manner. Hornung et al. <ref type="bibr" target="#b8">[9]</ref> formulated the reconstruction as a graph-cut minimization on a volumetric grid. A coarse visual hull is refined in a hierarchical pipeline. While this leads to a progressively increasing 3D accuracy, the algorithm relies on a visual hull, limiting the application range.</p><p>Yuan et al. <ref type="bibr" target="#b21">[22]</ref> presented an interesting work, allowing to integrate new images into an existing 3D reconstruction. Hereby input images of an existing model are arranged in a view sphere and new images with patches are integrated in a bayesian learning framework. While being incremental, no feedback on the actual reconstruction is given and it is not clear how the algorithm behaves in non-object oriented scenes and in large scale.</p><p>Tetrahedralization methods <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b18">19]</ref> are very close to voxel based methods, but work on a irregular grid. Recent work of Sugiura et al. <ref type="bibr" target="#b16">[17]</ref> is capable of incrementally adding cameras and 3D points to an existing mesh. Hoppe et al. <ref type="bibr" target="#b7">[8]</ref> directly extract a textured mesh from the sparse point cloud for a good visualization, instead of delivering the most accurate dense reconstruction. The pipeline is incrementally adding points and the surface is extracted by a graph-cut optimization on top of the tetrahedralization. While being very fast and progressive in theory, the system is not suited for highly accurate reconstructions, capturing the fine details of a scene.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.2.">Contribution and Outline</head><p>To the best of our knowledge, we are the first who deliver a dense point cloud starting from a sparse structure from motion point cloud on a computational budget in a progressive manner, while explicitly handling the scene scale and delegating the computational power to individual scene parts. The presented pipeline uses an efficient model representation in an octree, allowing the reconstruction of general scenes in large datasets.</p><p>An open-source implementation of the proposed pipeline is available at: https://github.com/ alexlocher/hpmvs</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Progressive Multi-View Stereo</head><p>The following section first introduces the proposed pipeline. Individual steps and terms are later detailed in the corresponding subsections.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Overview</head><p>The proposed MVS algorithm takes a set of calibrated cameras V and sparse 3D points x (the result of any SfM method) as input and produces a dense point cloud consisting of oriented surface patches p. Algorithm 1 gives an overview on the most important steps. The initialization stage converts input points with assigned visibility constraints to surface patches, which are filled into a priority queue and are spatially organized in a dynamic octree. A series of operations on individual patches gradually increase the density, resolution and accuracy of the output point cloud: patches are expanded into their local neighbourhood, their neighbourhood is analysed for filtering and prioritizing and finally a patch is branched into multiple patches of smaller size. Due to the hierarchical procedure, the quality of the produced point cloud is increasing with increasing runtime, which can be observed on-the-fly. The algorithm ends if stopped by the user or if all input images are processed to their finest resolution. </p><formula xml:id="formula_0">Q ← Initialize ({x}, {V }) while Queue Q not empty do ⊲ Get top priority patch: p ← Q[0]</formula><p>if p not expanded then ⊲ Expand patch: </p><formula xml:id="formula_1">Q ← Q ∪ { p, Expand(p) } else if Nghd N (p) of p not analysed then ⊲ Analyse patch: Q ← Q ∪ Nghd-Analysis (p, N (p)) else ⊲ Branch patch: Q ← Q ∪ Branch (p) end end Algorithm 1: General pipeline overview. e x e y n s w x y O i C i V (p) R(p)</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Model Representation</head><p>The model is represented by a set of individual patches P , where each patch p has an assigned normal n(p), center c(p), size s(p) and a set of images, in which the patch is visible V (p) (see also <ref type="figure" target="#fig_2">Fig. 2</ref>). One of the visible images is selected as the reference image R(p). I i denotes the image with the index i and C i the position and O i the optical axis of the assigned camera. A depth image D i with the depth values of visible patches closest to the camera is maintained. Every patch has an assigned x-axis e x (p) with unit length set to be parallel to the x-axis of its reference image R(p) and e y (p) is perpendicular to e x (p) and n(p):</p><formula xml:id="formula_2">e y (p) = n(p) × −e x (p)<label>(1)</label></formula><p>Patches are organized in a dynamic octree T , consisting of individual nodes N i (x, w) and a root node N r , where x denotes the node's center coordinate and w its width. We use the term w Ni for the width of node N i .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.">Patch Optimization</head><p>In multiple stages of the pipeline, the patch's position c(p) and normal n(p) are optimized by maximizing the averaged Normalized Cross Correlation (NCC) of the patch's projection into the image space g I (p). For the optimization, the patch is parametrized by its depth in the reference image d R (p) and the two Euler angles of n(p). Formally, the following function is minimized:</p><formula xml:id="formula_3">e(p) = 1 |V (p)| − 1 I∈V (p)\R(p) 1 − g R (p), g I (p)<label>(2)</label></formula><p>A patch's projection g I (p) is evaluated by bilinear interpolation of points sampled from a plane centered at c(p) and with normal n(p). Points are regularly sampled, such that they form a µ × µ grid, where the x-axis is aligned to the x-axis of the reference image and individual grid points are separated by s(p). To respect the patch's scale, the corresponding level l I , in the image pyramid is used for sampling,</p><formula xml:id="formula_4">l I = log 2 f Ci s(p) d Ii<label>(3)</label></formula><p>where f Ci denotes the focal length of camera C i and ⌊.⌉ means integer rounding. Before the optimization process, visible images with a pairwise NCC below a threshold α 1 or an invalid corresponding image level l I are removed from the set of visible images attached to the patch V (p). After a successful optimization, V (p) is constrained further by increasing the threshold to α 2 (α 1 &lt; α 2 ) and the reference image R(p) is set to the one with optical axis most similar to the patch's normal n(p).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.4.">Initialization from SfM</head><p>An initial set of patches is created out of the SfM point cloud. For that, the root node of the octree is initialized from a slightly extended bounding box of the initial cloud. Images are loaded, a scale-space pyramid with l max + 1 levels is created and a co-visibilty graph is extracted. A set of initial patches is created and its fields are initialized as shown in Algorithm 2. The scale s(p) is initially set to the distance corresponding to one pixel difference in the reference image in the chosen pyramid level l Iinit 1 . However, during the optimization and processing of the patch, this equality is broken.</p><p>The patch's postion and orientation are optimized and filled into the dynamic octree. The patch's scale s(p) determines the octree-level l N , in which the patch is stored:</p><formula xml:id="formula_5">l N = log 2 w Nr s(p)<label>(4)</label></formula><p>Data: SfM point x, assigned cameras V s with camera position C, optical axis O and focal length  We limit the number of patches per tree node to one. As this condition can be violated after initialization, we filter all nodes N i and keep only the most consensual patch in the sense of least squared error e l (p) among other patches.</p><formula xml:id="formula_6">f C I Result: initialized patch p c(p) ← x V (p) ← V s n(p) ← 1 |V (p)| I∈V (p) (C I − c(p)) R(p) ← argmin I n(p), O I |I ∈ V (p) s(p) ← f C I d R (p) · 2 lIinit</formula><formula xml:id="formula_7">e l (p) = pi∈Ni n(p) · (c(p i ) − c(p)) |n(p)| 2<label>(5)</label></formula><p>For further processing, all patches are filled into the priority queue Q.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.5.">Expansion</head><p>The extension stage tries to grow existing patches into neighbouring cells by using the planarity assumption. The octree structure simplifies book keeping and makes sure that extension is only happening into unoccupied regions. Algorithm 3 details the extension procedure. A set of expansion candidate patches P ′ of p in node N i are sampled on a circle around p <ref type="figure" target="#fig_4">(Fig. 3a)</ref> and their fields are initialized. The set of visible images V (p n ) is extended by the co-visible images of the reference image R(p n ), the patch's scale is set to 90% of the node's width and the rest of the fields are copied from p. If the node containing c(p n ) is empty, the new patch is optimized. After successful optimization, a depth test rejects patches with inconsistent depth information.</p><formula xml:id="formula_8">V ok = I ∈ V (p) (d I (p) − D I (p)) 2 &lt; s(p) δ (6) V nok = I ∈ V (p) d I (p) &lt; D I (p) − 4 δ s(p)<label>(7)</label></formula><p>V ok denotes the set of images with similar depth values and V nok are images where the new patch would be in front of a visible geometry. We finally add the new patch, if the target node is still empty and |V ok | &gt; V min and |V nok | &lt; V min .</p><p>Data: input patch p and co-visibility graph Result: set of extended patches P ′</p><formula xml:id="formula_9">P ′ ← {} forall the n ∈ {1, 2, . . . N } do p n ← p δ = w Ni e x (p) cos 2πn N + e y (p) sin 2πn N c(p n ) ← c(p) + δ V (p n ) ← V (p) ∪ CoVis(R(p n ))</formula><p>s(p n ) ← 0.9 · w Ni if optimise(p n ) AND nodeEmpty(N (p n )) AND depthTest(p n ) then P ′ ← P ′ ∩ p n end end Algorithm 3: Extend patch to local neighbourhood.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.6.">Neighbourhood Analysis</head><p>For further filtering and for the prioritization, we analyze the local neighbourhood of every patch. Due to the octree structure, this can be realized fast and efficiently. We define the local neighbourhood N (p) as the patches within the distance 2 · w N (p) and evaluate a robust Huber loss function L δ of the planar error, similar to Eq. 5.</p><formula xml:id="formula_10">N (p) = p i ∈ P |c(p i ) − c(p)| &lt; 2 · w N (p) (8) e n (p) = pi∈N (p) L δ n(p) · (c(p i ) − c(p)) |n(p)| 2 δ= w N (p) 4<label>(9)</label></formula><p>We discard patches where |N (p)| &lt; 3 or en(p) s(p) &gt; 0.5 as outliers and remove them from the model.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.7.">Branching</head><p>By splitting a single patch into multiple smaller ones, the resolution of the 3D model is gradually increased. Algorithm 4 shows the basic steps. Similar to the expansion procedure, we place the new patches p n on a circle around c(p), but with a smaller radius <ref type="figure" target="#fig_4">(Fig. 3b)</ref>. The rest of the fields are copied from the source patch. New patches are optimized and only added to the point cloud, if its center stays within the parent node.</p><formula xml:id="formula_11">Data: input patch p Result: set of smaller patches P ′ P ′ ← {} forall the n ∈ {1, 2, . . . N } do p n ← p δ = w N i 4 e x (p) cos 2πn N + e y (p) sin 2πn N c(p n ) ← c(p) + δ s(p n ) ← 0.45 · w Ni</formula><p>if optimise(p n ) AND nodeEmpty(N (p n )) then P ′ ← P ′ ∩ p n end end Algorithm 4: Branching of patch p into smaller ones.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Prioritization</head><p>The priority queue enables to prioritize different patches in different regions. The general idea is to first process patches of higher level nodes and gradually increase the resolution. Patches in salient areas are processed with more priority than patches in planar regions, as they improve the overall accuracy. In addition, a user defined term q u can focus the reconstruction into regions of major interest. Formally, patches in the queue are sorted by increasing priority q as follows: <ref type="formula" target="#formula_2">(11)</ref> The additive term q step assures that the dependency of the individual steps is respected, while the node's priority is dependent on its size and the planarity error e n of the patch. Basically we give priority to higher level nodes, unless we detect that their local neighbourhood is already well approximated by a plane.</p><formula xml:id="formula_12">q step =      0 if extend 1 if neighbourhood analysis 2 if branch (10) q = 10 · ⌊l N − max {2, e n (p)} + q u ⌉ + q step</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Concurrency</head><p>For parallel processing of individual nodes, we kept the dependency between different cells and processing steps low. The local filtering as well as the branching step strictly operate on a single node. The expansion step includes a test for empty neighbouring cells, which requires a read access. The insertion of a successfully extended patch is modifying  the tree's structure. The local neighbourhood analysis requires read access to neighbouring cells. The proposed design of the priority queue enables the parallel processing of all steps except the expansion without further synchronization. Note that most of the time, the algorithm is busy with patch optimization and hence the synchronization overhead for the expansion stage is minimal.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments and Results</head><p>In order to demonstrate the capabilities of the proposed algorithm, we conducted a series of experiments with a C++ implementation of the pipeline. The following parameters were used: V min = 3, µ = 4, α 1 = 0.4, α 2 = 0.7 , l max = 7 and l init = 4 if not stated otherwise. Timings are based on the C++ implementation and the measurements were performed on a single machine with a Intel Core i7 with 8 × 3.7 GHz and 16GB of RAM. The experiments on the citywall dataset were performed on an Intel Xeon with 16 × 2.4 GHz and 48 GB of RAM.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Progressive Modelling</head><p>To compare the performance with state of the art, we tested our algorithm on two different datasets with available ground truth. The fountain-P11 and Herz-Jesu-P8 datasets consists of 11 and 8 calibrated and undistorted cameras <ref type="bibr" target="#b15">[16]</ref>. A high resolution laser scan within the same coordinate system serves as ground truth. The error of the produced point cloud is measured as a signed Euclidean distance between the point itself and the closest point on the mesh's surface. As it is complicated to measure the completeness of a point cloud, we use a method similar to the one used in Middlebury dataset <ref type="bibr" target="#b14">[15]</ref>. The ground truth surface is sampled regularly and every vertex is considered to be covered if the there is a point within a certain range d, leading to the completeness C. If not stated otherwise, we let the algorithm run until the maximum input image resolution (l I = 0) is reached. <ref type="figure" target="#fig_6">Fig. 4</ref> shows the evolution of the RMS error with respect to the runtime. It is visible that the average point error decreases with increasing runtime until a final error of 7mm on the fountain-P11 or 360mm on the Herz-Jesu-P8 dataset is reached. In order to compare the performance with the baseline, we also calculated the final average RMS error of PMVS on different image levels. The plot shows that our method keeps the accuracy of PMVS and even outperforms it, while being able to progressively deliver more and more accurate results. Please note that the hierarchical approach gets more and more efficient on higher image resolution as information is propagated among image levels. The graph also demonstrates the effectiveness of the pipeline compared to the trivial approach of running PMVS on increasing image resolutions. The sum of the runtimes on individual PMVS levels is significantly larger than the runtime of the proposed algorithm.  are streamed to a visualization tool as they are created. In comparison to PMVS, which grows very high resolution patches and achieves a low coverage at the beginning, the proposed method grows patches hierarchically and a reconstruction of the whole model (in low resolution) becomes immediately available. <ref type="table" target="#tab_0">Table 1</ref> shows the completeness of the final dense point clouds for the proposed algorithm, PMVS on two different levels and MultiView Environment (MVE) on the image level 2. For the evaluation of C, we used a distance threshold d of 0.1% of the bounding box diagonal. The completeness of PMVS and the proposed algorithm are both very similar and both outperform MVE significantly. A frequent problem in hierarchical algorithms is that fine details get missed. Due to the expansion step, details are well covered in the proposed pipeline, as long as they are connected. <ref type="figure">Fig. 6</ref> shows an example of a freestanding object in the Herz-Jesu-P8 dataset. However, very small disconnected objects, which are already poorly covered in the initial SfM cloud might not get reconstructed. In all our experiments, we never detected such problems -the algorithm had even shown to be less prone to hallucinating flying artefacts, which often survive the PMVS filtering stage. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Prioritization</head><p>In order to show the effect of the employed prioritizing scheme, we run our algorithm with and without enabled prioritizing, until all nodes with priority lower than a user defined goal q end are processed. We conducted the experiment within the fountain-P11 and Herz-Jesu-P8 datasets and compared it to ground truth. The performance is summarized in Tab. 2. Enabling the prioritizing scheme, allows to reduce the computational time until a fixed goal while maintaining a similar error. The average patch resolution is increased at the same time, as not all nodes are pushed to the final detail level. While the flatness prior (Eq. 11) is very general, a more user specific prior can guide the reconstruction into scene parts he/she might be interested in. We simulate this behaviour by a simple 3D location based priority term, where cells within a certain radius from an interesting scene part are avg s(p) error t with prioritizing 3.5 mm 6.8 mm 486s without prioritizing 3.0 mm 6.7 mm 675s processed with higher priority. Specifically, we selected the left trash bin of the citywall dataset as a point of interest and reconstructed points within a radius of one meter with higher priority. <ref type="figure">Fig. 8a</ref> shows the reconstruction in an early stage and <ref type="figure">Fig. 8b</ref> shows a visualization of the corresponding octree at the same stage. Every non-empty leaf in the tree is rendered as a cube, coloured with the colour of the patch it contains. Nodes close to the point of interest are of much finer resolution than the rest of the image. <ref type="figure">Fig. 8c</ref> shows a closeup and <ref type="figure">Fig. 8d</ref> a view from distance of the scene.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Explicit Scale Handling</head><p>Due to the octree structure, the effective image resolutions of the input images can be handled globally and the resulting resolution of the point cloud can be increased homogeneously and only processes high resolution close-up images if needed. This helps reducing computational time, but also leads to more realistic reconstructions. The citywall dataset consists of images with a very large difference in effective resolution. <ref type="figure" target="#fig_10">Fig. 9</ref> shows the colour coded scale of individual patches in a reconstruction. While the proposed algorithm produces a scene with a very homogeneous effective scale, the reconstruction of PMVS varies greatly in resolution, depending on the resolution of images at that viewpoint. Note that the resolution of patches at far distances (e.g. the roof of the tower) have a lower resolution than the wall itself. This comes from the fact that patches are only reconstructed until their scale reaches the effective image resolution in the corresponding cameras. With that, patches are only reconstructed up to the resolution offered by the images.  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Timing</head><p>While not being the main goal of this work, the algorithm's runtime is an important figure for real-world applications. Therefore, we measure the runtime of our algorithm on the different datasets and compare it to PMVS <ref type="bibr" target="#b5">[6]</ref> and the patch reconstruction of Goesele et al. <ref type="bibr" target="#b6">[7]</ref> (publicly available in MVE). Tab. 3 summarizes the runtimes, patch's resolution and number of patches among the different datasets and algorithms. Due to the hierarchical approach, our algorithm outperforms the compared methods in terms of runtime in high resolution images. The citywall dataset was split into 11 clusters by the CMVS, which resulted in a total processing time of 3.5 hours. In comparison, the proposed method was able to reconstruct the scene as a whole within ten minutes. While individual parts of the scene are not reconstructed to the very finest image resolution, a wellbalanced overall scene resolution of 3mm is reached. The MVE method computes pairwise depth maps, resulting in a huge amount of redundant points but not increasing the effective resolution of individual patches.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.5.">Scalability</head><p>The design of the algorithm allows it to be easily parallelized in a shared memory system. Individual nodes of the octree can be processed in parallel and only a small part of the algorithm has to be synchronized. <ref type="figure" target="#fig_0">Fig. 10</ref> shows the scalability of the implementation on a range between one and eight processing units. The linear dependency be- tween the speedup and the number of CPU cores shows that the algorithm is perfectly suited to be run on multiple CPU cores. The global mutex for patch insertion would limit the speedup at some point, but can be replaced by multiple local locks in a distributed system.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>We have presented a MVS algorithm capable of progressively delivering a dense point cloud. The algorithm explicitly handles the effective scale of input images and focuses on visually pleasing results in early stages. While first reconstruction results are already available after seconds, the accuracy and resolution is gradually improved with increasing runtime. A prioritization scheme focuses the computational power to scene parts with high curvature. The algorithm can reconstruct scene parts of immediate user interest with higher priority. The structure of the algorithm allows for easy parallelization on multiple CPU cores. We evaluated our algorithm on several challenging dataset and compared it to ground truth and to the state of the art. While it maintains or even outperforms the baseline in terms of accuracy, it reduces the processing time by a factor of two on high resolution images. This makes the algorithm perfectly suited for real-time applications, where an immediate user feedback on the dense reconstruction is of great use and allows an early intervention in cases of failure.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Progressive reconstruction of the citywall dataset (562 images). With increasing runtime, the resulting dense point cloud gets more accurate and covers finer details.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head></head><label></label><figDesc>Data: SfM point cloud {x} and cameras {V } Result: dense point cloud at any point in time ⊲ Initialize Queue Q with patches p from SfM data:</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 2 :</head><label>2</label><figDesc>Patch's geometry and coordinate systems.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Algorithm 2 :</head><label>2</label><figDesc>Patch initialization from SfM point. (a) The blue patch is extended into neighbouring nodes. Red patches are not added, since nodes are already occupied. (b) The blue patch is branched into multiple smaller patches and the tree level increased.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 3 :</head><label>3</label><figDesc>Visualization of the extension and branching step.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 4 :</head><label>4</label><figDesc>RMS error versus runtime of the proposed method with respect to ground-truth.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 5 :</head><label>5</label><figDesc>Qualitative evaluation of the 3D reconstruction and error distribution of the fountain-P11 and Herz-Jesu-P8 dataset between the proposed method (top) and PMVS (bottom). Blue points are behind and red ones in front of the ground truth surface.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_8"><head>Fig. 5</head><label>5</label><figDesc>shows the qualitative evaluation between the final result of PMVS and the proposed algorithm. The error distributions between the two methods are very similar. The highly saturated areas on the model edges are generated due to the lack of ground truth data at that particular location and are simply discarded by a bounding box during the evaluation.The different approaches of growing patches between the proposed method and the baseline are visualized inFig 7.It was created by a modified version of PMVS where patches fountain-P11 Herz-Jesu-P8 algorithm C [%]</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_9"><head>Figure 8 :Figure 6 :Figure 7 :</head><label>867</label><figDesc>Reconstruction of the citywall dataset with a user defined priority. The priority of cells around the trash bin was increased by a user request. Eventhough a hierarchical scheme is used, fine details are well reconstructed. One to one comparison of the patch growing between the proposed method (top) and PMVS (bottom).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_10"><head>Figure 9 :</head><label>9</label><figDesc>Colour coded per patch resolution of the citywall dataset. While the proposed method (left) can deliver a homogeneous point cloud, PMVS (right) strictly reconstructs on a single image level.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_11"><head>Figure 10 :</head><label>10</label><figDesc>Scalability plot of the C++ implementation of the proposed algorithm in a shared memory system.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 :</head><label>1</label><figDesc>Comparison of the point cloud's completeness C.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 2 :</head><label>2</label><figDesc></figDesc><table>Effect of the prioritization scheme, shown with the 
+runtime and average patch scale after running the algorithm 
+up to a user defined goal (q = 110) on the Herz-Jesu-P8 
+dataset. 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 3 :</head><label>3</label><figDesc>patches time # patches time # patches time # patches time # patches time Comparison of the runtime among different datasets compared to PMVS on different image resolutions and the reconstruction algorithm offered by MVE. The runtimes are given in minutes.</figDesc><table>fountain-P11 
+
+Herz-Jesu-P8 
+entry-P10 
+castle-P30 
+citywall 
+algorithm 
+# proposed 
+700k 
+8 
+500k 
+3 
+600k 
+4 
+1M 
+8 
+1.5M 
+10 
+CMVS-PMVS -L0 
+1.7M 
+15 
+1.3M 
+8 
+1.4M 
+10 
+2.4M 
+24 
+20M 214 
+CMVS-PMVS -L1 
+500k 
+3 
+400k 
+2 
+400k 
+3 
+700k 
+6 
+6M 
+69 
+MVE -L2 
+2.4M 
+48 
+1.5M 
+32 
+2.0M 
+33 
+6.0M 
+62 
+78.6M 706 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">If available, the scale of detected keypoints can be used to determine l I init for individual points. In our experiments we used l I init = 4.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgment. This work was supported by the H2020 project REPLICATE (No. 687757).</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Agisoft photoscan. Professional Edition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Agisoft</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Superpixel Meshes for Fast Edge-Preserving Surface Reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bodis-Szomoru</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Riemenschneider</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Using multiple hypotheses to improve depthmaps for multi-view stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">D F</forename><surname>Campbell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Vogiatzis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Hernández</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cipolla</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+			<publisher>ECCV</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Floating scale surface reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fuhrmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Goesele</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>SIGGRAPH</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+		<title level="m" type="main">Towards Internet-scale multi-view stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Furukawa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title level="m" type="main">Accurate, dense, and robust multiview stereopsis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Furukawa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ponce</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010-08" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="page" from="1362" to="1376" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Multi-view stereo for community photo collections. ICCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Goesele</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hoppe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Seitz</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Hoppe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Klopschitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Donoser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+		<title level="m">cremental Surface Extraction from Sparse Structure-from-Motion Point Clouds. BMVC</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Hierarchical volumetric multiview stereo reconstruction of manifold surfaces based on dual graph embedding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Hornung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Kobbelt</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Hallucination-free multi-view stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jancosek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pajdla</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV Workshop</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Scalable multiview stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jancosek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Shekhovtsov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pajdla</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">ARC 3D Webservice. 3D, Science and Cultural Heritage</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Moons</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Vergauwen</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">REMODE : Probabilistic , Monocular Dense Reconstruction in Real Time</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pizzoli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Forster</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Scaramuzza</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICRA</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-P</forename><surname>Pons</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Keriven</surname></persName>
+		</author>
+		<ptr target="https://www.acute3d.com" />
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">A comparison and evaluation of multi-view stereo reconstruction algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Diebel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Scharstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">On benchmarking camera calibration and multi-view stereo for high resolution imagery</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Strecha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Hansen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Thoennessen</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Sugiura</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torii</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Okutomi</surname></persName>
+		</author>
+		<title level="m">3d surface extraction using incremental tetrahedra carving. ICCV Workshop</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Tanskanen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kolev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Meier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Camposeco</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Saurer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+		<title level="m">Live Metric 3D Reconstruction on Mobile Phones. ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Towards high-resolution large-scale multi-view stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-H</forename><surname>Vu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Keriven</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Labatut</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-P</forename><surname>Pons</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title level="m" type="main">Dense reconstruction on-the-fly</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Wendel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Maurer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Graber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pock</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wu</surname></persName>
+		</author>
+		<title level="m">VisualSFM: A Visual Structure from Motion System</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Incremental 3d reconstruction using bayesian learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z.-H</forename><surname>Yuan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Applied intelligence</title>
+		<imprint>
+			<biblScope unit="volume">39</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="761" to="771" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

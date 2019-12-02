@@ -1,0 +1,1201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Adaptive 3D Face Reconstruction from Unconstrained Photo Collections</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Joseph</forename><surname>Roth</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Computer Science and Engineering</orgName>
+								<orgName type="institution">Michigan State University</orgName>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yiying</forename><surname>Tong</surname></persName>
+							<email>ytong@msu.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Computer Science and Engineering</orgName>
+								<orgName type="institution">Michigan State University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaoming</forename><surname>Liu</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Computer Science and Engineering</orgName>
+								<orgName type="institution">Michigan State University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Adaptive 3D Face Reconstruction from Unconstrained Photo Collections</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:37+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Given a collection of "in-the-wild" face images captured under a variety of unknown pose, expression, and illumination conditions, this paper presents a method for reconstructing a 3D face surface model of an individual along with albedo information. Motivated by the success of recent face reconstruction techniques on large photo collections, we extend prior work to adapt to low quality photo collections with fewer images. We achieve this by fitting a 3D Morphable Model to form a personalized template and developing a novel photometric stereo formulation, under a coarse-to-fine scheme. Superior experimental results are reported on synthetic and real-world photo collections.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Computer vision has had much interest in the longstanding problem of 3D surface reconstruction, expanding from constrained desktop objects to in-the-wild images of large outdoor objects <ref type="bibr" target="#b0">[1]</ref>. Face reconstruction <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b27">28]</ref>, the process of creating a detailed 3D model of a person's face, is important with applications in face recognition, video editing, avatar puppeteering, and more. For instance, accurate face models have been shown to significantly improve face recognition by allowing the rendering of a frontal-view face image with neutral expression <ref type="bibr" target="#b42">[43]</ref>, thereby suppressing intra-person variability. The face presents additional challenges than general surface reconstruction due to nonrigid deformations caused by expression variation.</p><p>For some, usually graphics, applications a highly detailed model may be reconstructed in a constrained scenario using depth scanners <ref type="bibr" target="#b25">[26,</ref><ref type="bibr" target="#b11">12]</ref>, calibrated stereo images <ref type="bibr" target="#b5">[6]</ref>, stereo videos <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b33">34]</ref> or even high-definition monocular videos <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b8">9]</ref>. However, for other applications such as biometrics, it is important to work on unconstrained photos like those typical of online image searches or from surveillance cameras. These photo collections present additional challenges since no temporal information may be used, images are of low resolution and quality, and occlusions may exist.</p><p>Photometric stereo-based reconstruction methods have proven effective for unconstrained photo collections. Beginning with Kemelmacher-Shlizerman and Seitz's work <ref type="bibr" target="#b22">[23]</ref> which reconstructs a 2.5D depth map and extended by Roth et al. <ref type="bibr" target="#b27">[28]</ref> to a full 3D mesh, photometric stereo-based approaches jointly estimate the surface normals, albedo, lighting conditions, and pose angles. Both techniques aim to identify a single representative face from the entire collection, which is challenging given the expression variation among images. By selecting a different consistent subset of images for each vertex on the face, the typical expression of the individual is used to drive the face reconstruction. However, there are still major limitations in photometric stereo-based reconstruction. One is that they require a sufficiently large collection of photos fo reconstruction. Theoretically, only four images are necessary if they are in perfect correspondence, but in practice the approaches use over one hundred images. Another is that the subset selection is binary and only makes use of ∼10% of the images for each vertex on the face.</p><p>Motivated by the success of the state of the art, we propose a novel adaptive photometric stereo-based reconstruction method from an unconstrained photo collection. Here, "adaptive" refers to the fact that our algorithm can handle a much wider range of photo collections, in terms of the number, resolution, and ethnicity of face images. Specifically, given a collection of unconstrained face images, we automatically detect faces and estimate 2D landmarks <ref type="bibr" target="#b36">[37]</ref>. We then fit a 3D Morphable Model (3DMM) jointly to the collection such that the projection of its annotated 3D landmarks are aligned with the 2D estimated landmarks <ref type="bibr" target="#b42">[43]</ref> to create a personalized template. Each image has its pose estimated and is back-projected onto the personalized template to establish correspondence, and a dependability of each vertex is estimated to weight its influence in the reconstruction. The correspondence is used to jointly estimate the albedo, lighting conditions, and surface normals while the template is used to regularize the estimation. The template is then deformed to match the estimated surface normals and produce a reconstructed surface. A coarse-tofine process is employed to first capture the generic shape and then fill in the details. To demonstrate the capabilities of the proposed approach, quantitative and qualitative experiments are performed on synthetic and in-the-wild photo collections, with comparison to the state of the art.</p><p>In summary, this paper makes three main contributions. ⋄ A 3D Morphable Model is fit jointly to 2D landmarks for template personalization. Prior work used either a fixed template or landmark-based deformation that does not work well for small collections, with no prior face distribution.</p><p>⋄ Photometric stereo is solved in a joint Lambertian image rendering formulation, with an adaptive template regularization that allows for graceful degradation to a small number of images. A dependability measure is proposed to weight the influence of images for face parts that are more confident to produce an accurate reconstruction.</p><p>⋄ A coarse-to-fine reconstruction scheme is proposed to produce the similar quality reconstruction, with substantially lower computational cost.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Prior Work</head><p>We present a brief summary of relevant prior work on photometric stereo and face reconstruction. Photometric stereo Classic photometric stereo estimates the surface normals of an object from a fixed camera orientation based on different light conditions. Photometric stereo was first proposed with knowledge of the light conditions <ref type="bibr" target="#b34">[35]</ref> and even current methods still use this approach for cooperative subjects <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b13">14]</ref>. Later it was discovered that even without knowledge of the light source photometric stereo can take advantage of the low rank nature of spherical harmonics <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b39">40,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b35">36]</ref>. Most recent works can take multiple camera positions and put images into correspondence using Structure from Motion and even estimate arbitrary non-linear camera response maps <ref type="bibr" target="#b28">[29]</ref>. Most photometric stereo techniques reconstruct from a common viewpoint and produce a 2.5D face surface which can only take advantage of frontal images. Photometric stereo usually uses SVD to find the low rank spherical harmonics, but then has to resolve an ambiguity using integrability or prior knowledge of the object. Such approaches require a sufficient number of images to obtain an accurate reconstruc-tion, especially for non-rigid objects like the face where expression variation can disturb the low rank assumption. We propose using a personalized template to solve photometric stereo without using SVD, allowing the reconstruction to adapt to a small number of images. Face reconstruction Face reconstruction creates a 3D face model from a set of input such as image(s), video, or depth data. It is a difficult problem with much recent interest and a variety of applications. In the biometrics community, pose, expression, and illumination are the main challenges of face recognition and all may be improved with accurate person-specific face models <ref type="bibr" target="#b42">[43,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b40">41]</ref>. In graphics, high fidelity models with skeletal structures are useful for animations, puppeteering, and post processing videos. Face reconstruction began with cooperative subjects and expensive hardware where range scanners, multi-camera stereo <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b6">7]</ref>, or photometric stereo with known light arrays <ref type="bibr" target="#b15">[16]</ref> can produce highly accurate models. There is recent interest from the graphics community in face reconstruction from videos <ref type="bibr" target="#b31">[32,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b9">10,</ref><ref type="bibr" target="#b29">30,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b16">17]</ref> and even from RGB-D sequences <ref type="bibr" target="#b32">[33]</ref>. But none of these techniques are directly comparable with ours since videos or special setups provide more information than unconstrained photo collections.</p><p>There are a series of recent works on reconstructing faces from photo collections <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b26">27]</ref>. The seminal work <ref type="bibr" target="#b22">[23]</ref> creates a 2.5D model, locally consistent with the photo collection. It is extended in a few different directions, one in <ref type="bibr" target="#b37">[38]</ref> where they use the surface normals from frontal faces to improve the fitting of a 3DMM, two in <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b30">31]</ref> where the technique is used to generate a 3DMM, and three in <ref type="bibr" target="#b27">[28]</ref> where the technique is expanded to handle pose variation and reconstructs a 3D model. Our work continues by improving the 3D reconstruction technique to adapt to lower-quality photo collections with fewer input images.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Algorithm</head><p>In this section, we present the details of the proposed approach and describe the motivational differences from prior art. We describe the basic preprocessing to obtain automatic landmark alignment. The main algorithm is broken down into three major steps. 1) Fit the 3DMM template to produce a coarse person-specific template mesh. 2) Estimate the surface normals of the individual using a photometric stereo (PS)-based approach. 3) Reconstruct a detailed surface using the estimated normals. <ref type="figure">Figure 2</ref> provides an illustrated overview of the algorithm.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Photo Collection Preprocessing</head><p>A photo collection is a set of n images containing the face of an individual and may be obtained in a variety of ways, e.g., a Google image search for a celebrity or a personal photo collection. The first step is to detect and crop faces from the images. We use the built-in face detection model from Bob <ref type="bibr" target="#b1">[2]</ref>   <ref type="figure">Figure 2</ref>. Overview of face reconstruction. Given a photo collection, we apply landmark alignment and use a 3DMM to create a personalized template. Then a coarse-to-fine process alternates between normal estimation and surface reconstruction. datasets, such as CMU-PIE, that include profile view faces. The face detector is a cascade of Modified Census Transform (MCT) local binary patterns classifiers. Given the face bounding box, we convert the image to the intensity channel and crop outside of the face bounding box in order to ensure inclusion of the entire face. To estimate 2D landmarks, we employ the state-of-the-art cascade of regressors approach <ref type="bibr" target="#b36">[37]</ref> to automatically fit 68 landmarks denoted as W ∈ R 2×68 onto each image.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Template Personalization</head><p>The initial template plays a vital role in the reconstruction process. Many aspects of the process depend upon the current template such as establishing correspondence across the photos, initial normal estimation during photometric recovery, and even Laplacian regularization during surface reconstruction. A good template should match the overall metric structure of the individual so that when it is projected onto photos of different poses, correspondence is established. Nevertheless, the template needs not contain fine facial details since those will be fleshed out by photometric normal estimation.</p><p>Prior work <ref type="bibr" target="#b27">[28]</ref> used a single east Asian face mesh as a template, and employed landmark-based deformation to register the generic mesh to the person of interest. This technique was basically Structure from Motion (SFM) for the landmarks while the rest of the face was regularized by the curvature of the template mesh. The resultant template has two major limitations. One, the template has Asian influences that could potentially fit poorly to different ethnicities. Two, the SFM technique breaks down when fitting to a small number of photos with limited pose variations.</p><p>In light of these limitations, we propose to use a 3DMM instead of a single template mesh. The 3DMM is shown to accurately represent arbitrary face shapes based on a linear combination of scanned faces. Dense correspondence is established among the scans, and then <ref type="bibr" target="#b10">[11]</ref> decomposes them into a set of bases for identity and another for expression.</p><formula xml:id="formula_0">X =X + 199 k=1 X id k α id k + 29 k=1 X exp k α exp k ,<label>(1)</label></formula><p>is the 3DMM composed of the mean shapeX, a set of identity bases X id , and a set of expression bases X exp . X ∈ R 3×p is the 3D coordinates of p vertices in a triangulated mesh. Typically, 3DMM fitting aims to minimize the difference between a rendered image and the observed photo <ref type="bibr" target="#b7">[8]</ref>, but recently, Zhu et al. propose an efficient fitting method based on landmark projection errors <ref type="bibr" target="#b42">[43]</ref>. Our method extends <ref type="bibr" target="#b42">[43]</ref> by jointly fitting the 3DMM to all n faces. To fit the 3DMM to a face image, we assume weak perspective projection sRX + t, where s is the scale, R is the first two rows of a rotation matrix, and t is the translation on the image plane.</p><p>Given the 2D alignment results W, the model parameters are estimated by minimizing the projection error of the landmarks that are labeled manually once onto the 3DMM, arg min</p><formula xml:id="formula_1">s,R,t,α id ,α exp W − (sR[X] land + t) 2 F ,<label>(2)</label></formula><p>where [X] land selects the annotated landmarks from the entire model and · F is the Frobenius norm. Furthermore, as the yaw angle increases, the 2D landmark alignment returns points along the contour or silhouette of the face, but the projected 3D landmarks would be obscured behind the cheek. <ref type="bibr" target="#b42">[43]</ref> proposes a novel landmark marching technique where the 3D landmarks are moved along the surface to match the 2D silhouette under the current pose estimate. We extend this process to jointly fit n faces of the same person by assuming a common set of identity coefficients α id but a unique set of expression α exp i and pose parameters per image. The error function then becomes,</p><formula xml:id="formula_2">arg min si,Ri,ti,α id ,α exp i n i=1 1 n W i − (s i R i [X + 199 k=1 X id k α id k + 29 k=1 X exp k α exp ki ] landi + t i ) 2 F ,<label>(3)</label></formula><p>where [·] landi is used because different poses of face images determine varying ranges of landmark marching, i.e., different selections of vertices. This minimization is not jointly convex, but it can be solved by alternating estimation since it is linear with respect to each variable. Once the parameters are learned, we generate a personalized template X 0 using the identity coefficients and the mean of the expression coefficients.</p><p>Model projection Correspondence between images in the collection is established based on the current template mesh X 0 . Given X 0 and the projection parameters solved per image during model fitting, we sample the intensity of the projected location of vertex j in image i and place the intensity into a correspondence matrix F ∈ R n×p . That is,</p><formula xml:id="formula_3">f ij = I i (u, v) where I i is the ith image and u, v ⊺ = s i R i x j +t i is the projected 2D location of vertex j in the image.</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Photometric Normal Estimation</head><p>Fitting the 3DMM based on limited landmarks reconstructs a face with the overall shape of the individual, without the fine facial details, since it has few parameters. Even a traditional 3DMM is constrained by the span of the face bases and lacks the representational power to accurately reconstruct arbitrary, unseen faces. To recover these fine details, we use a photometric stereo-based approach to estimate the normals which in turn drives the reconstruction of surface details.</p><p>In computer graphics, a 3D model, projection model, texture map, and light sources are combined under a lighting model to render images. Computer vision aims to solve the inverse problem, i.e., inferring the model parameters from one or multiple images. In either case, simplifying assumptions must be made. For graphics, the assumptions are because of either limited understanding about reflectance properties of different surfaces or computational efficiency. For vision, assumptions or prior knowledge are required to make the under-constrained inverse problem solvable.</p><p>We assume a Lambertian lighting model where the intensity at a projected point is defined by a linear combination of lighting parameters and the surface normal,</p><formula xml:id="formula_4">I(u, v) = ρ j k a + k d l x n x j + l y n y j + l z n z j ,<label>(4)</label></formula><p>where ρ j is the surface albedo at vertex j, n x j , n y j , n z j is the unit surface normal at vertex j, k a is the ambient coefficient, k d is the diffuse coefficient, and l x , l y , l z (a) (b) <ref type="figure">Figure 3</ref>. Effect on albedo estimation with (a) and without (b) dependability. Skin should have a consistent albedo, but without dependability the cheek shows ghosting effects from misalignment.</p><p>is the unit light source direction. For simplicity, we define l = k a , k d l x , k d l y , k d l z ⊺ for the lighting, n j = 1, n x j , n y j , n z j ⊺ for the normal, and s j = ρ j n j for the shape, so that I(u, v) = l ⊺ s j .</p><p>To solve the Lambertian equation, prior work recognized that 95% of the variation in a face image set is explained by the first four principal components of F <ref type="bibr" target="#b4">[5]</ref>. Thus, singular value decomposition (SVD) is used to factor F into a light matrix L ⊺ , where each row is the light coefficients of image i, and S, where each column is the shape coefficients of vertex j. Unfortunately, SVD alone cannot determine the true lighting and shape matrices since any invertible 4 × 4 matrix A forms a valid solution, F = L ⊺ S =L ⊺ A −1 AS. To resolve this ambiguity the template face is typically used to constrain A to a numerically stable solution. In our study, we discover that this SVD approach fails to reconstruct for small image collections or when too much noise enters the rank-4 approximation from either extreme expression for people like Jim Carrey, or inconsistent occlusions such as long hair from women.</p><p>Instead we propose to solve the unknowns in an energy minimization approach with the following loss function,</p><formula xml:id="formula_5">argmin ρj ,li,nj p j=1 n i=1 f ij − ρ j l ⊺ i n j 2 + λ n n j − n t j 2 ,<label>(5)</label></formula><p>where n t j is the current surface normal of the template at vertex j. This function may be solved by initializing n j to n t j and ρ j to 1 and then solving in an alternating manner for lighting, albedo, and normals.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.1">Dependability</head><p>Not every part of each image is created equal. Clearly non-visible parts are not dependable, but even some visible parts may not help. For example, a low-resolution image will contribute less information than a higher-resolution one. Parts of faces changed by expression will have different surface normals. Faces with inaccurate landmark alignment will be out of correspondence. Many different factors play a role in the dependability of a projected point within an image. In the end, we found that simply using d ij = max(cos(c ⊺ i n j ), 0) where c i is a unit camera vector perpendicular to the image plane is a good measure of dependability. This decreases the weight as a vertex approaches perpendicular to the camera since it is more susceptible to small changes in the pose estimation, whereas a vertex pointing towards the camera is more dependable. <ref type="figure">Fig. 3</ref> shows the albedo estimation with and without dependability. We update Eqn. 5 to,</p><formula xml:id="formula_6">argmin ρj ,li,nj p j=1 n i=1 d ij (f ij − ρ j l ⊺ i n j ) 2 + λ n n j − n t j 2 . (6)</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.2">Lighting and albedo estimation</head><p>We begin by initializing n j to the template surface normal at vertex j and ρ j to 1. While keeping the surface normals fixed, we alternate between solving the light coefficients and the surface albedo. We let this converge before estimating the surface normal, which allows the current surface normal to influence which local minimum solution is found. Solving for albedo is then an overconstrained least squares solution, i.e., ρ j = (d ⊺ j L ⊺ n j )/(d ⊺ j f j ). Similarly, the lighting for an image has the closed form solution</p><formula xml:id="formula_7">l ⊺ i = (f i • d i )/(S • d i ),</formula><p>where • is the Hadamard or entrywise product.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.3">Surface normal estimation</head><p>Once the lighting and surface reflectance properties are estimated, we finally estimate the surface normals. Similar to <ref type="bibr" target="#b22">[23]</ref>, we use a local subset of images to estimate the surface normal at each vertex. The goal of the local selection is to capture the dominant local expression among the collection, instead of a smoothed average of all expressions; it also serves to filter occlusions or areas with poorly fit templates. Given a subset of images B = {i | l ⊺ i s j − f ij 2 &lt; ǫ n }, we minimize the following energy for each vertex:</p><formula xml:id="formula_8">argmin nj i∈B d ij (ρ j l ⊺ i n j − f ij ) 2 + λ n n j − n t j 2 . (7)</formula><p>The regularization helps keep the face close to the initialization. But since the summation is not averaged, as more photos are added to the collection, the regularization has less weight and the estimated normals can deviate to match the observed photometric properties of the collection. In contrast, when the photo collection is small, the regularization term will play a relatively larger weight in determining the desired surface normal. Thus, this adaptive weighting handles a diverse photo collection size.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Surface Reconstruction</head><p>Given the surface normals n j that specify the fine details of the face, we reconstruct a new surface X following </p><formula xml:id="formula_9">until 1 p X k+1 − X k 2 F &lt; τ 12</formula><p>subdivide surface the procedure outlined in <ref type="bibr" target="#b27">[28]</ref>. We briefly summarize the procedure, and refer the reader to <ref type="bibr" target="#b27">[28]</ref> for full details. The overall energy for surface reconstruction is composed of three parts,</p><formula xml:id="formula_10">argmiñ X E n + λ b E b + λ l E l .<label>(8)</label></formula><p>We defineX as a 3p-dim reshaping of X collecting the x-coordinates followed by y and z, ∆ is the Laplacian operator, L is its discretization up to a sign, H is the mean curvature, and H j is the estimation based on the normals <ref type="bibr" target="#b27">[28]</ref>. Then E n = LX − H k 2 is the normal energy derived from the mean curvature formula ∆x = −Hn and we collect and repeat −H j n j into a 3p-dim vector H. E b = L bX − L bX k 2 is the boundary energy, required since the mean curvature formula degenerates along the surface boundary into the geodesic curvature, which cannot be determined from the photometric normals. We therefore seek to maintain the same Laplacian along the boundary with L b,ij = 1/e ij where e ij is the edge length connecting adjacent boundary vertices i and j. And</p><formula xml:id="formula_11">E l = i s i R i [X] land + t i − W i 2 F</formula><p>, which uses the landmark projection error to provide a global constraint on the face, without which, the integration of the normals can have numeric drift across the surface of the face. Unlike <ref type="bibr" target="#b27">[28]</ref> we do not include a shadow region smoothing since we use the template normal as a regularizer during normal estimation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.5.">Adaptive Mesh Resolution</head><p>Algorithm 1 describes the order of steps as put together in the final face reconstruction system. When putting the steps together, we use a coarse-to-fine scheme to first fit the overall face shape and later adapt to the details present in the collection. To begin, we use ReMESH <ref type="bibr" target="#b2">[3]</ref> to uniformly resample the personalized mesh X 0 to a coarse 6, 248 (= p) vertices. The resampling is done once offline on the mean shape and is transferred to a personalized mesh by using the barycentric coordinates of the corresponding triangle. The algorithm is repeated within each detail level until it converges. After convergence, Loop subdivision <ref type="bibr" target="#b17">[18]</ref> is performed to increase the resolution of the mesh, multiplying the number of vertices by 4. Moving from the coarse to fine level, we decrease ǫ n and λ n to increase selectivity of images used for surface normal estimation and lower template normal regularization. This helps the coarse reconstruction stay smooth and fit the generic structure while allowing the fine reconstruction to capture the details. We would like to stop the reconstruction automatically after the coarse or medium level if the photo collection does not contain enough information for detailed reconstruction, since the fine level may overfit to noise and lead to poor quality reconstruction. But we have yet to identify a good stopping criterion so we leave this for future work.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experimental Results</head><p>To examine the effectiveness of the proposed approach, we experiment using synthetic data, personal photo collections with ground truth scans, and Internet images of celebrities and political figures. For baselines, we compare against prior photometric stereo-based approaches <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b22">23]</ref>. Stereo imaging or video-based reconstruction techniques have access to additional information and are not compared. Furthermore, because the proposed approach uses a 3DMM to create the initial personal template, we do not compare against 3DMM either. Despite only using the landmarks for 3DMM fitting, the proposed approach can theoretically use any state-of-the-art 3DMM as initialization.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Experimental Setup</head><p>Data Collection We gather the three types of photo collections. Synthetic images are rendered from subject M001 of the BU-4DFE database <ref type="bibr" target="#b38">[39]</ref> using the provided texture and selecting random frames from the 6 expression sequences <ref type="figure" target="#fig_1">(Fig. 4)</ref>. A Lambertian lighting model re-illuminates the face with light sources randomly sampled from a uniform distribution in front of the face. Personal photos are used with ground truth models of the subjects created with a Minolta VIVID 910 range scanner at VGA resolution capturing 2.5D depth scans accurate to 220 microns. Given frontal and both 45 • yaw scans, we stitch them together using Geomagic Studio to create a full 3D model. For Internet images, we query the Bing image search API with a person's Metrics To quantitatively evaluate the reconstruction performance we compute the average distance between the ground truth and reconstructed surfaces. The two surfaces are aligned by Procrustes superimposition of the 3D landmarks from the internal part of the face. The normalized vertex error is computed as the distance between a vertex in the ground truth mesh and the closest vertex in the reconstructed surface divided by the eye-to-eye distance. We report the average normalized vertex error. Parameters The parameters for the algorithm are set as follows: τ = 0.005, λ l = 0.01, λ b = 10, λ n = [1, 0.1, 0.01], and ǫ n = [0.2, 0.08, 0.08] for coarse, medium, and fine resolution respectively.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Results, Comparisons, and Discussions</head><p>Synthetic The synthetic dataset allows us to test the algorithm's robustness to pose and expression independently. We generate three different sets of 50 images each: frontal faces with neutral expression, neutral expression faces with random yaw angles between ±30 • , and frontal faces with random expressions. The ground truth model is taken as the neutral expression and reconstructions are aligned to the model using manually annotated 3D landmarks around the eyes, nose, and mouth. <ref type="table" target="#tab_1">Table 1</ref> shows that the proposed approach outperforms prior work in all scenarios. We see the proposed algorithm is more robust to pose than expression variation. Hopefully the improved capability of landmark alignment for large-pose faces <ref type="bibr" target="#b19">[20,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b41">42]</ref> will further improve 3D reconstruction performance. Personal photo collections To evaluate the reconstruction empirically on in-the-wild images, we capture two personal photo collections as well as ground truth 3D models of their neutral expression. Photo collection 1 (PC1) consists of 39 professional photos taken at a wedding. The proposed approach has 5.10% error while <ref type="bibr" target="#b27">[28]</ref> has 8.31% on this set. Both results are relatively poor, which we hypothesize is due to the post processing usually done on professional photos of this nature, which invalidates the Lambertian assumption. Photo collection 2 (PC2) consists of 40 images captured on an iPhone by moving around to get different overhead lights and having the subject make random expressions and poses. This collection is similar to the popular selfies.</p><p>Ours <ref type="bibr" target="#b27">[28]</ref> [23] Ours <ref type="bibr" target="#b27">[28]</ref> [23] Ours <ref type="bibr" target="#b27">[28]</ref> [23] <ref type="figure">Figure 5</ref>. Qualitative comparison on celebrities. The proposed approach incorporates more of the sides of the face and neck than <ref type="bibr" target="#b22">[23]</ref> while producing a better depth estimate than <ref type="bibr" target="#b27">[28]</ref>.</p><p>Figure 6(c) shows the resulting reconstruction with different numbers of images and photo resolution overlaid with the reconstruction error to demonstrate how different error amounts appear. This error measurement does a good job of capturing the global reconstruction error. We also compare with the prior work <ref type="bibr" target="#b27">[28]</ref> for decreasing image numbers in <ref type="table">Table 2</ref>. This shows our method has consistently lower errors, especially with lower numbers of images.</p><p>Internet collections A reconstruction may have a very good fit to the overall structure of the individual, but fail to capture some of the fine details that help define the person. For example, missing facial wrinkles will have a very minor impact on the surface-to-surface error, but can play a large role in convincing a human that the reconstruction is accurate. We strive not just for a metrically correct reconstruction, but also for a visually compelling reconstruction. After all, one major goal of using the photometric normals is to allow for reconstruction of the details outside of the span of a traditional 3DMM. We process the same set of celebrities used in <ref type="bibr" target="#b22">[23]</ref> and <ref type="bibr" target="#b27">[28]</ref>, George Clooney (359 photos), Kevin Spacey (231), Bill Clinton (330), and Tom Hanks (264). The resolution of the images is scaled to 500 vertical pixels to match <ref type="bibr" target="#b27">[28]</ref>. <ref type="figure">Figure 5</ref> presents a side by side comparison between the various approaches. Our reconstruction is able to capture a larger surface area stretching to the neck and all the way back to the ears, while still capturing the fine details of the face. <ref type="figure" target="#fig_3">Fig. 7</ref> presents more examples using 25-50 photos demonstrating the ability of our algorithm to generalize across races and genders. Note the ability to even reconstruct hairstyles for some people. The contrast between the personalized template and final reconstruction shows the limitation of landmark-based 3DMM fitting and the power of normal-based surface reconstruction.</p><p>Efficiency Written in a mixture of C++ and Matlab, the algorithm runs on a commodity PC with an AMD A10-5700 3.40 GHz CPU and 8 GB RAM. The processing time is O(np + p 2 ) and we report times w.r.t. 100-image collections. Preprocessing, including face detection, cropping, and landmark alignment, takes 38 seconds. Template personalization takes 5 seconds. Photometric normal estimation and surface reconstruction take 6, 22, and 94 seconds for each iteration of the coarse, medium, and fine resolution, respectively. A typical reconstruction of George Clooney takes 5 coarse iterations, 2 medium, and 1 fine for a total time of 3.5 minutes.</p><p>Number of images One critique of photometric stereobased reconstructions in the past is their dependence on a large number of images, typically several hundreds, which is too many for most applications. <ref type="figure" target="#fig_2">Figure 6(a)</ref> shows the reconstruction results for George Clooney with varied image numbers and resolutions. When only a few images exist, the algorithm relies more on the template face to regular-  ize the photometric normals. This allows the reconstruction to gracefully degrade; as more images are available, the algorithm uses the additional data to create a more accurate and detailed reconstruction. Even with low resolution it is able to capture wrinkles on the forehead since the sampling across multiple images acts as super-resolution.</p><p>We also present the reconstruction errors for PC2 with different numbers of images in <ref type="figure" target="#fig_2">Figure 6</ref>(c). Note that the proposed approach can reconstruct a reasonable appearing face with only a few images and the error decreases as more images are used. The minimal number of images for PC2 is less than <ref type="figure" target="#fig_2">Fig. 6</ref>(a) since personal photo collections tend to be higher quality.</p><p>Coarse to Fine The coarse-to-fine scheme benefits both efficiency and quality. If the coarse-to-fine scheme is not used and instead the reconstruction starts at the fine resolution, it takes 4 iterations to converge for a total time of 7 minutes or double the time. Also, <ref type="figure" target="#fig_2">Fig. 6</ref>(b) shows the resultant reconstructions which are similar for large amounts of images, but noisy for small collections since the coarse step allows for more template regularization.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusions</head><p>We presented a method for reconstructing a 3D face model from an unconstrained 2D photo collection which adapts to lower quality and fewer images. By using a 3DMM to create a personalized template which adaptively influences reconstruction in a coarse-to-fine scheme, we can efficiently create a more accurate model than prior work as demonstrated by experiments on synthetic and real-world data. There are numerous paths for future work, e.g., fusing 3DMM and photometric stereo-based reconstructions so it can gracefully degrade down to a single image, and automatically identifying the detail level of reconstruction possible from an arbitrary photo collection.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>The proposed system reconstructs a detailed 3D face model of the individual, adapting to the number and quality of photos provided.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 4 .</head><label>4</label><figDesc>Synthetic data with expression, pose, lighting variation.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 6 .</head><label>6</label><figDesc>(a) George Clooney with different quality images. (b) Reconstruction without coarse-to-fine process. (b) Personal collection with different quality images. Reconstruction errors of our method are overlaid on each face pair.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 7 .</head><label>7</label><figDesc>Reconstruction results for Jinping Xi, Robin Williams and Sonya Sotomayor. From Left to right, personalized template, final reconstruction, and estimated albedo rendered on the surface.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>which was trained on various face</figDesc><table>Photo Collection 
+
+3D Morphable 
+Model 
+
+coarse 
+
+medium 
+
+fine 
+
+su bd iv is io n 
+
+repeat 
+
+repeat 
+
+su bd iv is io n 
+
+Landmark Alignment 
+
+Normal 
+Estimation 
+Surface 
+Reconstruction 
+
+Template 
+Personalization 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Algorithm 1 :</head><label>1</label><figDesc>Adaptive 3D face reconstruction Data: Photo collection Result: 3D face mesh X // Template personalization 1 estimate landmarks Wi for each image 2 fit the 3DMM via Eq. 3 to generate template X 0 3 remesh to the coarse resolution 4 for resolution ∈ {coarse, medium, fine} do estimate projection si, Ri, ti for each image establish correspondence F via backprojection estimate lighting L and albedo ρ via Eq. 6 estimate surface normals N via Eq. 7 reconstruct surface X k+1 via Eq. 8</figDesc><table>5 
+
+repeat 
+
+6 
+
+7 
+
+8 
+
+9 
+
+10 
+
+11 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="true"><head>Table 1 .</head><label>1</label><figDesc>Error comparison on synthetic data.</figDesc><table>Method Neutral 30 • Yaw Expression 
+Ours 3.22% 
+3.82% 
+4.40% 
+[28] 6.13% 
+7.48% 
+6.59% 
+
+Table 2. Error comparison of PC2 with different image numbers. 
+# Images 
+1 
+5 
+10 
+20 
+40 
+Ours 4.19% 4.07% 4.03% 3.46% 3.18% 
+[28] 
+-
+8.77% 5.40% 4.73% 4.13% 
+
+full name. Face clustering is performed with Picasa to filter 
+out spurious results and locate the subject of interest. 
+</table></figure>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Building rome in a day</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Furukawa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Simon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Communications ACM</title>
+		<imprint>
+			<biblScope unit="volume">54</biblScope>
+			<biblScope unit="issue">10</biblScope>
+			<biblScope unit="page" from="105" to="112" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Bob: a free signal processing and machine learning toolbox for researchers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Anjos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">E</forename><surname>Shafey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Wallace</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Günther</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Mccool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Marcel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACMMM</title>
+		<imprint>
+			<publisher>ACM Press</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1449" to="1452" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">ReMESH: An interactive environment to edit and repair triangle meshes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Attene</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Falcidieno</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SMI</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="page" from="271" to="276" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Lambertian reflectance and linear subspaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Basri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Jacobs</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell</title>
+		<imprint>
+			<biblScope unit="volume">25</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="218" to="233" />
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Photometric stereo with general, unknown lighting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Basri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Jacobs</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kemelmacher</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Int. J. Comput. Vision</title>
+		<imprint>
+			<biblScope unit="volume">72</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">High-quality single-shot capture of facial geometry</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Beeler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Bickel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Beardsley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sumner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Gross</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Graph</title>
+		<imprint>
+			<biblScope unit="volume">29</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">High-quality passive facial performance capture using anchor frames</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Beeler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Hahn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Bradley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Bickel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Beardsley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Gotsman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Gross</surname></persName>
+		</author>
+		<idno>75:1-75:10</idno>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Graph</title>
+		<imprint>
+			<biblScope unit="volume">30</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Face recognition based on fitting a 3D morphable model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Blanz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Vetter</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell</title>
+		<imprint>
+			<biblScope unit="volume">25</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1063" to="1074" />
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Real-time highfidelity facial performance capture</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Cao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Bradley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Beeler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Graph</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="1" to="46" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Facewarehouse: a 3D facial expression database for visual computing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Cao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Weng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Zhou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Vis. Comput. Graphics</title>
+		<imprint>
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="413" to="425" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">3D-aided face recognition robust to expression and pose variations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Chu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Romdhani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Chen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="1899" to="1906" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">3D scanning deformable objects with a single RGBD sensor</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Dou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Taylor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Fuchs</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="493" to="501" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Reconstructing detailed dynamic face geometry from monocular video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Garrido</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Valgaerts</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Theobalt</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Graph</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page">158</biblScope>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">3D face reconstructions from photometric stereo using near infrared and visible light</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">F</forename><surname>Hansen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">A</forename><surname>Atkinson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">N</forename><surname>Smith</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">L</forename><surname>Smith</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">CVIU</title>
+		<imprint>
+			<biblScope unit="volume">114</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="942" to="951" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Photometric stereo under a light source with arbitrary motion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hayakawa</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J. Optical Soc. America A</title>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="3079" to="3089" />
+			<date type="published" when="1994" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Multiview photometric stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Hernández</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Vogiatzis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cipolla</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell</title>
+		<imprint>
+			<biblScope unit="volume">30</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="548" to="554" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Dynamic 3D avatar creation from hand-held video input</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">E</forename><surname>Ichim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bouaziz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pauly</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Graph</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page">45</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Jacobson</surname></persName>
+		</author>
+		<ptr target="http://github.com/alecjacobson/gptoolbox.6" />
+		<title level="m">Geometry processing toolbox</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Dense 3D face alignment from 2D videos in real-time</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">A</forename><surname>Jeni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">F</forename><surname>Cohn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kanade</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">FG</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Pose-invariant 3D face alignment</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Jourabloo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Large-pose face alignment via CNN-based dense 3D model fitting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Jourabloo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Internet-based morphable model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kemelmacher-Shlizerman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Face reconstruction in the wild</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kemelmacher-Shlizerman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Nine points of light: Acquiring subspaces for face recognition under variable lighting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kriegman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2001" />
+			<biblScope unit="page" from="129" to="139" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Pose-robust face recognition using geometry assisted probabilistic modeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Chen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="502" to="509" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Dynamicfusion: Reconstruction and tracking on non-rigid scenes in real-time</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Newcombe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fox</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Seitz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="343" to="352" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">3D face modeling based on structure optimization and surface reconstruction with bspline</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Peng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Feng</surname></persName>
+		</author>
+		<imprint>
+			<publisher>Neurocomputing</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Unconstrained 3D face reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">Photometric stereo using internet images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Inose</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Matsushita</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Tan</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page" from="361" to="368" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Automatic acquisition of high-fidelity facial performances using monocular videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-T</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Chai</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Graph</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Automatic construction of robust spherical harmonic subspaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Snape</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Panagakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zefeiriou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Total moving face reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Suwajanakorn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kemelmacher-Shlizerman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="796" to="812" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Real-time expression transfer for facial reenactment</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Thies</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zollhöfer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nießner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Valgaerts</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Stamminger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Theobalt</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Graph</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Lightweight binocular facial performance capture under uncontrolled lighting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Valgaerts</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bruhn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-P</forename><surname>Seidel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Theobalt</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. Graph</title>
+		<imprint>
+			<biblScope unit="volume">31</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="1" to="187" />
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Photometric method for determining surface orientation from multiple images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">J</forename><surname>Woodham</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Optical Engineering</title>
+		<imprint>
+			<biblScope unit="volume">19</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="139" to="144" />
+			<date type="published" when="1980" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Robust photometric stereo via low-rank matrix completion and recovery</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ganesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Matsushita</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Ma</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="703" to="717" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Learn to combine multiple hypotheses for accurate face alignment</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Yi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">Z</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCVW</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Improving 3D face details based on normal map of hetero-source images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Su</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPRW</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="9" to="14" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">A highresolution 3D dynamic facial expression database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Yin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Worm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Reale</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">FG</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Determining generative models of objects under varying illumination: Shape and albedo from multiple images using SVD and integrability</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Snow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Epstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">N</forename><surname>Belhumeur</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Int. J. Comput. Vision</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="203" to="222" />
+			<date type="published" when="1999" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<monogr>
+		<title level="m" type="main">Examplar coherent 3D face reconstruction from forensic mugshot database. J. Image Vision Computing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Zeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Li</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Face alignment across large poses: A 3D solution</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">Z</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">High-fidelity pose and expression normalization for face recognition in the wild</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Yi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">Z</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

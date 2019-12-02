@@ -1,0 +1,953 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Multivariate Regression on the Grassmannian for Predicting Novel Domains</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yongxin</forename><surname>Yang</surname></persName>
+							<email>yongxin.yang@qmul.ac.uk</email>
+							<affiliation key="aff0">
+								<orgName type="department">Queen Mary</orgName>
+								<orgName type="institution">University of London</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Timothy</forename><forename type="middle">M</forename><surname>Hospedales</surname></persName>
+							<email>t.hospedales@qmul.ac.uk</email>
+							<affiliation key="aff0">
+								<orgName type="department">Queen Mary</orgName>
+								<orgName type="institution">University of London</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Multivariate Regression on the Grassmannian for Predicting Novel Domains</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:43+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We study the problem of predicting how to recognise visual objects in novel domains with neither labelled nor unlabelled training data. Domain adaptation is now an established research area due to its value in ameliorating the issue of domain shift between train and test data. However, it is conventionally assumed that domains are discrete entities, and that at least unlabelled data is provided in testing domains. In this paper, we consider the case where domains are parametrised by a vector of continuous values (e.g., time, lighting or view angle). We aim to use such domain metadata to predict novel domains for recognition. This allows a recognition model to be pre-calibrated for a new domain in advance (e.g., future time or view angle) without waiting for data collection and re-training. We achieve this by posing the problem as one of multivariate regression on the Grassmannian, where we regress a domain's subspace (point on the Grassmannian) against an independent vector of domain parameters. We derive two novel methodologies to achieve this challenging task: a direct kernel regression from R M → G, and an indirect method with better extrapolation properties. We evaluate our methods on two crossdomain visual recognition benchmarks, where they perform close to the upper bound of full data domain adaptation. This demonstrates that data is not necessary for domain adaptation if a domain can be parametrically described.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>The issue of domain shift arises when the testing data on which we are interested to apply pattern recognition methods differs systematically from the training data available to train them -violating the underlying assumption of supervised learning. It is becoming increasingly clear that this issue is pervasive in practice and leads to serious drops in performance <ref type="bibr" target="#b34">[35,</ref><ref type="bibr" target="#b15">16]</ref>. This has motivated extensive work in the area of domain adaptation, which aims to ameliorate the negative impact of this shift by transforming the model or the data to bridge the train-test gap <ref type="bibr" target="#b31">[32,</ref><ref type="bibr" target="#b9">10,</ref><ref type="bibr" target="#b27">28]</ref>. Although diverse, traditional domain adaptation (DA) approaches can be grouped according to assumptions on supervision. Supervised approaches assume the target (test) domain has labels but the data volume is very small <ref type="bibr" target="#b31">[32]</ref>, while in unsupervised approaches the target domain is completely unlabelled <ref type="bibr" target="#b9">[10]</ref>. Nevertheless, both of these categories share common assumptions of: (i) domains are discrete entities, e.g., corresponding to dataset <ref type="bibr" target="#b34">[35]</ref>, or capture device <ref type="bibr" target="#b31">[32]</ref>, and (ii) at least unlabelled data in the target domain.</p><p>Interest has recently grown in relaxing this strict assumption, and expanding the scope of domain adaptation to include a wider variety of practically valuable settings including: continuously varying rather than discrete domains <ref type="bibr" target="#b13">[14]</ref>; domains parametrised by multiple factors rather than a single index <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b37">38]</ref>; and predicting domains in advance of seeing any samples <ref type="bibr" target="#b17">[18]</ref>. Continuous DA considers the situation where the domain evolves continuously, for example with time. In this case evolving the model online allows a recognition model to remain effective, e.g., at any time of day <ref type="bibr" target="#b13">[14]</ref>. Multi-factor DA considers the situation where the domain is parametrised by a vector of multiple factors, e.g., [pose, illumination] <ref type="bibr" target="#b29">[30]</ref> and [capture device, location] <ref type="bibr" target="#b37">[38]</ref>. Here, the structured nature of the domain's parameters can be used to improve performance compared to treating them as discrete entities. Finally, predictive DA considers predicting a recognition model for a domain in advance of seeing any data. This provides the powerful capability of precreating models suited for immediate use in novel domains, for example future data in a time-varying stream <ref type="bibr" target="#b17">[18]</ref>.</p><p>In this paper we provide a general framework for predictive domain adaptation -adapting a recognition model to a new setting for which some metadata (e.g., time or view angle) but no data is available in advance. This capability is important, because we may not be able to wait for extensive data collection, and re-training of models as would be required to apply conventional (un)supervised DA. Our framework takes as input a recognition model, and set of previously observed domains, each described by a parameter or parameter vector. It then builds a predictor for domains, that can be used to generate a recognition model for any novel domain purely based on its parameter(s). Our contribution is related to that of <ref type="bibr" target="#b37">[38,</ref><ref type="bibr" target="#b17">18]</ref>, but it is signifi-cantly more general because: (i) we can use as input a vector of any parameters, rather than a single time parameter only <ref type="bibr" target="#b17">[18]</ref>, (ii) we can use continuously varying rather than discrete parameters, which is important for domains defined by time or position <ref type="bibr" target="#b37">[38]</ref>, (iii) for continuous domains such as time, we can predict domains at an arbitrary point in the future rather than one time-step ahead as <ref type="bibr" target="#b17">[18]</ref>.</p><p>To provide this capability we frame the problem as one of multivariate regression on the Grassmannian. Points on the Grassmannian correspond to subspaces, and differing subspaces are a key cause of the domain shift problemthis is the key insight of subspace-based DA techniques that solve domain shift by aligning subspaces <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b4">5]</ref>. By regressing points on the Grassmannian against the independent parameters of each domain (such as time, view angle), we can predict the appropriate subspace for any novel domain in advance of seeing any data. Once the subspace is predicted, any existing subspace-based DA technique can be used to adapt a pre-trained model for application to the new domain. However, such regression on the Grassmannian is non-trivial to achieve. While methods have been proposed <ref type="bibr" target="#b2">[3]</ref>, they do not scale <ref type="bibr" target="#b16">[17]</ref>, or extend to multiple independent parameters <ref type="bibr" target="#b14">[15]</ref>. We propose two different scalable approaches to multivariate regression on the Grassmannian: a direct kernel regression approach from R M → G, and an indirect approach with better extrapolation ability.</p><p>We compare our domain prediction approaches on the surveillance over time benchmark from <ref type="bibr" target="#b13">[14]</ref>, and on a car recognition task in the style of <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b17">18]</ref> -but using both view and year as domain parameters. We demonstrate that we can extrapolate to predict domains multiple time-steps ahead in the future; and when applying our predictive domain adaptation framework to generate models for novel domains, performance approaches the upper bound of fully-observed DA, while not requiring any data or online re-training.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Domain Adaptation</head><p>Domain Adaptation (DA) methods reduce the divergence between a source and target domain so that a model trained on the source performs well on the target. The area is now too big to review fully, but <ref type="bibr" target="#b27">[28]</ref> provides a good survey. Unsupervised Domain Adaptation: We focus here on unsupervised domain adaptation (UDA), as its lack of data annotation requirement makes it more generally applicable, and it is more closely connected to our contributions. In the absence of labels, UDA aims to exploit the marginal distributions P (X T ) and P (X S ) to align domains. There are two main approaches here: data and subspace centric. Data-centric Approaches:</p><p>These seek a transformation φ(·) that projects two domains' data into a space that reduces the discrepancy between the transformed target φ(X T ) and source data φ(X S ). A typical pipeline is to perform PCA <ref type="bibr" target="#b23">[24]</ref> or sparse coding <ref type="bibr" target="#b22">[23]</ref> on the union of the domains with an additional objective that minimises maximum mean discrepancy (MMD) of the new representations a reproducing kernel Hilbert space H, i.e.,</p><formula xml:id="formula_0">E[φ(X T )] − E[φ(X S )] 2</formula><p>H . Domain generalisation (DG) approaches <ref type="bibr" target="#b24">[25]</ref> find transformations that minimise distance between an arbitrary number of domains, with the aim of generalising to new domains. Thus DG is appropriate if no domain parameters are available, while our predictive DA is expected to outperform DG if metadata is available.</p><p>Subspace based Approaches: These approaches make use of the two domain's subspaces rather than manipulating the data directly. Here, subspace refers to a D-by-K matrix of the first K eigenvectors of the original D-dimensional data. We denote P S and P T as the source and target domain subspaces learned separately by PCA. Subspace Alignment (SA) <ref type="bibr" target="#b4">[5]</ref> learns a linear map M for P S that minimise the Bregman matrix divergence ||P S M − P T || 2 F . <ref type="bibr" target="#b9">[10]</ref> samples several intermediate subspaces P 1 , P 2 , . . . , P N from P S to P T . That is achieved by thinking of P S and P T as points on the Grassmann manifold G(K, D) and finding a geodesic (shortest path on manifold) between them. Points (subspaces) are sampled from the geodesic and concatenated to form a richer linear operator [P S , P 1 , P 2 , . . . , P N , P T ] that projects two domains into a common space, where the source classifier generalises better to the target domain. A weakness of <ref type="bibr" target="#b9">[10]</ref> is that the number of intermediate points is a hard-to-determine hyper-parameter. An elegant solution to this, <ref type="bibr" target="#b8">[9]</ref> samples all the intermediate points. This produces infinitely long feature vectors, but their dot-product is defined, and thus any kernelised classifier can be used.</p><p>New Settings: All the previously discussed methods apply in the classic DA setting of a discrete source and target domain. The setting where domains are continuously evolving was recently considered by <ref type="bibr" target="#b13">[14]</ref> using a sequential PCA and subspace-based DA method. This is important for many practical problems, however the proposed method has limitations: It does not extend to a vector of domain parameters, and most importantly it can not be used to predict future unseen domains. Predicting future domains was recently considered by <ref type="bibr" target="#b17">[18]</ref>. The proposed data-centric approach reweights the past training samples via making a prediction of their time-varying probability distribution. However, this again does not extend to more than one domain parameter, and predictions can only be made one time-step into the future. Both <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b17">18]</ref> are constrained to fixed-size time-steps. Some previous studies considered vector-parametrised domains <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b37">38]</ref>. <ref type="bibr" target="#b29">[30]</ref> is limited in application to multi-view recognition type problems where the same instance (e.g., face) is seen in each domain, thus it does not extend to general recognition tasks. <ref type="bibr" target="#b37">[38]</ref> is restricted to discrete domain parameters as it uses 1-of-K coding that applies to categor- </p><formula xml:id="formula_1">Predictive ✓ ✓ ✗ ✓ ✓ Multi-factor ✓ ✓ ✗ ✗ ✓ Continuous Parameters ✓ ✓ ✓ ✓ ✗ Extrapolation ✗ ✓ ✗ ✓ ✗ Extrapolate arbitrarily far ✗ ✓ ✗ ✗ ✗</formula><p>ical parameters only. In this paper, we generalise all these settings by developing a model to predict a new subspace P ∈ G given its corresponding parameter z ∈ R M . Since z is a vector, multiple factors can be used, and extrapolations made arbitrarily far in the future. Tab 1 contrasts our contribution with prior work.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Zero-Shot Learning</head><p>A related problem to predictive domain adaptation is Zero-Shot Learning (ZSL). In ZSL, a classifier is created for a novel task, in the absence of any training data for the task, by using task metadata. This has been extensively studied in applications such as character <ref type="bibr" target="#b19">[20]</ref>, object <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b6">7]</ref>, and action <ref type="bibr" target="#b21">[22]</ref> recognition. Instead of building a map (classifier) directly from the image to label space, ZSL studies <ref type="bibr" target="#b19">[20,</ref><ref type="bibr" target="#b26">27]</ref> learn the classifier in terms of an intermediate semantic representation such as attributes <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b21">22]</ref> or word-vectors <ref type="bibr" target="#b6">[7]</ref>. Recognisers can then be built on-the-fly for novel objects given only their semantic representations. For example by assigning the attributes ['black', 'white', 'stripes'] to the new object 'zebra'. We aim to achieve a similar on-the-fly capability for DA: adapting a trained model to any target domain given only its (often freely available) metadata. Such metadata is termed herein as domain parameter.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.">Manifold-valued Data Regression</head><p>Several studies address regression in the setting that the independent variable is a point in Euclidean space and the dependent variable is a point in non-flat space such as Riemann or Grassmann manifolds. These can be grouped into: (i) Parametric approaches like <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b5">6,</ref><ref type="bibr" target="#b30">31,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b7">8]</ref> typically try to find a formulation for the geodesic and then provide a numerical solution for its estimation and (ii) Nonparametric approaches such as <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b3">4]</ref> adapt kernel regression to the manifold case by observing that they are all essentially about searching for a point for which the sum of its (reweighed) distances with all training points is minimised.</p><p>For most parametric solutions, the independent variable is assumed to be scalar. This is because: (i) In applications where these methods are popular, e.g., medical imaging, one usually wants to find a pattern against a single factor (e.g., age) and (ii) it is technically challenging to extend these to the multivariate case <ref type="bibr" target="#b16">[17]</ref>, because the prediction no longer corresponds to a single geodesic curve, which makes the gradient derivation problematic.</p><p>The non-parametric method <ref type="bibr" target="#b2">[3]</ref> provides the solution for a very special manifold 3D rotation group SO(3), so it is not applicable for our problem. However, it inspires us to extend kernel regression, since the kernel function does not make assumptions on whether the input is a scalar or vector. This then forms the core of our direct prediction method.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Methodology</head><p>In order to build predictive model for domains (subspaces), we need to build a mapping from an Mdimensional vector of independent variables to points on the Grassmannian (represented by a matrix with orthonormal columns): R M → G. The output constraint means it can not be treated as conventional Euclidean regression. In the following we present direct kernel regression (Sec 3.1) and an indirect solution (Sec 3.2) to achieve this.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Direct Kernel Regression on the Grassmannian</head><p>Kernel Regresison Review We first review kernel regression. Assume we are given a set of (data, label) pairs,</p><formula xml:id="formula_2">{(z 1 , P 1 ), (z 2 , P 2 ), . . . , (z N , P N )}<label>(1)</label></formula><p>where z ∈ R M and P ∈ R 1 ; and a kernel function k(z 1 , z 2 ) that measures the similarity between z 1 and z 2 . The Nadaraya-Watson <ref type="bibr" target="#b25">[26]</ref> kernel regression prediction for P given a test point z is</p><formula xml:id="formula_3">P = N i=1 k(z, z i )P i N i=1 k(z, z i )<label>(2)</label></formula><p>From Euclidean to Grassmannian When P ∈ M where M is a non-flat manifold and P is no longer a scalar, Eq. 2 can be invalid. So this does not provide a solution to our problem. For example, suppose M is a Grassmann manifold G(K, D), so its numerical representation 1 is now matrices P ∈ R D×K with constraints P T P = I K . Eq. 2 could be applied, but this is meaningless because adding two points on the Grassmannian does not necessarily give another point on the Grassmannian. Inspired by <ref type="bibr" target="#b2">[3]</ref>, we propose to think of kernel regression as the solution of the following optimisation problem: </p><formula xml:id="formula_4">arg min P ∈R 1 N i=1 w i (P − P i ) 2 (3) where w i = k(z,zi) N i=1 k(z,zi) . More generally, we have G(k,D)# R M% Direct#Manifold#Regression# R M% R N% Indirect#Manifold#Regression# G(k,D)#</formula><formula xml:id="formula_5">R M → R N , R N → G. arg min P N i=1 w i d 2 (P, P i )<label>(4)</label></formula><p>where d 2 (·, ·) is a metric (distance function). P is the Fréchet mean if the minimizer is unique (or Karcher mean when it is a local minimum). The Fréchet mean is defined in general metric space, thus it provides a way to work with manifold-valued data as long as we can find a well defined distance function for points on the manifold.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Grassmann Manifold Background</head><p>We first review some concepts about the Grassmannian, before solving Eq 4. Many distances on the Grassmannian are defined based on the concept of 'principal angle', which can be calculated by SVD. E.g., for two points P 1 and P 2 on G(K, D),</p><formula xml:id="formula_6">P T 1 P 2 = U SV T<label>(5)</label></formula><p>where S = diag(cos(θ 1 ), cos(θ 2 ), . . . , cos(θ K )). The angle θ k = cos −1 (S k,k ) is the kth principal angle. Multiple distance functions exist on the Grassmannian <ref type="table" target="#tab_1">(Table 2)</ref>. <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b38">39]</ref> provide a variety of metrics and their derivations. </p><formula xml:id="formula_7">Binet-Cauchy 1 − K k=1 cos 2 θ k 1 − (det(P T 1 P 2 )) 2 Martin log K k=1 (cos 2 θ k ) −1 − log((det(P T 1 P 2 )) 2 )</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Manifold-valued Data Regression with Vector Input</head><p>For our manifold-valued data regression task, Binet-Cauchy (BC) and Martin distances are suitable because they are amenable to deriving gradients w.r.t. the target matrix, and their sensitivity properties are more favourable than alternatives <ref type="bibr" target="#b11">[12]</ref>. However, when the core part of BC distance, i.e., the determinant, is so small that underflow occurs, Martin distance is a better choice as it calculates the log-determinant. Substituting Martin distance into Eq. 4, we obtain the following objective function to optimise:</p><formula xml:id="formula_8">arg min P ∈R D×K − N i=1 w i log((det(P T P i )) 2 )<label>(6)</label></formula><p>which is subject to constraint P T P = I K . The gradient with respect to P is:</p><formula xml:id="formula_9">∇ P = −2 N i=1 w i P i (P T P i ) −1 .<label>(7)</label></formula><p>Vanilla gradient descent is not applicable because of the orthogonality constraints. It is a non-trivial optimisation problem as the constraints lead to non-convexity. A simple solution is to do gradient descent and re-orthogonalise the matrix after each step, but it is numerically expensive. Some studies have addressed this issue, e.g., <ref type="bibr" target="#b33">[34,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b32">33]</ref>. We apply the solution from <ref type="bibr" target="#b35">[36]</ref>: an efficient update scheme based on the Cayley transformation that preserves the constraints. Given a feasible point P and the gradient G = ∇ P , a skew-symmetric matrix A is defined as,</p><formula xml:id="formula_10">A := GP T − P G T<label>(8)</label></formula><p>The new trial point is determined by the Crank-Nicolsonlike scheme,</p><formula xml:id="formula_11">P Update (η) = P − η 2 A(P + AP Update (η))<label>(9)</label></formula><p>where η is the step size that can be found by curvilinear search, and P Update (η) is given by the closed form,</p><formula xml:id="formula_12">P Update (η) = QP where Q = (I + η 2 A) −1 (I − η 2 A) (10)</formula><p>Iterating Eq. 10 is guaranteed to converge to a stationary point as a solution for Eq. 6. Thus we can predict an unseen domain's subspace P given its domain parameter z.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Indirect Regression on the Grassmannian</head><p>A limitation of the previous direct approach is that, similarly to Euclidean kernel regression, it is fundamentally interpolation-based. This makes it unable to extrapolate to out-of-sample (e.g., far future) subspaces. To address this, we propose an indirect approach for R M → G regression. Indirect Prediction with a Single Reference:</p><p>Instead of regressing domain parameter z ∈ R M to subspace P ∈ G, consider setting the dependent variable of our regression problem to be the distance l ∈ R 1 between P and a fixed reference point (subspace). Then the problem is reduced to standard multivariate regression R M → R 1 .</p><p>A natural question arises: how to choose the reference point on the Grassmannian? A simple answer is to use the Karcher mean of all observed points (subspaces). Assume that the Karcher mean isP , then the N training instances/labels for the regression model are {(z 1 , d 2 (P 1 ,P )), (z 2 , d 2 (P 2 ,P )), . . . , (z N , d 2 (P N ,P ))}. For a given testing instance z, the regression model predicts the distance between its associated subspace and the reference subspace:l. We could then estimate the target subspace by solving the following optimisation problem.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>arg min</head><formula xml:id="formula_13">P ∈R D×K (l − d 2 (P,P )) 2<label>(11)</label></formula><p>However, Eq. 11 is underdetermined, so does not guarantee a meaningful result. Indirect Prediction with Multiple References: To find a unique optimum, rather than use a fixed reference point, we instead use all observed subspaces P as references. This results in a multi-output regression problem R M → R N . For a given test instance z, it will yield a N -dimensional vectorl = [l 1 ,l 2 , . . . ,l N ], wherel i is the estimated distance between the target subspace and the ith observed subspace. Thus rather than the direct regression z → P we now have z →l → P . The objective for the second step is then</p><formula xml:id="formula_14">arg min P ∈R D×K N i=1 (l i − d 2 (P, P i )) 2<label>(12)</label></formula><p>Eq. 12 can be solved by the constrained gradient descent from Sec. 3.1, where the gradient with respect to P is:</p><formula xml:id="formula_15">∇ P = N i=1</formula><p>4(l i + log((det(P T P i )) 2 ))P i (P T P i ) −1 (13)</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Predictive Domain Adaptation</head><p>Using the methodology developed in Sec. 3.1-3.2, our goal of predictive domain adaptation becomes possible. We assume that we are given: (i) a classifier trained on any source domain, and (ii) N additional unlabelled domains:</p><formula xml:id="formula_16">{(X 1 , z 1 ), (X 2 , z 2 ), . . . , (X N , z N )},<label>(14)</label></formula><p>where X i is ith domain data, from which we can learn a subspace P i by PCA; and z i is ith domain's parameters.</p><p>For an unseen domain with parameters z * , we can predict its subspace P * based on the proposed method (Eq. 6 or Eq. 12) and the training data {(z 1 , P 1 ), (z 2 , P 2 ), . . . , (z N , P N )}. Once P * is obtained, any subspace-based DA method (e.g., <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b9">10,</ref><ref type="bibr" target="#b8">9]</ref>) can be applied to align the unseen (target) domain P * to any labelled source domain P S where a classifier was trained. An illustration of our approaches is given in <ref type="figure" target="#fig_0">Fig. 1</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>We evaluate our contributions on two benchmark tasks: (i) surveillance scene classification, which is well suited to testing extrapolation and (ii) vehicle type classification over time and viewing angle, suited for testing multi-factor based prediction. For the direct method, RBF kernel is used for measuring the domain parameter similarity, and its bandwidth is set to be the median of pairwise distances of the domain parameters <ref type="bibr" target="#b10">[11]</ref>. For the indirect method, the regression from domain parameter to reference set distances is done by kernel ridge regression with same RBF kernel above, and ℓ 2 regularisation weight chosen by cross validation. Given our methods' predicted subspaces, we need to plug in a subspace-based DA method to complete the adaptation. We choose to use Geodesic Flow Kernel (GFK) <ref type="bibr" target="#b8">[9]</ref> because of its better performance and fewer hyperparameters to tune. GFK takes in source and target domain subspaces and produces a positive semi-definite matrix G, with which we can calculate the training and testing kernels by x T i Gx j . The precomputed kernel is then fed into LIB-SVM <ref type="bibr" target="#b0">[1]</ref> for classifier training, for which the cost parameter is tuned by 10-fold cross validation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Surveillance Scene Classification</head><p>Dataset: We use the benchmark dataset studied by <ref type="bibr" target="#b13">[14]</ref>. It contains video frames (320x240 RGB, 20 per hour) of a traffic intersection captured by a fixed camera over an extended period of time. Over time, factors such as illumination change cause a challenging domain shift problem. Setup: We use the 512-dimensional GIST feature provided by <ref type="bibr" target="#b13">[14]</ref>. For direct comparison, we also adopt their task: recognising if one or more vehicles appear in the frame. For this binary classification, model performance is measured by Precision =  The source domain where the classifier is trained is the same as <ref type="bibr" target="#b13">[14]</ref>: it contains 50 consecutive images (2.5 hours). Then we test on the immediately following 40 hours (800 images). The testing frames are split into eight domains equally in time, so each target domain has 100 images. For simplicity, we denote the source domain as τ 0 , and the ith target domain as τ i . Six methods are evaluated:</p><p>No-DA: A lower bound. The classifier trained on τ 0 is directly applied to every τ i . Rolling UDA Baseline: Approximately adapt to τ i by using the subspace of its previous domain τ i−1 as input to GFK. Note that this is only reasonable in such a continuous online application, not for arbitrary subspace prediction. Direct: Our direct method (Sec 3.1) predicts τ i 's subspacê P i given the observed subspaces from {τ 0 , τ 1 , · · · , τ i−1 }. Indirect: As above, but using the proposed indirect method (Sec 3.2) to predict the subspace of τ i . EDD <ref type="bibr" target="#b17">[18]</ref>: Predictive DA by modelling the data's timevarying distribution. The paper <ref type="bibr" target="#b17">[18]</ref> assumed all domains are labelled because it essentially re-weights the classification loss on the level of individual domain. So we provide labels of all domains, giving it a significant advantage CMA <ref type="bibr" target="#b13">[14]</ref>: Rather than predicting the subspace from its timestamp, CMA assumes we have observed data in τ i from which the true subspace P i is learned, and then fed into GFK for domain adaptation. By using the true rather than predicted subspace, this provides an upper bound.</p><p>Instead of learning the subspace of τ i from scratch every time, we use sequential PCA <ref type="bibr" target="#b20">[21]</ref> that processes the data in τ i and its previous subspace P i−1 . The motivation is twofold: (i) it encourages subspace smoothing that fits the nature of this task well and (ii) by doing so CMA reproduces the result of <ref type="bibr" target="#b13">[14]</ref>. The number of eigenvectors used for P i is 10 (same as <ref type="bibr" target="#b13">[14]</ref>). The domain parameter is intuitive: integers starting from 0 (i.e., the index of τ ). <ref type="figure" target="#fig_2">Fig. 2(a)</ref> summarises the performance of the methods as time proceeds. The results are cumulative so, for example, the 5th result is the precision evaluated on the first 5 target domains. From the raw results on the left, we can see that: (i) Without DA, performance drops significantly as time passes and domain shift increases and (ii) All alternatives are better than the baseline of No-DA. For easier comparison, <ref type="figure" target="#fig_2">Fig. 2</ref>(a) also presents the results as % improvement over the simple baseline of Rolling UDA. From here we can see that: (i) In each case our methods improve on Rolling UDA, indicating successful prediction of future subspaces. (ii) The performance of EDD is considerably worse than predicted/actual subspacebased DA methods, though it surpassed the baseline of No-DA. The reason might be that its adaptation strategy (reweight the loss of each domain) is more crude than GFK. (iii) Our direct method is comparable to the CMA upper bound in early predictions. (iv) Our indirect method surpasses the direct method, and occasionally the CMA upper bound, particularly as the domain grows more distant (τ 7 and τ 8 ) from the initial source τ 0 .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Domain Prediction Results:</head><p>Extrapolating Far Future Domains: The previous experiment predicted domains one time-step ahead. This strong assumption enabled Rolling UDA as competitive baseline because with only one time-step change, the domain shift was always small. To test the ability to extrapolate and predict domains arbitrarily far ahead in time, the next experiment fixed a set of observed domains {τ 0 , τ 1 , · · · , τ 4 }. We then tested on the following four domains without seeing any data (given their parameters only). The proposed methods are compared with two baselines: No-DA (classifier trained on τ 0 is directly used) and UDAτ 4 (GFK using the last available domain τ 4 's subspace in place of subspaces of unseen test domains). The results in <ref type="figure" target="#fig_2">Fig. 2(b)</ref> show that when required to extrapolate further into the future, our indirect method is clearly superior to our direct method and other baselines. Summary: Overall, both our proposed methods for predicting domains from metadata (in this case future timestamp), perform comparably or better than CMA-based DA, which requires the much stronger assumption that data in these domains was available for training models. Moreover, we are not restricted to small domain-shifts: our indirect method can effectively predict domains that are distant from available training domains. These capabilities enable use cases where we can calibrate (domain adapt) a model and deploy it for immediate use in a new context without waiting to collect data and retrain the model.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Vehicle Type Classification</head><p>Dataset: Comprehensive Cars <ref type="bibr" target="#b36">[37]</ref> is a recent large-scale dataset of vehicle photos. We use the first subset (Part-I in <ref type="bibr" target="#b36">[37]</ref> The two domain factors are orthogonal, so they produce 6 × 5 = 30 domains in total. The number of images per domain ranges from 347 to 1410, with 24151 in total -about 80% of the dataset. To evaluate Predictive-DA, we use a hold-one-domain-out strategy. In each round, we observe all domains' data (not necessarily labels) except the heldout target domain. For this target domain, we only know the domain parameters, but use the proposed methods to estimate its subspace. Subsequently we perform a standard UDA analysis: from one of the 30 − 1 = 29 source domains, we train a classifier with or without the help of the predicted subspace and domain adaptation (via GFK).</p><p>For parsimony, we exhaustively consider each possible , we see that performance drops as the gap between source and target year grows <ref type="figure" target="#fig_3">(Fig. 3, inset)</ref>. These visualisations verify the existence of two independent sources of domain shift, and thus support the value of our multi-variate regression contribution. Predictive DA Analysis: We next investigate whether the proposed methods can predict the target subspace in order to alleviate the domain-shift problem visualised in <ref type="figure" target="#fig_3">Fig. 3</ref>. <ref type="table" target="#tab_3">Table 3</ref> reports the mean and standard deviation of the accuracies calculated from 870 experiments. From this we can observe that: (i) The DA methods surpass the No-DA baseline and (ii) Our Direct and Indirect methods match the upper bound of fully observed DA in performance and stability. It strongly suggests that our proposed methods can synthesise useful subspaces for use with UDA methods. Further Analysis: To analyse the previous results in more detail, we plot the accuracy broken down over target or source domain ( <ref type="figure" target="#fig_8">Fig. 4(a)</ref>). Since the number of domains is large, we rescale the accuracies as:     <ref type="figure" target="#fig_8">Fig. 4(a,top)</ref> shows that for all target domains, the proposed methods surpass the baseline of not using DA, and sometimes even surpass DA-with-ground-truth-subspace. Similarly, <ref type="figure" target="#fig_8">Fig. 4</ref>(a,bottom) shows that most source domains provide positive transfer on average. However, three source domains produce 'hard-to-transfer' classification models.</p><p>Negtive transfer analysis: The reason behind negative transfer in <ref type="figure" target="#fig_8">Fig. 4</ref>  <ref type="formula" target="#formula_2">(1082)</ref>, but its label set is imbalanced by a very low number of MPV cars. However, note that for these source domains, negative transfer is also observed when DA-with-ground-truth-subspace is used as well, so these are examples of downstream UDA failure, rather than failures of our subspace prediction.</p><p>For reference, in 870 experiments, DA (with groundtruth subspace) improved 711 (81.72%). Of these 711 experiments, Direct improves 687 (of its 700 positive transfer cases in total) and Indirect improves 678 (of its total 690 positive transfer cases). Thus overall, as long as DA can alleviate the domain shift, it is likely that our predictive DA can as well -but without accessing the domain's data.</p><p>Effect of number of observed domains: The experiments so far have considered a hold-one-out setting, with all domains except the target being observed. In practice, we may not have such a such dense collection of known domains, so we investigate the relation between number of training domains and performance. We select two representative examples from the 870 available source→target pairs: 2010/Front-Side→2013/Rear-Side and 2011/Side→2011/Rear-Side. Then we sample an increasing number (1 to 27) of domains (together with source domain's subspace) for training our models. We run each experiment 20 times randomly choosing the sources each time. <ref type="figure" target="#fig_8">Fig. 4(b)</ref> illustrates the results. Generally more observed domains leads to better performance. However this dependence is weak once a few domains have been ob-served: The accuracy is close to the upper bound once the number of observed domains is larger than 15. This reassuringly suggests that dense observations of prior domains is not critical for the efficacy of predictive-DA.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>We proposed the problem of vector-parametrised predictive domain adaptation and developed two solutions based on manifold-valued data regression. This allows us to predict a test-time subspace and thus align a source classifier to a test-domain in advance of seeing any data. Results on two benchmarks demonstrate that our approach matches, and sometimes surpasses the upper bound of using the true test-time subspace. This could impact a variety of areas where it would be useful to be able to pre-calibrate a model, or calibrate it on the fly based on sensor metadata.</p><p>There are numerous areas for future work. We studied vector domain parameters, but kernel regression could apply to any domain parameter where kernels exist (e.g., trees, strings). While the proposed method uses a set of available source domains' data to learn the subspace regressor, it can only exploit a single source domain's labels. A useful extension would be to exploit multiple source domains' labels. It is also interesting is to see if the predicted subspace can act as a regulariser that still helps when target data are available but limited. We assume (in common with most other DA work) that the domain parameter is observed and accurate. Relaxing this assumption to deal with missing or noisy parameters is also an interesting direction. Finally, although our application was predictive-DA, our methods for regression on the Grassmannian are general contributions that could be used in other areas such as medical imaging.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Illustration of the proposed methods. Direct kernel regression: Domain parameters to subspace: R M → G. Indirect regression: Domain parameters to distances of a reference set to subspace:</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head></head><label></label><figDesc>detection performance with DA (CMA<ref type="bibr" target="#b13">[14]</ref>) and Predictive-DA (Direct, Indirect, EDD<ref type="bibr" target="#b17">[18]</ref>). future extrapolation of car detection.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 2 .</head><label>2</label><figDesc>Surveillance experiment results</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 3 .</head><label>3</label><figDesc>Demonstration of domain shift: Accuracies of every source-target combination without DA. Each off-diagonal cell corresponds to one of 870 experiments. Rows indicate domain for classifier training, and columns correspond to the target domain.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head></head><label></label><figDesc>) in our second experiment. This subset contains 30,955 images of entire cars, in which there are 431 unique models. The manufacturing year ranges from 2004 to 2015, and each image is associated with one of five view points. Setup: We use the state-of-the-art CNN model VGG-full [2] as feature extractor. The image is preprocessed by cropping the given bounding box, rescaling to 224×224 and subtracting the mean. Then it is fed into the CNN, where values in the penultimate layer (4096 neurons) is used as the feature vector for further experiments. We define a multi-class recognition task: to determine if the vehicle is an MPV, SUV, sedan, or hatchback. For the domain parameters, we use a two-dimensional vector [Year, Viewpoint]. We encode years 2009-2014 as integers 1-6, and viewpoint (Front, Front-Side, Side, Rear-Side, Rear) as integers 1-5. We exclude years 2004-08 and 2015 because there are too few examples, producing extremely small domains.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head></head><label></label><figDesc>acc = acc. − acc. of No-DA |acc. of DA-with-true-subspace − acc. of No-DA| To interpret the results, divide the rescaled figures into three intervals: [1, +∞] means the proposed method outperforms DA with ground-truth subspace; [0, 1] means the proposed method makes positive contribution, but less than DA with ground-truth subspace; [−∞, 0] means negative transfer happens -using DA is worse than not using it.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head></head><label></label><figDesc>Performance over each target (top) and source (below) domains. Domains sorted by accuracy.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head></head><label></label><figDesc>of dependence of accuracy on number of observed domains to train Grassmann regression. Left: 2010 Front-side→2013 Rear-side Right: 2011 Side→2011 Rear-side</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_8"><head>Figure 4 .</head><label>4</label><figDesc>Evaluating multivariate domain prediction on comprehensive cars database</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 .</head><label>1</label><figDesc>Contrasting our direct (D) and indirect (ID) methods versus existing predictive/non-predictive domain adaptation studies.</figDesc><table>Capability 
+D ID [14] [18] [38] 
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 2 .</head><label>2</label><figDesc>Distances d 2 (P1, P2) on G(K, D) in terms of principal angles and orthonormal bases</figDesc><table>Principal angles 
+Orthonormal bases 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 3 .</head><label>3</label><figDesc>Vehicle Classification Results. Accuracy average over all 870 source-target domain combinations. No-DA Direct Indirect GT-DA 54.06 ± 12.09 58.12 ± 9.69 58.21 ± 9.56 58.23 ± 9.68</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head></head><label></label><figDesc>(a,bottom) could be: (i) Two domains have fewer examples (438, 621) than average (805), (ii) The third domain has enough examples</figDesc><table></table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Strictly speaking, it is inaccurate to say a matrix with orthonormal columns is a point on the Grassmann manifold, though many papers use this terminology<ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b8">9]</ref>. The correct manifold to mention is Stiefel manifold, but this does not affect the correctness of these subspace-based DA methods because such a matrix is one of the non-unique numerical representations of a point on the Grassmann manifold.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements This work was supported by EPSRC (EP/L023385/1), and the European Union's Horizon 2020 research and innovation program under grant agreement No 640891.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">LIBSVM: A library for support vector machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-C</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-J</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Intelligent Systems and Technology</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Return of the devil in the details: Delving deep into convolutional nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chatfield</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">British Machine Vision Conference (BMVC)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Population shape regression from random design data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">C</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">T</forename><surname>Fletcher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Bullitt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Joshi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Analysis of human attractiveness using manifold kernel regression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">C</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Image Processing (ICIP)</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Unsupervised visual domain adaptation using subspace alignment</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Fernando</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Habrard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Sebban</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tuytelaars</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Geodesic regression and the theory of least squares on riemannian manifolds</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">T</forename><surname>Fletcher</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">105</biblScope>
+			<biblScope unit="page" from="171" to="185" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Transductive multi-view embedding for zero-shot recognition and annotation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Fu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Hospedales</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Fu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gong</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Efficient algorithms for inferences on grassmann manifolds</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Gallivan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Van Dooren</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Workshop on Statistical Signal Processing</title>
+		<imprint>
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Geodesic flow kernel for unsupervised domain adaptation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Gong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Sha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Grauman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Domain adaptation for object recognition: An unsupervised approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Gopalan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Chellappa</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Measuring statistical dependence with hilbert-schmidt norms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gretton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Bousquet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Smola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schölkopf</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 16th international conference on Algorithmic Learning Theory</title>
+		<meeting>the 16th international conference on Algorithmic Learning Theory</meeting>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Grassmann discriminant analysis: a unifying view on subspace-based learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">D</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Polynomial regression on riemannian manifolds</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hinkle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Muralidharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">T</forename><surname>Fletcher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">C</forename><surname>Joshi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Continuous manifold based adaptation for evolving visual domains</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hoffman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Saenko</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Geodesic regression on the grassmannian</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Hong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kwitt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Singh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Vasconcelos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Niethammer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Undoing the damage of dataset bias</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Malisiewicz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Efros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Multivariate general linear models (MGLM) on riemannian manifolds with applications to statistical analysis of diffusion weighted images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">J</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">B</forename><surname>Bendlin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Adluru</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">D</forename><surname>Collins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">K</forename><surname>Chung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">C</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">J</forename><surname>Davidson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Singh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Predicting the future behavior of a timevarying probability distribution</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">H</forename><surname>Lampert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Learning to detect unseen object classes by between-class attribute transfer</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">H</forename><surname>Lampert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Nickisch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Harmeling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Zero-data learning of new tasks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Larochelle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI Conference on Artificial Intelligence (AAAI)</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Sequential karhunen-loeve basis extraction and its application to images. Image Processing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Levey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Lindenbaum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1371" to="1374" />
+			<date type="published" when="2000" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Recognizing human actions by attributes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Kuipers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Transfer sparse coding for robust image representation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Ding</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Yu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Transfer feature learning with joint distribution adaptation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Ding</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">S</forename><surname>Yu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Domain generalization via invariant feature representation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Muandet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Balduzzi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schölkopf</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Machine Learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">On estimating regression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">A</forename><surname>Nadaraya</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Theory of Probability &amp; Its Applications</title>
+		<imprint>
+			<date type="published" when="1964" />
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="page" from="141" to="142" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Zero-shot learning with semantic output codes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Palatucci</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Pomerleau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">M</forename><surname>Mitchell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Neural Information Processing Systems (NIPS)</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Visual domain adaptation: A survey of recent advances</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Patel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Gopalan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Chellappa</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Signal Processing Magazine</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>IEEE</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Lie group methods for optimization with orthogonality constraints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">D</forename><surname>Plumbley</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Independent Component Analysis and Blind Signal Separation</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Domain adaptive dictionary learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Qiu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">M</forename><surname>Patel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Turaga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Chellappa</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">A gradient method for geodesic data fitting on some symmetric riemannian manifolds</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Rentmeesters</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Decision and Control and European Control Conference (CDC-ECC)</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Adapting visual category models to new domains</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Saenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Kulis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Fritz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">T</forename><surname>Smith</surname></persName>
+		</author>
+		<title level="m">Optimization Techniques on Riemannian Manifolds. ArXiv e-prints</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+		<title level="m" type="main">Supersymmetric Method for Constructing Quasi</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">M</forename><surname>Tkachuk</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:quant-ph/9806030</idno>
+		<imprint>
+			<date type="published" when="1998" />
+		</imprint>
+	</monogr>
+	<note type="report_type">Exactly Solvable Potentials. eprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Unbiased look at dataset bias</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+		<title level="m" type="main">A feasible method for optimization with orthogonality constraints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Yin</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+		<respStmt>
+			<orgName>Rice University</orgName>
+		</respStmt>
+	</monogr>
+	<note type="report_type">Technical report</note>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">A large-scale car dataset for fine-grained categorization and verification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">Change</forename><surname>Loy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">A unified perspective on multi-domain and multi-task learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">M</forename><surname>Hospedales</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Learning Representations (ICLR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">Distance between subspaces of different dimensions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Ye</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L.-H</forename><surname>Lim</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note>ArXiv e-prints</note>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

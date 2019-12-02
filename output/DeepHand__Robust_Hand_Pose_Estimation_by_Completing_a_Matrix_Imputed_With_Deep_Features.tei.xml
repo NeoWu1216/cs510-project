@@ -1,0 +1,1021 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">DeepHand: Robust Hand Pose Estimation by Completing a Matrix Imputed with Deep Features</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ayan</forename><surname>Sinha</surname></persName>
+							<email>sinha12@purdue.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Purdue University West Lafayette</orgName>
+								<address>
+									<postCode>47907</postCode>
+									<region>IN</region>
+									<country key="US">USA</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chiho</forename><surname>Choi</surname></persName>
+							<email>chihochoi@purdue.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Purdue University West Lafayette</orgName>
+								<address>
+									<postCode>47907</postCode>
+									<region>IN</region>
+									<country key="US">USA</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Karthik</forename><surname>Ramani</surname></persName>
+							<email>ramani@purdue.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Purdue University West Lafayette</orgName>
+								<address>
+									<postCode>47907</postCode>
+									<region>IN</region>
+									<country key="US">USA</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">DeepHand: Robust Hand Pose Estimation by Completing a Matrix Imputed with Deep Features</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:39+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We propose DeepHand to estimate the 3D pose of a hand using depth data from commercial 3D sensors. We discriminatively train convolutional neural networks to output a low dimensional activation feature given a depth map. This activation feature vector is representative of the global or local joint angle parameters of a hand pose. We efficiently identify 'spatial' nearest neighbors to the activation feature, from a database of features corresponding to synthetic depth maps, and store some 'temporal' neighbors from previous frames. Our matrix completion algorithm uses these 'spatio-temporal' activation features and the corresponding known pose parameter values to estimate the unknown pose parameters of the input feature vector. Our database of activation features supplements large viewpoint coverage and our hierarchical estimation of pose parameters is robust to occlusions. We show that our approach compares favorably to state-of-the-art methods while achieving real time performance (≈ 32 FPS) on a standard computer.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Robust hand tracking is central to human-computer interaction interfaces and augmented reality applications. Although, there exists robust and accurate methods for full body tracking, hand tracking is far more challenging <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b22">23,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b16">17,</ref><ref type="bibr" target="#b17">18]</ref>. This is due to several reasons: (i) the hand pose exists in a high dimensional space because each finger and the palm is associated with several degrees of freedom, (ii) the fingers exhibit self similarity, are flexible and often occlude each other, (iii) noise in acquired data coupled with fast finger articulations confounds continuous hand tracking. Multi camera setups or GPU acceleration eases some of these challenges, but limits deployment to the general public.</p><p>We present a robust method for hand tracking with a * These authors made an equal contribution. single depth camera which achieves real time performance without a GPU. Specifically, we propose a novel matrix completion method to estimate the joint angle parameters on a per frame basis. Our method is flexible to operate with or without temporal information. This alleviates the need for explicit pose initialization if the method loses track or the hand disappears from the camera's view frustum. Furthermore, our pre-compiled database supports large viewpoint coverage and our hierarchical pose estimation from global to local parameters is robust to severe finger occlusions.</p><p>At the core of our approach lies a convolutional neural net (ConvNet) architecture to discriminatively reduce the dimensionality of the depth map. ConvNets have achieved ground-breaking performance in image classification <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b23">24]</ref> and video recognition <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b8">9]</ref>. A naive strategy to replace the classification layer in a deep neural net with a regression layer leads to errors, as the objective function often gets stuck in a local minima. Previous approaches have shown that this error decreases by incorporating a prior <ref type="bibr" target="#b14">[15]</ref> or a intermediate heat map features <ref type="bibr" target="#b28">[29]</ref> into the ConvNet architecture. Different from these approaches, we train several ConvNets to output a discriminative low dimensional activation feature in the penultimate fully connected layer. This activation vector represents either the global hand orientation or the local articulations of the five fingers, given a depth map. Our main insight is that a pool of (spatially or temporally) nearby activation features to an activation feature can better represent the hand pose. For generating a population of activation features from which such a pool is extracted, we render realistic depth maps covering a large range of hand articulations and feed them into a deep ConvNet. The ConvNets automatically learn the scope of training (local or global), the finger type (thumb, ring, index, middle or little), and prevalent occlusions by simply inputting the discretized class of the pose parameter values, and do not require any additional information. We then store the activation features from the ConvNets for each depth map in the training data to create a population database of activation features. We demonstrate these activation features can be re-purposed on generic databases in our experiments. Additionally, the low dimensionality of the activation feature, coupled with product quantization enables efficient retrieval of approximate nearest neighbors from the population at runtime.</p><p>A pose estimation matrix is imputed with the deep activation vectors of the nearest neighbor, their corresponding joint angles and the activation vector of the input depth map. This is similar in spirit of the collaborative filtering approach proposed in <ref type="bibr" target="#b0">[1]</ref>. However, neither do we use low fidelity BRIEF descriptors for nearest neighbor retrieval, nor do we use inefficient iterations to factorize and complete the matrix. Instead, we estimate the unknown values in the incomplete matrix (i.e. pose parameters of input depth map) by assuming a low-rank matrix structure with missing entries. We also add some temporal neighbors from previous frames in the pose estimation matrix which act as a regularizer and reduce jitter of the estimated pose.</p><p>Following the success of cascaded approaches to hand pose estimation <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b17">18]</ref>, we hierarchically regress the hand pose from global to local joint angle parameters. The articulation complexity of the palm is lower than of the fingers, and hence, robust estimation of the global orientation is an easier task relative to that of the fingers. The ConvNet finetuned to the conditioned search space outputs more discriminative activation features for finger articulations. This in turn leads to better accuracy for finger parameter estimation. We demonstrate that the ConvNet architecture significantly outperforms PCA <ref type="bibr" target="#b22">[23]</ref> and random forests (RF) <ref type="bibr" target="#b17">[18]</ref> for global pose initialization. Our overall pipeline runs as 32 frame per second (FPS) on a standard computer. Our main contributions are summarized as follows:</p><p>1. Initialization of the pose matrix using a low dimensional and discriminative representation of the global orientation or finger articulations as an activation feature using deep ConvNets, which aids efficient retrieval of nearest neighbors from a large population of pre-computed activation features using product quantization.</p><p>2. An efficient matrix completion method for estimating joint angle parameters using the initialized pose matrix.</p><p>3. A hierarchical pipeline for hand pose estimation that combines the global pose orientation and finger articulations in a principled way while maintaining real-time frame rates on a standard computer.</p><p>The rest of this paper is organized as follows. In section 2, we review relevant literature on 3D hand pose estimation from depth sensors. Section 3 briefly describes our synthetic 3D hand model. The activation feature extraction using ConvNets is discussed in section 4. Section 5 introduces matrix completion for pose parameter estimation. Experimental results and evaluations are described in section 6. Finally, conclusions are presented in section 7.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>Approaches for hand-pose estimation can be broadly classified as either generative (model-based) or discriminative (appearance based) methods. We briefly discuss the generative and discriminative methods relevant to our work. We refer the readers to <ref type="bibr" target="#b4">[5]</ref> for a comprehensive review on wearable, marker based and RGB input based techniques from single or multiple cameras and <ref type="bibr" target="#b30">[31]</ref> for review on depth-based body pose estimation.</p><p>Generative methods An explicit hand model guides the optimization of an objective function in model-based methods to recover the hand pose. <ref type="bibr" target="#b15">[16]</ref> use particle swarm optimization (PSO) and <ref type="bibr" target="#b13">[14]</ref> use a Gauss-Seidel solver to recover the hand configuration. The objective function is based on the similarity of the depth map and an approximate depth map corresponding to the hand model. The accuracy of the these methods are highly reliant on the hand crafted similarity function. Moreover, these methods are susceptible to error accumulation when the previous estimates are inaccurate. To alleviate model drift prevalent in generative methods, recent approaches adopt the paradigm of optimization + reinitialization. These methods first create a population of hand poses and then select the hand pose that best fits the observed depth data. The heavy computational burden of this optimization means that the system either achieves low frame rates (12 FPS in <ref type="bibr" target="#b29">[30]</ref>) or needs to be accelerated using a GPU (as in <ref type="bibr" target="#b17">[18]</ref>).</p><p>Discriminative approaches Appearance based methods are proposed for hand pose estimation in <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b26">27]</ref> similar in spirit to human pose estimation in <ref type="bibr" target="#b18">[19]</ref>. The low resolution of hand depth map, self-occlusion and rapid movements lead to large errors in these methods. Subsequently, local regression <ref type="bibr" target="#b2">[3]</ref> based approaches were presented to improve the robustness to occlusions, but these methods <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b27">28]</ref> may suffer from jittering between frames. In <ref type="bibr" target="#b28">[29]</ref>, convolutional neural networks are used to infer 2D heat-maps corresponding to joint positions. However, their inverse kinematic approach for 3D pose recovery from a 2D image is inefficient in the presence of occlusion. Although our method is similar in spirit to regression, our deep activation features together with enforced temporal consistency in the matrix completion method suppress jitter. Also, the low rank assumption used for matrix completion implicitly allays outliers and aggravates inliers. Our method also shares relationship with the collaborative filtering model proposed in <ref type="bibr" target="#b0">[1]</ref>. However, the small size of their database makes the method prone to errors when introduced to unknown poses. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Preliminaries</head><p>In this section, we briefly describe our 3D hand model and discuss our method to extract the region of interest corresponding to the hand which serves as input to our hand pose estimation method.</p><p>Hand model We use a kinematic hand model with 21 degrees of freedom (DOF), represented as H(θ, φ), as standard in hand pose estimation literature (see <ref type="figure" target="#fig_0">Figure 1e</ref>). θ denotes the set of 18 joint angle parameters and φ is the set of 3 global translation parameters (x, y and z) of the hand.</p><p>Region of interest extraction Unlike the body, the hand occupies a relatively small region in the overall depth image obtained from the 3D depth camera. Hence, we preprocess the depth image to only include values that lie in the range of [50, 500] mm under the premise that the hand lies within this range. We then do a largest blob detection as an indicator of the hand segment, followed by median filtering for noise removal, depth normalization so that values lie in the range [0, 255], and finally resize the image while maintaining the aspect ratio to obtain a 64×64 depth image.The centroid of the blob in the original image marks the global position, φ. In more extreme settings (for ranges upto 2000 mm), we use a colored wristband as a simple indicator of the hand region as done in <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b24">25]</ref>. Even in a close range scenario, the wristband helps removing extraneous pixels like those below the wrist, leading to better performance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Dimensionality Reduction using Deep Learning</head><p>It is well known that the activation features from the intermediate hidden layers of a ConvNet can be re-purposed across domains <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b5">6]</ref>. This suggests that the activation feature of a depth image itself contains discriminative cues about its overall shape and form of the hand, in the context of hand pose estimation. The thrust of our approach relies on the contention that a pool of nearby activation features is better able to reach consensus about the hand's orientation and shape. This introduces two challenges (1) The activation features in the population should conform to the activation features obtained from different individuals in diverse real settings. Additionally, they should be accurately annotated with their ground truth labels (joint angles or positions) (2) The population of activation features must be large enough to provide robust nearest neighbors to any input activation feature, however should be efficiently retrievable and consume limited memory. A straightforward approach is to directly use the depth data gathered from 3D sensors to train a ConvNet and store the corresponding activation features. However, creating a such database of hand poses to cover full range of hand articulations with accurate ground truth labels is a tedious task. In this section, we describe how we generate such a population of activation features from synthetic dataset, reflective of real data. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Synthetic population of realistic hand poses</head><p>We generate synthetic depth maps by first imposing static (e.g., range of motion, joint length, location) and dynamic (e.g., among joints and fingers) constraints listed in <ref type="bibr" target="#b12">[13]</ref> 1 . We then uniformly sample each of the 18 joint parameters in this restricted configuration space. This ensures that the depth maps are reflective of real poses covering a wide range of hand articulations. However, data from 3D sensors are prone to noise, distortion and additional artifacts. Hence, we add gaussian noise N (0,σ 2 ) to the synthetic depth maps wherein the standard deviation σ is chosen from a range of [0, 2] by uniform sampling. We empirically validated the inclusion of Gaussian noise by testing the classification accuracy of the global rotation angles in the correct bin (total 144) for a real hand depth sequence captured using SoftKinect DS325 (2500 frames). The drastic improvement of classification accuracy in <ref type="table">Ta</ref> . Our large coverage ensures the robustness our method to camera viewpoint changes and not restricted to near frontal poses. We discuss the size of the synthetic population in context to ConvNets in the next subsection.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Activation features using ConvNet</head><p>ConvNet and its variants are the current state of the art architecture for numerous classification tasks such as object detection, scene recognition, texture recognition and fine grained classification. However, hand tracking is effectively a regression task. Our preliminary experiments with deep learning indicated that ConvNets do not adapt to regression as well as they do for classification as shown in <ref type="figure">Figure 2d</ref>. Consequently, our activation features are computed using ConvNet for classification instead of regression. These activation features feed into our matrix completion method which implicitly regresses and outputs the estimated joint angle parameters. The classification of joint angles into quantized bins, and hence, calculation of the activation feature in the penultimate layer, is performed by the ConvNet architecture displayed in <ref type="table" target="#tab_3">Table 2</ref>. Observe that the penultimate layer corresponding to the activation feature is <ref type="bibr" target="#b0">1</ref> The availability of rigourous constraints in terms of joint angles is the main reason we choose angles over joint position in our hand pose method.  a 32 dimensional vector of the sixth convolutional layer so as to reduce memory usage in storing the population of activation features. We use these activation features in a collaborative spatio-temporal fashion to estimate pose parameters using efficient nearest neighbor search and out novel matrix completion model.</p><p>There are two extremal strategies for quantization. The first strategy is to quantize each joint angle separately for a total of 21 ConvNets. However, this is inefficient both in terms of speed and memory. The second is to use an allin-one strategy to train all joint angle parameters simultaneously. However, it would be impossible to learn an accurate classifier in such a high dimensional space even with a nominal number of bins. Hence, we use a 2-stage hierarchical strategy which satisfactorily balances computational time, memory requirement and classification accuracy.</p><p>In Stage 1 the activation feature associated with the 3 global rotation angles, θ W = {θ W r ,θ W p ,θ W y } is calculated and input into the matrix completion method along with a pool of nearest neighbors. The output of the matrix completion method is used to infer the correct rotation bin. For each rotation bin, five ConvNets are trained to output the activation feature associated with each of the five fingers. The ConvNets in Stage 2 are trained on images within the bin to simplify learning and also on images in adjacent bins to prevent boundary errors. We used 200K images for Stage 1 global regression (see <ref type="figure" target="#fig_0">Figure 1c)</ref>   The activation feature associated with the global rotation is critical to the overall accuracy of our approach because this step influences all subsequent ones. To demonstrate the efficacy of ConvNet relative to other approaches, we detail the classification accuracy of ConvNet for global rotation relative to PCA <ref type="bibr" target="#b22">[23]</ref> and random forest (RF) <ref type="bibr" target="#b17">[18]</ref>. We used 100K depth images because of RF's memory constraints. <ref type="table" target="#tab_5">Table 3</ref> shows that ConvNet achieves a very high accuracy with minimal memory requirement.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Matrix Completion for Regression</head><p>The matrix completion algorithm runs 6 times: once for the 3 global rotation angles and 5 times for estimating the 15 joint angle parameters associated with the fingers. An iterative approach as the one in <ref type="bibr" target="#b0">[1]</ref> is inefficient. Instead we evaluate the unknown parameters in a single shot by assuming a low rank matrix. We discuss the details of our nearest neighbor retrieval to create a pool of activation features followed by the matrix completion method below.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Extracting pool of activation features</head><p>Our matrix completion method takes spatio-temporal nearest neighbors as input. Acquiring temporal nearest neighbors are trivial as they are simply the activation features from the previous frames. However, brute force nearest neighbor evaluation from say the 200K global activation vectors introduces a computational bottleneck unsuitable for realtime application. Our solution to alleviate this problem is to use the top classes predicted by the softmax function in ConvNet to first reduce the search space. We then use highly efficient product quantization based nearest neighbor approximation <ref type="bibr" target="#b6">[7]</ref> with 8 subquantizers to retrieve the desired number of nearest neighbors. Details of product quantization are skipped for brevity. In practice, we found retrieving a higher fraction of approximate nearest neighbors by product quantization and then selecting the desired number of nearest neighbors using brute force search from this reduced subset to be more robust than direct retrieval.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Matrix Completion</head><p>Let n be number of spatial nearest neighbors, D 1 ∈ R n×r be the r dimensional activation vectors and P 1 ∈ R n×m be the m desired joint angle parameters being estimated of the n neighbors. In addition, let vector d 2 ∈ R 1×r be the r dimensional activation feature output from Con-vNet. Let vector p 2 ∈ R 1×m be the unknown parameters.</p><formula xml:id="formula_0">M = D 1 P 1 d 2 p 2 (1)</formula><p>Our task is to estimate p 2 given the other 3 block matrices. Assuming a low rank structure of matrix M this reduces ro solving:</p><formula xml:id="formula_1">p 2 = d 2 (D 1 ) −1 P 1 ,<label>(2)</label></formula><p>The proof of the above result is detailed in the supplementary material.</p><p>In practice, we observed that kernelizing the feature matrix and regularizing it by adding a small constant, c to the diagonal, in the spirit of ridge regression makes the output more robust. This parameter c is set to 0.001 in all our experiments. We use the RBF kernel with sigma equal to the variance of the dataset (σ = 200).</p><p>A straightforward extension beyond including just the spatial neighbors is to also include t temporal neighbors from previous frames. This reduces jitter and improves the final quality of our solution. We use 60 nearest neighbors and 16 temporal neighbors for the global parameter estimation. For the 15 local angles, we use 24 nearest neighbors and 4 temporal neighbors. The choice of these parameters is empirically validated in the supplementary material.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Experiments</head><p>We conduct a comprehensive evaluation with state-ofthe-art approaches as well as self-generated baselines on the synthetic and real datasets to demonstrate the efficacy of our solution. We first describe the datasets and baselines.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.1.">Datasets</head><p>We split our evaluation into two stages. First, we use synthetic data to compare our method to baselines. This comparison validates the rationale of our specific approach against other choices. This data is generated using the same approach as described in Section 3 to generate our database, albeit continuity constraints are enforced. Two synthetic sequences are generated which are 2.5K frames long at standard rates (approximately 80 seconds each). The advantage of these synthetic sequences are that they are already labeled, avoiding tedious ground-truth assignment.</p><p>Next, for fair comparison to other methods, we evaluate the performance of our method on two publicly available datasets: Dexter1 <ref type="bibr" target="#b20">[21]</ref> and NYU <ref type="bibr" target="#b28">[29]</ref>. The Dexter1 dataset consists of seven gestures (i.e., adbadd, flexex1, pinch, fingercount, tigergrasp, fingerwave, and random) with high inter-gesture verifiability, however, mostly from frontal viewpoints. Hence we use the NYU dataset for a more thorough evaluation of the method. As we shall shortly show, our method remarkably achieves state-of-art performance without fine-tuning on their training dataset.</p><p>Although the authors are aware of other datasets like ICVL <ref type="bibr" target="#b25">[26]</ref>, MSRA14 <ref type="bibr" target="#b16">[17]</ref>, or MSRA15 <ref type="bibr" target="#b22">[23]</ref> in the literature, we do not use them for one or more of the following reasons: (1) the depth pixels of the body are included with the hand depth map. Recall we use a heuristic method for segregating the hand from the rest of the body and a wrist band under more extreme conditions. We did not find a straightforward way to segregate the data without incurring loss. <ref type="formula" target="#formula_1">(2)</ref> The hand poses are enforced using muscular labor, i.e., hand configurations wherein one or more finger applies pressure on another. These configurations are not accounted for in our joint angle modeling framework to render synthetic depth maps, however, modeling additional constraints to account for such hand poses is plan of future work. Also note that we use the SoftKinetic's DethSense DS325 for all our real demonstrations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.2.">Baselines for method validation</head><p>There are three salient features of our approach which we rigorously validate. First, a hierarchical approach is justified in spite of the computational overload it introduces. Second, a pool of activation features is better at estimating the hand pose than a single activation feature or a direct regression based approach using ConvNets. Third, our choice of imputing the matrix with spatio-temporal neighbors and kernelizing the features provides superior performance. We naturally perform this validation by comparing to the following three baselines: (a) Holistic which evaluates all parameters in an all-in-one approach using a single activation feature. We also compare it to JMFC which also performs a matrix update using a single feature vector, although using computationally expensive iterations in <ref type="bibr" target="#b0">[1]</ref> (b) Conv-PQ which directly estimates the pose parameters to be the nearest neighbor and Regression which directly regresses pose parameters using ConvNets with L2 loss are used to validate our choice of pool of activation feature, and finally (c) No-temporal which contains only spatial neighbors for matrix completion, Non-kernel which uses feature matrix without kernelization, and Weighted which finds pose parameters using Gaussian similarity between activation features as weights are used to validate our matrix completion approach. The validation is done in terms of one or more of the following standard error metrics popular for pose estimation problems: (a) the average joint angle error in degrees, (b) the average joint distance error in millimeters, (c) the maximum allowed joint angle error in terms of a threshold ε A , and (d) the maximum allowed joint distance error in terms of a threshold ε D . Broadly speaking, the first two metrics evaluate performance at a local joint level whereas the the other measure global robustness of an approach. We employ the appropriate metric based on the context of the evaluation. Although our angle based method is particularly effective in minimizing joint angle errors, yet we choose joint distances as our error metric on public datasets to demonstrate the overall robustness of our approach.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.3.">Comparison to Baselines</head><p>In this section, we quantitatively evaluate our method with respect to the baselines on the synthetic datasets. <ref type="figure">Figure 2</ref> shows that our method significantly outperforms the proposed baselines both in terms of local as well global error metrics. The performance markup over the Conv-PQ approach as seen in <ref type="figure">Figure 2c</ref> indicates that a ConvNet by itself would do a poor job of inferring a complex articulated structure such as the hand. The performance improvement over Holistic in the zone of small angles is also intuitive. It indicates that the global activation feature contains some latent information about the local joint angles, but this information is better revealed by a hierarchical estimation procedure. This is also validated in <ref type="figure">Figure 2a and 2b</ref> where we see a significant performance improvement in terms of joint angles for finger portions that are frequently occluded such as the middle finger. It is also noteworthy to note that the similarity of these plots in terms of error ranges to plots on real hand sequences implicitly validate our data creation process. Regression 2 for joint angle prediction resulted in worse performance than even Conv-PQ baseline (nearest activation feature) as shown in <ref type="figure">Figure 2d</ref>. We adopted different approaches, e.g., fine-tuning our ConvNets, L1 loss, etc.to ensure that direct regression is indeed suboptimal. We contend that as joint angles are a function of relative joint points,learning joint angles is harder compared to joint positions, and hence, resulted in inferior performance. <ref type="figure">Figure 2e</ref> shows the performance of matrix-completion baselines relative to our proposed approach. The figure validates that constructing a kernel, incorporating temporal information and using matrix completion instead of simple weighted regression are all critical to good performance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.4.">Comparison with the state-of-the-arts</head><p>Having validated the rationale of our approach, we now compare our method to other state-of-the-art approaches  <ref type="figure">figure 4</ref> in <ref type="bibr" target="#b19">[20]</ref> and figure 3a in <ref type="bibr" target="#b14">[15]</ref>). <ref type="bibr" target="#b28">[29,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b14">15,</ref><ref type="bibr" target="#b0">1]</ref> on the Dexter1 and NYU datasets. Quantitative Analysis We measured the average distance error of five fingertips (in mm) on the Dexter1 dataset to evaluate the overall robustness of our approach. <ref type="figure">Figure 3a</ref> shows the comparison of our approach to other methods which include both discriminative <ref type="bibr" target="#b25">[26,</ref><ref type="bibr" target="#b0">1]</ref> as well as generative <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b21">22]</ref> methods. Not only does our method achieve the lowest overall error rate (see <ref type="table" target="#tab_7">Table 4</ref>), we also achieve the lowest individual error rates for all but one gesture i.e. adbadd. This is because the particular gesture is especially hard to model in terms of joint angle constraints.</p><p>We evaluated our approach directly on the 8.2K of test depth maps from the NYU dataset. <ref type="figure">Figure 3b</ref> illustrates the maximum allowed error with respect to the distance  threshold. The fact that our method performs better than <ref type="bibr" target="#b14">[15]</ref> over a long range indicates the activation features we get from ConvNet can be used across domains and sensor types 3 , and hence the activation features can potentially be made general purpose. This is encouraging in the context of progressively fine-tuning ConvNets with more information such as when new joint angle constraints or dynamic constraints become available. Furthermore, simulating principled noise models such as <ref type="bibr" target="#b11">[12]</ref> corresponding to true sensor noise can further enhance the generality of these features in the context of hand pose estimation. Qualitative Analysis We do a qualitative evaluation of our algorithm with the state-of-the-art methods on some public datasets. The top row of <ref type="figure">Figure 4</ref> shows cropped 64x64 depth images which are used as input to our system, and the second row shows corresponding estimates with our matrix completion method (without temporal neighbors). All estimated poses are kinematically valid and follow a natural sequence. For the sake of completion, we also show some failure cases in the last two columns of <ref type="figure">Figure 4</ref>. In our system this happens when some unnatural pose (driven by muscular force ) appears in front of the camera or when the image is severely affected by noise or has missing parts.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Conclusion</head><p>We present a novel framework for hand pose estimation using a deep convolutional neural network. Instead of using a single activation feature, we use a pool of activation features to synchronize and collectively estimate the hand <ref type="bibr" target="#b2">3</ref> NYU dataset use PrimeSense to capture their data configuration, all in real time. This pool is derived by training a deep ConvNet with a large database of synthetic hand poses and efficiently storing the activation feature corresponding to the penultimate fully connected layer. Careful thought was placed so that this database is reflective of real data. At runtime the pool of activation features in the spatial domain and temporal domain combine together in a hierarchical way to robustly estimate the hand pose. The derived activation features can be applied across domains and sensor types as demonstrated in our experiments. Furthermore, our method achieves state of the art performance. Although our approach is general, one limitation of our activation features is that the estimations are only valid in the joint angle domain. Future work will focus on ways such that people working in the joint angle or joint position domain can seamlessly fuse their models together to create even deeper and more robust models. Another line of future work is to investigate our matrix completion approach in a more general setting. The simplicity combined with its efficiency makes a promising alternative to standard regression techniques for a wide array of machine learning tasks.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>An overview of the proposed approach. In a real-setting, we extract region of interest using depth map and RGBbased wrist band detector (a)-(b). The obtained depth image is fed into a ConvNet which outputs an activation feature. This activation feature synchronizes with other features in a population database using our matrix completion method and the global pose parameters are estimated(c). Based on this global pose initialization, we estimate the rest of the local joint parameters in the same recursive manner (d). The final hand pose is displayed on a multimedia screen (f).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 :Figure 3 :</head><label>23</label><figDesc>The results of quantitative evaluation on the synthetic dataset. The results of quantitative evaluation on the public dataset. Note that the accuracies are directly estimated from corresponding figures (i.e.,</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 :</head><label>1</label><figDesc>The classification accuracy for the global rotation.</figDesc><table>Gaussian noise 
+
+Classification accuracy 
+Ye s 
+77.00% 
+No 
+44.88% 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>ble 1 highlights that our noise model if fairly reflective of real sensor noise. Our training dataset covers an entire camera viewpoint (coverage due to the 3 wrist rotation angles θ W = {θ W</figDesc><table>r ,θ W 
+p ,θ W 
+y }, where θ W 
+
+r 
+
+∈ [−45, 135],θ W 
+
+p 
+
+∈ 
+[−45, 180],θ W 
+y ∈ [−45, 180])</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 2 :</head><label>2</label><figDesc>Overall architecture of our convolutional networks. (Conv: convolutional layer, Pmax: max pooling layer, ReLU: rectified linear units layer, Smax: softmax layer)</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head></head><label></label><figDesc>wherein the roll, pitch, yaw angles were quantized into 144 bins. Subsequently, 5 Convnets for each of the 144 bins were trained on 10K im-</figDesc><table>Model 
+
+Accuracy Memory Settings 
+RF 
+57.45 % 1.30 GB 22 Depth, 70 Trees 
+59.04 % 1.87 GB 22 Depth, 100 Trees 
+ConvNet 
+71.01 % 2.12 MB 20 Epochs 
+72.30 % 2.12 MB 25 Epochs 
+PCA 
+5.72 % 
+None 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_5" validated="true"><head>Table 3 :</head><label>3</label><figDesc>Accuracy and memory comparison of global pose initialization.</figDesc><table>ages within the bin and 10K randomly chosen images in 
+adjacent bins. Training converged after 20 Epochs for the 
+global bin and approximately 10 Epochs for the local rota-
+tion bins. The discrete quantization over the joint angle val-
+ues for each finger is as follows: thumb (144), index (144), 
+middle (36), ring (144), and little (144). 
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_6" validated="false"><head></head><label></label><figDesc>Figure 4: Qualitative evaluations are conducted on two public datasets, Dexter1 and NYU. The first row shows the input depth image, and corresponding estimation is presented in the second row.</figDesc><table>Input depth 
+
+Our 
+estimation 
+
+Dexter1 
+NYU 
+Failure cases 
+
+Methods [26] [21] [22] [20] 
+[1] 
+Ours 
+Error 
+42.4 31.8 24.1 19.6 25.27 16.35 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_7" validated="false"><head>Table 4 :</head><label>4</label><figDesc>The overall average error (mm) of the five fingertip positions on Dexter1. Ours shows the lowest error rate compared to the state-of-the-art methods.</figDesc><table></table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">the penultimate layer is of dimension 2048 as we do not need nearest neighbor retrieval</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements This work was partially supported by the NSF Award No.1235232 from CMMI and 1329979 from CPS, as well as the Donald W. Feddersen Chaired Professorship from Purdue School of Mechanical Engineering. Any opinions, findings, and conclusions or recommendations expressed in this material are those of the authors and do not necessarily reflect the views of the sponsors.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">A collaborative filtering approach to real-time hand pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Choi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Sinha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">H</forename><surname>Choi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Jang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Ramani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision (ICCV), 2015 IEEE International Conference on</title>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Multi-column deep neural networks for image classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ciresan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Meier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2012 IEEE Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="3642" to="3649" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Locally weighted regression: an approach to regression analysis by local fitting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">S</forename><surname>Cleveland</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">J</forename><surname>Devlin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of the American Statistical Association</title>
+		<imprint>
+			<biblScope unit="volume">83</biblScope>
+			<biblScope unit="issue">403</biblScope>
+			<biblScope unit="page" from="596" to="610" />
+			<date type="published" when="1988" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Decaf: A deep convolutional activation feature for generic visual recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hoffman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Tzeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of The 31st International Conference on Machine Learning</title>
+		<meeting>The 31st International Conference on Machine Learning</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="647" to="655" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Vision-based hand pose estimation: A review</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Erol</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Bebis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nicolescu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">D</forename><surname>Boyle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Twombly</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computer Vision and Image Understanding</title>
+		<imprint>
+			<biblScope unit="volume">108</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="52" to="73" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Rich feature hierarchies for accurate object detection and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE conference on computer vision and pattern recognition</title>
+		<meeting>the IEEE conference on computer vision and pattern recognition</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="580" to="587" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Aggregating local image descriptors into compact codes. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Perronnin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Douze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sanchez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1704" to="1716" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">3d convolutional neural networks for human action recognition. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="221" to="231" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Large-scale video classification with convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Toderici</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Shetty</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Leung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sukthankar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="1725" to="1732" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Hand pose estimation and hand shape classification using multi-layered randomized decision forests</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Keskin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Kıraç</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">E</forename><surname>Kara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Akarun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision-ECCV 2012</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="852" to="863" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Real time hand pose estimation using depth sensors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Keskin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Kıraç</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">E</forename><surname>Kara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Akarun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Consumer Depth Cameras for Computer Vision</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="119" to="137" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Simulating kinect infrared and depth images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Landau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">Y</forename><surname>Choo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">A</forename><surname>Beling</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Model-based analysis of hand posture</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">L</forename><surname>Kunii</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computer Graphics and Applications</title>
+		<imprint>
+			<biblScope unit="volume">15</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="77" to="86" />
+			<date type="published" when="1995" />
+			<publisher>IEEE</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Dynamics based 3d skeletal hand tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Melax</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Keselman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Orsten</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of Graphics Interface 2013</title>
+		<meeting>Graphics Interface 2013</meeting>
+		<imprint>
+			<publisher>Canadian Information Processing Society</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="63" to="70" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Oberweger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Wohlhart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.06807</idno>
+		<title level="m">Hands deep in deep learning for hand pose estimation</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Efficient model-based 3d tracking of hand articulations using kinect</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Oikonomidis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Kyriazis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Argyros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Realtime and robust hand tracking from depth</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Qian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2014 IEEE Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="1106" to="1113" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Accurate, robust, and flexible real-time hand tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Sharp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Keskin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Robertson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Taylor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">K C R I</forename><surname>Leichter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">V Y</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">F P K E</forename><surname>Krupka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CHI</title>
+		<meeting>CHI</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">8</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Real-time human pose recognition in parts from single depth images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Sharp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kipman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Finocchio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Blake</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cook</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Moore</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Communications of the ACM</title>
+		<imprint>
+			<biblScope unit="volume">56</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="116" to="124" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Fast and robust hand tracking using detection-guided optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sridhar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Mueller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oulasvirta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Theobalt</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Interactive markerless articulated hand motion tracking using rgb and depth data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sridhar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oulasvirta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Theobalt</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE International Conference on Computer Vision (ICCV)</title>
+		<meeting>the IEEE International Conference on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2013-12" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Real-time hand tracking using a sum of anisotropic gaussians model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sridhar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Rhodin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-P</forename><surname>Seidel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oulasvirta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Theobalt</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the International Conference on 3D Vision (3DV)</title>
+		<meeting>the International Conference on 3D Vision (3DV)</meeting>
+		<imprint>
+			<date type="published" when="2014-12" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Cascaded hand pose regression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Liang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="824" to="832" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Going deeper with convolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1" to="9" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">Robust articulated-icp for realtime hand tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Tagliasacchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Schroeder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Tkach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bouaziz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Botsch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pauly</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">Technical report</note>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Latent regression forest: Structured estimation of 3d articulated hand posture</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">J</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Tejani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-K</forename><surname>Kim</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2014 IEEE Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="3786" to="3793" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Real-time articulated hand pose estimation using semi-supervised transductive regression forests</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-H</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-K</forename><surname>Kim</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision (ICCV), 2013 IEEE International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="3224" to="3231" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title level="m" type="main">Multivariate relevance vector machines for tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Thayananthan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Navaratnam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Stenger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H</forename><surname>Torr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cipolla</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+			<publisher>Springer</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Real-time continuous pose recovery of human hands using convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tompson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Stein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Perlin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics (TOG)</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page">169</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Efficient hand pose estimation from a single depth image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Cheng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision (ICCV), 2013 IEEE International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="3456" to="3462" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">A survey on human motion analysis from depth data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ye</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gall</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Timeof-Flight and Depth Imaging. Sensors, Algorithms, and Applications</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="149" to="187" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

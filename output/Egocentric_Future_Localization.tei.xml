@@ -1,0 +1,1243 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Egocentric Future Localization</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hyun</forename><forename type="middle">Soo</forename><surname>Park</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">University of Pennsylvania</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jyh-Jing</forename><surname>Hwang</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">University of Pennsylvania</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yedong</forename><surname>Niu</surname></persName>
+							<email>yedniu@seas.upenn.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">University of Pennsylvania</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jianbo</forename><surname>Shi</surname></persName>
+							<email>jshi@seas.upenn.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">University of Pennsylvania</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Egocentric Future Localization</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:40+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We presents a method for future localization: to predict plausible future trajectories of ego-motion in egocentric stereo images. Our paths avoid obstacles, move between objects, even turn around a corner into space behind objects. As a byproduct of the predicted trajectories, we discover the empty space occluded by foreground objects.</p><p>One key innovation is the creation of an EgoRetinal map, akin to an illustrated tourist map, that 'rearranges' pixels taking into accounts depth information, the ground plane, and body motion direction, so that it allows motion planning and perception of objects on one image space. We learn to plan trajectories directly on this EgoRetinal map using first person experience of walking around in a variety of scenes. In a testing phase, given an novel scene, we find multiple hypotheses of future trajectories from the learned experience. We refine them by minimizing a cost function that describes compatibility between the obstacles in the EgoRetinal map and trajectories. We quantitatively evaluate our method to show predictive validity and apply to various real world daily activities including walking, shopping, and social interactions.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Consider a dynamic scene such as <ref type="figure" target="#fig_0">Figure 1</ref> where you, as the camera wearer, plan to pass through the corridor in the shopping mall while others walk in different directions. You need to plan your trajectory to avoid collisions with others and objects such as walls and fence. Looking ahead, you would plan a trajectory that enters into the shop by turning left at the corner although such space cannot be seen directly from your perspective.</p><p>The fundamental problem we are interested in is future localization: where am I supposed to be after 5, 10, and 15 seconds? This challenging task requires understanding of the scene in terms of a long term temporal human behaviors, with missing data due to occlusions. We solve this future path prediction problem by learning from our experiences of walking around (in different scenes) with egocen-</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Future localization</head><p>Occluded space discovery We present a method to predict a set of plausible future trajectories given a pair of egocentric stereo images. As a byproduct of the predicted trajectories, the occluded space by foreground objects such as the space inside of the shop or behind the ladies are discovered.</p><p>tric stereo cameras 1 as shown in <ref type="figure" target="#fig_1">Figure 2</ref>(a). How past experiences lead to future path prediction into a novel scene? <ref type="bibr" target="#b1">2</ref> There are two forms of learning signals: 1) what we see in egocentric visual images (on 2D retinal space), and 2) where we go through physical movements (on a 3D ground space). Learning from retinal visual images tell us about 'walking affordance': what are the walkable surfaces, which objects we can should avoid, which gap between objects we can pass through. Learning from physical movement tell us about 'spatial preferences': what is our sense of personal spaces with people, how we navigate around people and objects, and how we 'parse' a clutter scene and walk through it.</p><p>While 'walking affordance' and 'spatial preferences' can be learned in isolation, can we learn them jointly and use that information directly to effect path planning in a novel scene? Our goal of direct learning/reasoning is contrast to first extracting object semantic information then project them onto the 3D ground plane for motion planning (as done in robotics), which is sensitive to over-simplified semantic abstraction (not all icy roads are hard to walk on). This is also in contrast to directly learning paths in the image space then remap it to the 3D ground plane, which is sensitive to 3D geometrical alignment of the ground plane and objects in the novel scene.</p><p>We unify the spatial and perceptual learning signals by 'rearranging' pixels into a synthetic EgoRetinal image, taking into accounts depth information, so that it is both easy for planning and for perception of objects. Inspired by proxemics <ref type="bibr" target="#b11">[12]</ref> and Gibson's 'ground theory' of spatial perception <ref type="bibr" target="#b9">[10]</ref>, we represent the space around a camera wearer using an EgoRetinal map which reassembles an illustrated tourist map: an overhead map with objects seen from first person video projected onto it. 3D information is used to generate this map: 1) ground plane inferred from the RGBD data, and 2) the heading direction from instantaneous egomotion of walking. The pixels in input (retinal) image are rearranged according to its projection onto the ground plane, parametrized by a log-polar coordinate centered at the person's location and aligned with the direction of heading. Each pixel in EgoRetinal map retains its RGB value in the retinal image, and its object height of the ground computed from 3D depth. This 2.5D representation efficiently models a trajectory configuration space as it respects 3D distance and 2D image measurements.</p><p>A predictive future localization model is learned by exploiting in-situ first person stereo videos from various life logging activities. Given a testing EgoRetinal map, we find multiple hypotheses of future trajectories from the learned experience. We adapt these trajectories to the testing EgoRetinal map by minimizing a cost function that describes compatibility between the obstacles and trajectories.</p><p>Why EgoRetinal map? Two cues are strongly related to predict a trajectory of ego-motion, e.g., where is he or she going? (1) ego-cue: a vanishing point is often aligned with the direction of ego-motion, and 2D visual layout of the obstacles in the first person view implicitly encodes the semantics of the scene. (2) exo-cue: objects in a 3D scene such as road, buildings, and tables constrain the space where the wearer can navigate. Our EgoRetinal map representation exploits these two cues where we create an illustrated tourist map representation capturing both 2D visual arrangement of the obstacles (egocentric coordinate) and their 3D layout (exocentric coordinate). This representation allows us to analyze and understand different scene types and ego-motion in a unified coordinate system.</p><p>Contributions To our best knowledge, this is the first paper that tackles egocentric future localization via in-situ first person measurements. Core technical contributions of our paper are (a) an EgoRetinal map that encodes a spatialvisual distribution of objects with respect to an egocentric view, allowing us to apply perception and trajectory planning in a common coordinate system; (b) trajectory learning by inferring 'walking affordance' and 'spatial preferences' from past ego-walking experience; (c) occluded space discovery through trajectory prediction; and (d) the EgoMotion dataset with a depth and its long term camera trajectory, which includes diverse daily activities across camera wearers. Our EgoRetinal map representation significantly outperforms image based representation up to ×8 accuracy at 0-15 seconds.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>Our framework lies an intersection between behavior prediction and egocentric vision.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Human Behavior Prediction</head><p>Predicting where-to-go is a long standing task in behavioral science. This task requires to understand the interactions of agents with objects in a scene that afford a space to move. Pentland and Lin <ref type="bibr" target="#b31">[32]</ref> modeled human behaviors using a hidden Markov dynamic model to recognize driving patterns. Such Markovian model is an attractive choice to encode human behaviors because it reflects the way humans make a decision <ref type="bibr" target="#b19">[20,</ref><ref type="bibr" target="#b22">23,</ref><ref type="bibr" target="#b39">40]</ref>. These models, especially partially observable Markov decision process (POMDP), have influenced motion planning in robotics <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b32">33,</ref><ref type="bibr" target="#b34">35]</ref>.</p><p>In computer vision, Ali and Shah <ref type="bibr" target="#b2">[3]</ref> developed a flow field model that predicts spatial crowd behaviors for tracking extremely cluttered crowd scenes. Inspired by the social force model <ref type="bibr" target="#b12">[13]</ref>, Mehran et al. <ref type="bibr" target="#b26">[27]</ref> predicted pedestrian behaviors in a crowd scene to detect abnormal behaviors, and Pellegrini et al. <ref type="bibr" target="#b30">[31]</ref> used a modified model to track multiple agents. Vu et al. <ref type="bibr" target="#b37">[38]</ref> predicted plausible activities from a static scene by associating the scene statistics and labeled actions. Our work is also closely related with path planning frameworks by Gong et al. <ref type="bibr" target="#b10">[11]</ref> (path topology), Kitani et al. <ref type="bibr" target="#b15">[16]</ref> (visual semantics), and Alahi et al. <ref type="bibr" target="#b1">[2]</ref> (social affinity).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Egocentric Vision</head><p>A first person camera is an ideal camera placement to observe human activities because it reflects the attention of the camera wearer. This characteristics provides a powerful cue to understand human behaviors <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b14">15,</ref><ref type="bibr" target="#b33">34,</ref><ref type="bibr" target="#b35">36]</ref>.</p><p>Traditional vision frameworks such as object detection, recognition, and segmentation frameworks have been integrated in first person data <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b33">34]</ref>. Notably, the relationship between visual semantics and egomotion has been recently studied <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b36">37]</ref>. In a social setting, first person cameras are used to capture person's visual attention, which allows localizing joint attention in social interactions. <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b29">30]</ref>. Such characteristics of first person cameras were used to generate interesting applications in vision <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b38">39]</ref> and graphics <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b16">17]</ref>.</p><p>Unlike previous methods, our EgoRetinal map representation combines ego-and exo-coordinates, which allows us to perceive a scene and predict trajectories in a unified coordinate system. From this representation, we can understand scene dynamic affordance with respect to ego-coordinate, e.g., how does a person approaching to me affect my egomotion? Our method does not rely on prior processes such as semantic segmentation, object detection, or saliency prediction, which are often fragile to real world scenes or need manual annotations. Our trajectories are automatically annotated by structure from motion enabling a large scale prediction. We leverage the trajectory prediction to discover an empty space that is not observable because of visual occlusion.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Representation of EgoRetinal Map</head><p>An EgoRetinal map is a trajectory configuration space <ref type="bibr" target="#b4">[5]</ref> for space experienced from first-person view but visualized in an overhead bird-eye map, akin to an illustrated tourist map. There are three key ingredients in the EgoRetinal map.</p><p>First, inspired by Gibson's ground theory <ref type="bibr" target="#b9">[10]</ref>-the ground plane plays a crucial role in our perception on a 3D spatial arrangement around us, we define the ground plane represented by (X g , Z g ) coordinate from an input ego-centric depth map, D(x, y). The normal direction, n, of the ground plane is aligned with the Y -axis (the gravity direction). The egocentric camera is located at c = 0 h 0 T with h height above the ground plane as shown in <ref type="figure" target="#fig_1">Figure 2</ref>(b). Second, the instantaneous ego-motion direction is used to define the Z g direction of the EgoRetinal map. We identify the instantaneous ego-motion in 3D by projecting it onto the ground plane to define the Z g direction, i.e.,</p><formula xml:id="formula_0">Z g = (v − (n T v)v)/ v − (n T v)v where v ∈ R 3 is the 3D instantaneous velocity.</formula><p>This representation is less sensitive to unintentional head vibration and intentional gaze direction movement, which both are much rapid movements comparing to the body motion.</p><p>Third, we project each pixel (x, y) in the egocentric image (retina) onto the ground plane coordinate system, (X G , Z G ), and shown in <ref type="figure" target="#fig_1">Figure 2</ref>(b). We use a log-polar (r, θ) parametrization in the (X g , Z g ) plane to obtain the EgoRetinal coordinate for each pixel, i.e., an injective map exists from the EgoRetinal map to the egocentric image: f (r, θ) = (x, y). In practice, we discretize the polar coordinate system by uniformly sampling in angle between π/6 and 5π/6 and uniform sampling in the logarithm of radius as shown in <ref type="figure" target="#fig_1">Figure 2</ref>(c).</p><p>We construct an EgoRetinal map, i.e., M(r, θ) = φ(r, θ) I(f (r, θ)) T T ∈ R 4 where I(x, y) ∈ R 3 is the RGB value of the egocentric image at (x, y). φ(r, θ) ∈ R measures the height of the point off ground u, from the ground plane that intersects the ray, g, from the center of eyes, c, to (r, θ) with an occluding object, O, i.e.,</p><formula xml:id="formula_1">φ(r, θ) = u T n,<label>(1)</label></formula><p>where</p><formula xml:id="formula_2">u = min λ∈L λg + c such that L = {λ|λg + c ⊂ ∪ I i=1 O i , λ &gt; 0}. {O i } O i=1</formula><p>is a set of objects in the scene. We characterize a 3D spatial arrangement of objects with respect to the EgoRetinal coordinate: 1) Objects on the ground: EgoRetinal map produces an uniform sample of the space around us in terms of distance and direction as shown in the first column of <ref type="figure" target="#fig_2">Figure 3</ref>(a). In contrast, the Cartesian representation on ground plane (second column) drastically collapses image pixels of short range area to construct the configuration space. Also it is hard to represent destinations on the horizon, as they have infinite spatial extend. In the other hand, the Cartesian in image plane (third column) does not encode a 3D spatial layout and rapidly diminishes image pixels of long range area, which does not reflect 3D distance. 2) Objects off the ground: EgoRetinal map provides a cylindrical unwrapping of the image. It reduces foreshortening of surfaces that are facing us, thus creating a frontal view of the facade. This process normalizes the object appearances with respect to the camera location producing a less orientation-variant shape representation that makes the learning efficient.</p><p>3) Objects at height of the viewer: EgoRetinal map emphasizes higher objects up the the height of the camera as they are spatially enlarged relative to objects close to the ground. This characteristics allows us to prioritize obstacles when planning a trajectory, e.g., a curb is easily passed over.</p><p>The EgoRetinal representation supports learning future localization from first person videos by combining cues from 3D scene geometry and ego-motion direction. Its benefits include: 1) a coordinate system normalized by the direction of ego-motion provides a common 3D reference frame to learn; 2) overhead view representation removes the variations in first person 3D experience due to sudden gaze movements and camera placement offset, 3) the log-polar encoding and sampling gives more importance to nearby space, and 4) the depth masking encodes implicitly both roll and pitch angle of head, making it more situation aware.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Trajectory Representation</head><formula xml:id="formula_3">Let X = r 1 θ 1 · · · r F θ F</formula><p>T be a 2D trajectory on the ground plane where F is the time steps to predict and r i and θ i are distance (radial) and direction (angle) with respect to the person's feet location at the i th time instance as shown in <ref type="figure" target="#fig_1">Figure 2</ref>(b). In practice, this trajectory can be obtained by projecting 3D camera poses between the f + 1 and f + F time instances at the f th time instant onto the ground plane. This allows us to represent all trajectories in the same coordinate system (EgoRetinal space), which are normalized by the direction of instantaneous ego-motion.</p><p>Topological properties of trajectory Two trajectories may share the same topology with respect to a scene while their Euclidean distance remains large. For instance, two trajectories that move in parallel along a wide road are topologically same while trajectories that bifurcate at an Y-junction are topologically different. To encode such topological variance, we augment the orientation toward near objects at each point in trajectory measured by an obstacle image:</p><formula xml:id="formula_4">Y = X T Ω T T where Ω = ω 1 · · · ω F T , and ω i = atan2(v i × z i , v i · z i ) where v i ∈ R 2</formula><p>is the unit tangential direction of trajectory at the i th time instant <ref type="bibr" target="#b2">3</ref> . z = y/ y is a unit vector towards near obstacles, i.e., y = w∈Nǫ(Xi) φ(w)w / w∈Nǫ(Xi) φ(w) − X i where X i is the point on the trajectory at the i th time instant and N ǫ is neighboring pixels of X i with radius ǫ ∝ 1/r in the EgoRetinal map. Ω encodes an angular distribution of near obstacles with respect to the tangential direction of the trajectory as shown in the second column of <ref type="figure" target="#fig_2">Figure 3</ref>(b). This representation is invariant to a homotopy class between trajectories, i.e., line integral along a trajectory encodes the winding number of each homotopy class <ref type="bibr" target="#b10">[11]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Prediction</head><p>A trajectory of ego-motion is associated with an EgoRetinal map, i.e., given a depth image, we know how we explored the space in the training data (Section 5). By leveraging a trajectory configuration space, or EgoRetinal map described in Section 3, in this section, we present a method to predict a set of plausible trajectories and to discover the occluded space that the predicted trajectories pass.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Ego-motion Prediction</head><p>Trajectory planning consists of coarse and fine levels. At a coarse level, we are interested in finding path satisfying the 'spatial preferences' induced by the scene type and spatial layout: what are possible destinations to move towards, whether we choose to move through a clutter environment of people, parked cars and furniture. We retrieve the coarse level plan by finding top m most similar EgoRetinal maps in the training set, and copy their trajectories directly as</p><formula xml:id="formula_5">{X Di } m i=1 .</formula><p>Given the EgoRetinal map, we compute a fea-</p><formula xml:id="formula_6">ture h = h (M D ) T h (M RGB ) T T</formula><p>where h(M) is a feature representation of the image M computed by pretrained network <ref type="bibr" target="#b17">[18]</ref>. M D and M RGB are the EgoRetinal map for depth and RGB images, respectively, where M D is treated as an independent three-channel image. Note that other compact feature representations can be used as a complimentary. We further group trajectories sharing similar topological features into k where k ≪ m based on the trajectory representation described in Section 3.1 using a kmean clustering algorithm.</p><p>At a fine level, we ensure that the trajectory is physically feasible. The main requirement is learning a 'walking avoidance' probability function ξ (r i , θ i )) on the EgoRetinal map using RGB values, i.e., I(f (r, θ)). We fine-tune the fully convolutional network <ref type="bibr" target="#b25">[26]</ref> using our training data. Given an RGB EgoRetinal map, M RGB , we convolve a Gaussian along the ground truth trajectory and invert its intensity, producing a pixel-wise 'walking avoidance' map. We use 500×500 EgoRetinal image with 227×227 receptive field and modify the FC8 layer to predict a binary output. We automatically label pixels that trajectories have passed from the training data, which enables the network to predict a pixel-wise probability of walkability as shown in the forth column of <ref type="figure" target="#fig_2">Figure 3</ref>(b). In conjunction with ξ, we incorporate φ(r, θ) that also indicates obstacles via the depth.</p><p>Estimating X that to find a path that stays in the ground plane while conforming both the obstacle map and the 'walking avoidance'. The trajectory minimizes the following cost function:</p><formula xml:id="formula_7">minimize X F i (φ (r i , θ i ) + ξ (r i , θ i )) + λ X − X * D 2 subject to X * D = argmin {X D j } m j=1 X − X Dj 2<label>(2)</label></formula><p>where λ controls how much deviation allows from the retrieved trajectories. Equation <ref type="formula" target="#formula_7">(2)</ref> is used in robotics communities for various path planning tasks. However, this does not take into account the trajectory that is partially occluded by objects because the occluded part of the trajectory always produces higher cost. Instead, we introduce a novel cost function that minimizes a trajectory cost difference between the given image and the retrieved image from . The blue grid shows sampling density to construct its representation and the red lines indicates unit 3D distance. The Cartesian on ground plane (second column) drastically collapses image pixels of short range area and more importantly, models one destination. The Cartesian in image plane (third column) does not model 3D spatial layout of scenes and rapidly diminishes image pixels of long range area. (b) A trajectory is represented by its polar coordinates X and angular distribution Ω of near objects (second column) that allows us to cluster into a few multiple hypotheses. We predict a trajectory that minimizes depth and semantic incompatibility in the EgoRetinal space. Colormap represents incompatibility with respect to D (third column) and RGB (forth column) channel along the trajectory. For the RGB cost, we overlay with a probability of pixel-wise incompatibility learned by a fully convolutional neural network <ref type="bibr" target="#b25">[26]</ref>.</p><p>the database:</p><formula xml:id="formula_8">minimize X F i (h (φ (r i , θ i ) − φ D (r i , θ i )) +h (ξ (r i , θ i ) − ξ D (r i , θ i ))) + λ X − X * D 2 subject to X * D = argmin {X D j } m j=1 X − X Dj 2 ,<label>(3)</label></formula><p>where h(·) is the hinge loss function, and φ D and ξ D are the cost of the retrieved trajectory from its EgoRetinal map. This minimization finds a partially occluded trajectory as long as there exists a trajectory in the database that has similar occlusion cost.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Occluded Space Discovery</head><p>The predicted trajectories allow us to discover the hidden space occluded by foreground objects because the trajectories can be still predicted in the hidden space. We build a likelihood map of the occluded space as follows:</p><formula xml:id="formula_9">ψ(x) = J j=1 F i=1 exp − x − Xij 2 /2σ 2 φ (Xij) J j=1 F i=1 exp (− x − Xij 2 /2σ 2 ) ,<label>(4)</label></formula><p>where ψ(x = (r, θ)) is the likelihood of the occluded space that a trajectory can pass through at the evaluating point x in the EgoRetinal map. X ij = (r ij , θ ij ) is the i th point of the j th predicted trajectory, J is the number of predicted trajectories, and σ is the bandwidth for the Guassian kernel. Equation (4) takes into account the likelihood of the predicted trajectories weighted by the likelihood of the occlusion. ψ(x) is high when many trajectories are predicted at x while φ(x) is high.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">EgoMotion Dataset</head><p>We present a new dataset, EgoMotion dataset, captured by first person stereo cameras (GoPro Hero 3 cameras with 100mm baseline) as shown in <ref type="figure" target="#fig_1">Figure 2(a)</ref>. This dataset includes various indoor and outdoor scenes such as Park, Malls, and Campus with various activities such as walking, shopping, and social interactions. The stereo cameras are calibrated prior to the data collection and synchronized manually with a synchronization. Detailed data analysis can be found in the supplementary material. Depth Computation We compute disparity between the stereo pair after stereo rectification. A cost space of stereo matching is generated for each scan line and match each pixel by exploiting dynamic programming in a coarse-tofine manner. 3D Reconstruction of Ego-motion We reconstruct a camera trajectory using a standard structure from motion pipeline with a few modifications to handle a large number of images 4 . We independently reconstruct partitioned dataset and merge them using overlapping images. Then, we project the reconstructed camera trajectory onto the ground plane estimated by fitting a plane using RANSAC <ref type="bibr" target="#b8">[9]</ref>. Scenes We collect both indoor and outdoor data, which consists of 26 scenes with 65.5k frames of 9.1 hours long in total, including walking on campus, in parks and downtown streets, shopping in the mall, cafe and grocery, as well as taking public transportation. The data consists of various activities (walking, talking, and shopping), scenes (campus, park, malls, and downtown streets), cities, and time. The dataset is summarized in <ref type="table">Table 1</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Result</head><p>We apply our method to predict ego-motion and hidden space in real world scenes by leveraging the EgoMotion dataset. Testing data are completely isolated from the training data in terms of geographical locations, i.e., a camera resectioning method such as perspective-n-point algorithms <ref type="bibr" target="#b21">[22]</ref> does not apply.   . We compare our method (A1: Ego+CNN+Ego) with 9 baseline representations (please find baseline descriptions in Section 6.1; A2: Ego+CNND+Ego; A3: Ego+CNNRGB+Ego; A4: Ego+Sub+Ego; A5: Ego+DSub+Ego; A6: Image+CNN+Ego; A7: Image+GIST+Ego; A8: Image+DSub+Ego; A9: Image+CNN+Image; A10: Image+GIST+Image). Our EgoRetinal map representation significantly outperforms other representations. Comparing to image based prediction (A9 and A10), it produces ×8 accurate prediction. In the right column, we show error rate, i.e., how fast error increases. All errors are measured in the meteric scale.</p><formula xml:id="formula_10">E g o + C N N + E g o E g o + C N N D + E g o E g o + C N N R G B + E g o E g o + D S u b + E g o E g o + S u b + E g o I m</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.1.">Quantitative Evaluation</head><p>We quantitatively evaluate our trajectory prediction by comparing with ground truth trajectories. Multiple trajectories are often equally plausible, e.g., Y-junction, while one ground truth trajectory is available per image. To account multiple hypotheses, we find top K = 10 trajectories and use the trajectory that produces minimum error, i.e., e = min j X − Z j 2 where Z j is the j th retrieved trajectory. Note that unlike previous approaches measured a spatial distance between trajectories [16] 5 , our evaluation measures a spatiotemporal distance between trajectories because the time scale also needs to be considered.</p><p>Total 10 representations (A1-A10 in <ref type="table" target="#tab_2">Table 3</ref>) <ref type="bibr" target="#b5">6</ref> are compared. The first column in <ref type="table" target="#tab_2">Table 3</ref> represents a trajectory configuration space which can be either EgoRetinal map or image space as shown in <ref type="figure" target="#fig_2">Figure 3(a)</ref>. Also the feature representation can be either EgoRetinal map or image space. For each representation, we use various data type, e.g., RGB vs. RGBD vs. D. Coarse rep. stands for a feature vector constructed by uniform sampling of RGB or D data. GIST is <ref type="bibr" target="#b4">5</ref> A dynamic time warping was used to handle a time scale. <ref type="bibr" target="#b5">6</ref> These baseline algorithms are designed by ours because no previous algorithm exists to predict the trajectories of ego-motion a scene descriptor <ref type="bibr" target="#b27">[28]</ref>. Note that A6, A7, and A8 use image features which are not normalized by ego-motion and ground plane. A9 and A10 are predictions on image domain without 3D information about the scene. For these predictions, we project the predicted trajectories in the image onto the ground plane to measure 3D distance between trajectories.  We compare our method (A1) in 4 outdoor (Train staion, Park, Downtown, and Campus) and 4 indoor scenes (Shopping mall, Grocery store, IKEA, and Costco). <ref type="figure" target="#fig_6">Figure 6</ref> shows average error between a retrieved trajectory and ground truth over time. A2 and A3 performs similar to ours and A4 and A5 are slightly worse. A6, A7, and A8 are 1.5-2 times worse than our method and image based prediction (A9 and A10) is 7-8 times worse than ours. A similar trend is also observed in error rate, i.e., how fast the error increases. <ref type="table" target="#tab_2">Table 2 summarizes the error across scenes and  0∼5 secs   5∼10 secs  10∼15 secs  O1  O2  O3  O4  I1  I2  I3  I4  O1  O2  O3  O4  I1  I2  I3  I4  O1  O2  O3  O4  I1  I2  I3  I4  Image+GIST+Image  2</ref> time.</p><p>Comparison with moving straight We compare with a linear trajectory, "moving straight" in terms of predictive precision-how often one of the predicted trajectories aligns with the ground truth trajectory, i.e., prec.</p><formula xml:id="formula_11">= N i=1 D i /N , where N is the number of testing images. D i = 1 if min k max t X t − X k t &lt; ǫ, and D i = 0 other- wise where X k</formula><p>t is the location at the t th time instant of the k th predicted trajectory and X is the ground truth trajectory. We set ǫ = 1.5m. The predictive precision is summarized in <ref type="table" target="#tab_5">Table 4</ref> and our prediction (A1) clearly outperforms "Moving straight" prediction.  Occluded Space Discovery We quantitatively evaluate our occluded space discovery by measuring detection rate, D/N where D is the number of true positive detection and N the total number of detection produced by the space discovery. We threshold the likelihood of the occluded space, ψ, from Equation (4) and manually evaluate whether the detection is correct. Note that no ground truth label is available unless the camera wearer already had passed through the space. The detection rate in <ref type="table">Table 5</ref> indicates that our method predicts the outdoor scenes better than the indoor scenes. This is because the indoor scenes such as Grocery and IKEA, the camera wearer had a number of close interactions with objects such as shelves or products where the view of the scenes are substantially limited.  <ref type="table">Table 5</ref>. Detection rate</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.2.">Qualitative Evaluation</head><p>We apply our method on real world examples to predict a set of plausible trajectories of ego-motion and the occluded space by foreground objects. Our training dataset is completely separated from testing data, e.g., Grocery scene was trained to predict IKEA scene. Given a depth image, we estimate the ground plane by a RANSAC based plane fitting with gravity and height prior. This ground plane is used to define the EgoRetinal map. <ref type="figure" target="#fig_0">Figure 1</ref> and 5 illustrate our results from the EgoMotion dataset. In <ref type="figure">Figure 5</ref>, we show (1) image and ground truth ego motion; (2) input depth image; (3) EgoRetinal map overlaid with the predicted trajectories (purple) and ground truth trajectory (red); (4) projection of the trajectories (future localization); (5) projection of occluded space (Occlusion discovery). For all scenes, our method predicts the plausible trajectories that pass through unexplored space. Obstacle Avoidance Our cost function in Equation <ref type="formula" target="#formula_8">(3)</ref> minimizes cost difference between trajectories from training data and testing data. This precludes a trajectory passing through an object unless the retrieved trajectory was partially occluded. EgoRetinal map captures the obstacle avoidance as shown in Downtown I, Campus II, Walmart, Costco, and so on. For Downtown II and Bench, we predict plausible trajectories while the ground truth trajectory cannot be correctly estimated. Multiple Plausible Trajectories Our prediction produces a number of plausible trajectories that conform to the testing scene. Trifurcated trajectories in Street I, Department store I and II; bifurcated trajectories in Mall I and Parking lot; and multiple directions of trajectories in Costco and Mall III. Occluded Space Discovery The space occluded by foreground objects is discovered by the predicted trajectories.  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Discussion</head><p>In this paper, we present a method to predict ego-motion and occluded space by foreground objects from egocentric stereo images. An EgoRetinal map that encodes a likelihood of occlusion and its semantics is used to represent a (b) Indoor scene <ref type="figure">Figure 5</ref>. Given an input RGBD image (the first and second column), we predict a set of plausible trajectories of ego-motion (the forth column) and discover the occluded space (the fifth column) using the EgoRetinal map (the third column: predicted purple trajectories and ground truth red trajectory). The first column shows an image with ground truth trajectory of ego-motion measured by 3D reconstruction of a first person camera (time is color-coded). For more scene description, see Section 6.2.</p><p>scene around a camera wearer. We associate a trajectory with the EgoRetinal map to predict a set of plausible trajectories. The trajectories that retrieved via a convolutional neural network are refined to conform with a testing scene. The occluded space is detected by measuring how often the predicted trajectories invade the occluded space.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Where am I supposed to be after 5, 10, and 15 seconds?</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .</head><label>2</label><figDesc>(a) We use egocentric stereo cameras to capture our dataset. (b) We represent the space around a person using a trajectory configuration space called EgoRetinal map computed from (c) an egocentric RGBD image. The future trajectory is marked as a colored line. (d) The EgoRetinal map that is normalized to the ground plane and the direction of instantaneous ego-motion captures a likelihood of occlusion and its semantics. This EgoRetinal map is invariant to sudden gaze movement, camera placement offset, and scene orientation.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 .</head><label>3</label><figDesc>(a) We represent an EgoRetinal map on ground plane (first column)</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 4</head><label>4</label><figDesc>Figure 4. We compare our method (A1: Ego+CNN+Ego) with 9 baseline representations (please find baseline descriptions in Section 6.1; A2: Ego+CNND+Ego; A3: Ego+CNNRGB+Ego; A4: Ego+Sub+Ego; A5: Ego+DSub+Ego; A6: Image+CNN+Ego; A7: Image+GIST+Ego; A8: Image+DSub+Ego; A9: Image+CNN+Image; A10: Image+GIST+Image). Our EgoRetinal map representation significantly outperforms other representations. Comparing to image based prediction (A9 and A10), it produces ×8 accurate prediction. In the right column, we show error rate, i.e., how fast error increases. All errors are measured in the meteric scale.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head></head><label></label><figDesc>The space inside of the shop and behind the person in Figure 1; the space occluded by moving persons in Campus I and II; the space behind the cars in Bus stop; the space inside of the shop in Mall I; the space inside the cloth in Department store II and III.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 6 .</head><label>6</label><figDesc>Our EgoRetinal map is beneficial to encode a configuration space above the vanishing line. Comparing to other representations, the EgoRetinal map continually links two different overhead views (ground plane and ceiling projections).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 3 .</head><label>3</label><figDesc>Baseline algorithms</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head></head><label></label><figDesc>Table 2. Mean error (m) (O1-O4: outdoor scenes, I1-I4: indoor scenes)</figDesc><table>.00 
+1.66 
+1.77 
+1.69 
+2.03 
+1.66 
+2.04 
+1.68 
+5.49 
+4.22 
+4.83 
+5.25 
+4.96 
+4.86 
+4.95 
+4.91 
+10.78 
+8.04 
+9.45 
+10.22 
+9.38 
+9.70 
+9.34 
+9.36 
+Image+CNN+Image 
+1.28 
+1.20 
+1.12 
+1.11 
+1.44 
+1.18 
+1.11 
+1.05 
+4.28 
+3.60 
+3.69 
+3.77 
+4.12 
+4.08 
+3.55 
+3.49 
+8.63 
+6.97 
+7.45 
+7.57 
+7.95 
+8.28 
+7.01 
+6.91 
+Image+DSub+Ego 
+0.72 
+0.71 
+0.60 
+0.67 
+0.87 
+0.86 
+0.85 
+0.71 
+1.77 
+1.64 
+1.42 
+1.52 
+2.06 
+1.89 
+1.96 
+1.61 
+2.89 
+2.59 
+2.28 
+2.47 
+3.38 
+3.05 
+3.17 
+2.61 
+Image+GIST+Ego 
+0.64 
+0.56 
+0.39 
+0.49 
+0.72 
+0.74 
+0.62 
+0.50 
+1.57 
+1.29 
+0.88 
+1.04 
+1.73 
+1.72 
+1.34 
+1.07 
+2.56 
+2.06 
+1.43 
+1.67 
+2.82 
+2.74 
+2.02 
+1.70 
+Image+CNN+Ego 
+0.66 
+0.60 
+0.38 
+0.52 
+0.79 
+0.77 
+0.59 
+0.54 
+1.58 
+1.36 
+0.87 
+1.13 
+1.85 
+1.80 
+1.29 
+1.16 
+2.59 
+2.15 
+1.40 
+1.82 
+2.98 
+2.89 
+2.04 
+1.81 
+Ego+DSub+Ego 
+0.46 
+0.43 
+0.42 
+0.47 
+0.61 
+0.60 
+0.48 
+0.52 
+1.05 
+0.94 
+0.95 
+0.96 
+1.41 
+1.38 
+1.06 
+1.09 
+1.64 
+1.42 
+1.51 
+1.49 
+2.10 
+1.99 
+1.67 
+1.74 
+Ego+Sub+Ego 
+0.44 
+0.42 
+0.45 
+0.48 
+0.57 
+0.58 
+0.49 
+0.52 
+1.00 
+0.94 
+1.05 
+0.99 
+1.36 
+1.37 
+1.11 
+1.12 
+1.67 
+1.52 
+1.70 
+1.61 
+2.15 
+2.20 
+1.82 
+1.83 
+Ego+CNNRGB+Ego 
+0.44 
+0.41 
+0.39 
+0.47 
+0.55 
+0.57 
+0.48 
+0.48 
+1.00 
+0.87 
+0.85 
+0.96 
+1.21 
+1.28 
+1.02 
+1.00 
+1.56 
+1.26 
+1.27 
+1.46 
+1.78 
+1.90 
+1.50 
+1.52 
+Ego+CNND+Ego 
+0.47 
+0.24 
+0.34 
+0.46 
+0.62 
+0.68 
+1.11 
+0.61 
+1.05 
+0.41 
+0.79 
+0.91 
+1.37 
+1.41 
+2.78 
+1.38 
+1.66 
+0.53 
+1.15 
+1.37 
+1.97 
+1.95 
+3.79 
+2.01 
+Ego+CNN+Ego 
+0.44 
+0.40 
+0.38 
+0.45 
+0.54 
+0.57 
+0.45 
+0.48 
+0.94 
+0.81 
+0.77 
+0.89 
+1.12 
+1.21 
+0.95 
+0.94 
+1.43 
+1.11 
+1.13 
+1.32 
+1.52 
+1.56 
+1.26 
+1.32 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_5" validated="false"><head>Table 4 .</head><label>4</label><figDesc>Predictive precision</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_7" validated="false"><head></head><label></label><figDesc>Ground truth Depth imageEgoSpace map Future loc. Occlusion disc.</figDesc><table>Downtown I 
+
+Campus I 
+
+Campus II 
+
+Bus stop 
+
+Bench 
+
+Downtown II 
+
+Street I 
+
+Street II 
+
+Parking lot 
+
+Bus stop 
+
+(a) Outdoor scene 
+
+IKEA I 
+
+Department store II 
+
+Mall I 
+
+Walmart 
+
+IKEA III 
+
+Mall II 
+
+Costco 
+
+Department store II 
+
+Department store III 
+
+Mall III 
+
+Ground truth Depth image 
+EgoSpace map 
+Future loc. Occlusion disc. 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Any RGBD sensor such as Kinect is complimentary to our depth measurement.<ref type="bibr" target="#b1">2</ref> Note that a camera resectioning method such as perspective-n-point algorithms<ref type="bibr" target="#b21">[22]</ref> does not apply as we predict a trajectory for a novel scene.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">In practice, we use a trigonometric reprsentation instead of ω, i.e., cos ω sin ω , to avoid the singularity at 2π.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="4">A 30 minute walking sequence at a 30 fps reconstruction rate produces HD 108,000 images.</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Learning to see by moving</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Agrawal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Carreira</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Socially-aware large-scale crowd forecasting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Alahi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ramanathan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Floor fields for tracking in high density crowd scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ali</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Automatic editing of footage from multiple social cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Arev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">S</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Sheikh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">K</forename><surname>Hodgins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Shamir</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">SIGGRAPH</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Choset</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">M</forename><surname>Lynch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hutchinson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Kantor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Burgard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">E</forename><surname>Kavraki</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Thrun</surname></persName>
+		</author>
+		<title level="m">Principles of Robot Motion: Theory, Algorithms, and Implementations</title>
+		<imprint>
+			<publisher>MIT Press</publisher>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Understanding egocentric activities</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fathi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Farhadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Rehg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Social interaction: A first-person perspective</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fathi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">K</forename><surname>Hodgins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Rehg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Modeling actions through state changes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fathi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Rehg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Modeling and prediction of human behavior</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">A</forename><surname>Fischler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">C</forename><surname>Bolles</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Communications of the ACM</title>
+		<imprint>
+			<biblScope unit="issue">5</biblScope>
+			<date type="published" when="1981" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">The Perception of the Visual World</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Gibson</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1950" />
+			<publisher>Houghton Mifflin</publisher>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<pubPlace>Boston</pubPlace>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Multi-hypothesis motion planning for visual object tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Gong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Likhachev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">A system for the notation of proxemic behaviour</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">T</forename><surname>Hall</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">American Anthropologist</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="1963" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Social force model for pedestrian dynamics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Helbing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Molnár</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Physics Review</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="1995" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Learning image representations tied to ego-motion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Jayaraman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Grauman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Fast unsupervised ego-action learning for first-person sports videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">M</forename><surname>Kitani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Okabe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Sato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Sugimoto</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Activity forecasting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">M</forename><surname>Kitani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Ziebart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">D</forename><surname>Bagnell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">First person hyperlapse videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kopf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cohen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">SIGGRAPH</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Motion planning under uncertainty for robotic tasks with long time horizons</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Kurniawati</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Du</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hsu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">S</forename><surname>Lee</surname></persName>
+		</author>
+		<editor>Robotics Research</editor>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Modeling humans as reinforcement learners: How to predict human behavior in multi-stage games</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">H</forename><surname>Wolpert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Backhaus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Bent</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bono</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Tracey</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Discovering important people and objects for egocentric video summarization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">J</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ghosh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Grauman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Epnp: An accurate o(n) solution to the pnp problem</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Moreno-Noguer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Continuous inverse optimal control with locally optimal examples</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Levine</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Pixel-level hand detection for egocentric videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">M</forename><surname>Kitani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Learning to predict gaze in egocentric video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fathi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Rehg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Fully convolutional networks for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Abnormal crowd behavior detection using social force model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Mehran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oyama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Modeling the shape of the scene: a holistic representation of the spatial envelope</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="issue">6</biblScope>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">3D social saliency from head-mounted cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">S</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Shiekh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Social saliency prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">S</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Youll never walk alone: Modeling social behavior for multi-target tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Pellegrini</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Schindler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Modeling and prediction of human behavior</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Pentland</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural Computation</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="1995" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Pomdp planning for robust robot control</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pineau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">J</forename><surname>Gordon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Robotics Research</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Recognizing activities of daily living in first-person camera views</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Pirsiavash</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Uav path planning in a dynamic environment via partially observable markov decision process</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ragi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">K P</forename><surname>Chong</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Transactions on Aerospace and Electronics Systems</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">First-person activity recognition: What are they doing to me</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">S</forename><surname>Ryoo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Matthies</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Krishnacam: Using a longitudinal, single-person, egocentric dataset for scene understanding tasks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">K</forename><surname>Singh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Fatahalian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">WACV</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Predicting actions from static scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Vu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Olsson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Laptev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Detecting snap points in egocentric video with a web photo prior</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Xiong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Grauman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Maximum entropy inverse reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Ziebart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Maas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bagnell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dey</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

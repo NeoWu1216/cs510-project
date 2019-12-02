@@ -1,0 +1,1063 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Three-Dimensional Object Detection and Layout Prediction using Clouds of Oriented Gradients</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhile</forename><surname>Ren</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Computer Science</orgName>
+								<orgName type="institution">Brown University</orgName>
+								<address>
+									<postCode>02912</postCode>
+									<settlement>Providence</settlement>
+									<region>RI</region>
+									<country key="US">USA</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Erik</forename><forename type="middle">B</forename><surname>Sudderth</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Computer Science</orgName>
+								<orgName type="institution">Brown University</orgName>
+								<address>
+									<postCode>02912</postCode>
+									<settlement>Providence</settlement>
+									<region>RI</region>
+									<country key="US">USA</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Three-Dimensional Object Detection and Layout Prediction using Clouds of Oriented Gradients</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:48+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We develop new representations and algorithms for three-dimensional (3D) object detection and spatial layout prediction in cluttered indoor scenes. RGB-D images are traditionally described by local geometric features of the 3D point cloud. We propose a cloud of oriented gradient (COG) descriptor that links the 2D appearance and 3D pose of object categories, and thus accurately models how perspective projection affects perceived image boundaries. We also propose a "Manhattan voxel" representation which better captures the 3D room layout geometry of common indoor environments. Effective classification rules are learned via a structured prediction framework that accounts for the intersection-over-union overlap of hypothesized 3D cuboids with human annotations, as well as orientation estimation errors. Contextual relationships among categories and layout are captured via a cascade of classifiers, leading to holistic scene hypotheses with improved accuracy. Our model is learned solely from annotated RGB-D images, without the benefit of CAD models, but nevertheless its performance substantially exceeds the state-of-the-art on the SUN RGB-D database. Avoiding CAD models allows easier learning of detectors for many object categories.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>The last decade has seen major advances in algorithms for the semantic understanding of 2D images <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b28">29]</ref>. Images of indoor (home or office) environments, which are typically highly cluttered and have substantial occlusion, are particularly challenging for existing models. Recent advances in depth sensor technology have greatly reduced the ambiguities present in standard RGB images, enabling breakthroughs in scene layout prediction <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b40">41]</ref>, support surface prediction <ref type="bibr" target="#b33">[34,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b9">10]</ref>, semantic parsing <ref type="bibr" target="#b10">[11]</ref>, and object detection <ref type="bibr" target="#b35">[36]</ref>. A growing number of annotated RGB-D datasets have been constructed to train and evaluate indoor scene understanding methods <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b33">34,</ref><ref type="bibr" target="#b34">35]</ref>.</p><p>A wide range of semantic 3D scene models have been developed, including approaches based on low-level voxel representations <ref type="bibr" target="#b19">[20]</ref>. Generalizing the bounding boxes widely used for 2D detection, the 3D size, position, and orientation of object instances can be described by bounding cuboids (convex polyhedra). Several methods fit cuboid models to RGB or RGB-D data <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b39">40]</ref> but do not have any semantic, high-level scene understanding. Other work has used CRFs to classify cuboids detected by bottom-up grouping <ref type="bibr" target="#b24">[25]</ref>, or directly detected objects in 3D by matching to known CAD models in "sliding" locations <ref type="bibr" target="#b35">[36]</ref>.</p><p>Several recent papers have used CAD models as additional information for indoor scene understanding, by learning models of object shape <ref type="bibr" target="#b38">[39]</ref> or hallucinating alternative viewpoints for appearance-based matching <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b23">24,</ref><ref type="bibr" target="#b22">23]</ref>. While 3D models are a potentially powerful information source, there does not exist an abundant supply of models for all categories, and thus these methods have typically focused on a small number of categories (often, just chairs <ref type="bibr" target="#b0">[1]</ref>). Moreover, example-based methods <ref type="bibr" target="#b35">[36]</ref> may be computationally inefficient due to the need to match each examplar to each test image. It is unclear how many CAD models are needed to faithfully capture an object class.</p><p>To model the spatial layout of indoor scenes, many methods assume an orthogonal "Manhattan" structure <ref type="bibr" target="#b3">[4]</ref> and aim to infer 2D projections of the 3D structure. Building on <ref type="bibr" target="#b21">[22]</ref> and <ref type="bibr" target="#b14">[15]</ref>, Hedau et al. <ref type="bibr" target="#b11">[12]</ref> use a structured model to rerank layout hypotheses, Schwing et al. <ref type="bibr" target="#b32">[33]</ref> propose an efficient integral representation to efficiently explore exponentially many layout proposals, and Zhang et al. <ref type="bibr" target="#b40">[41]</ref> incorporate depth cues. Jointly modeling objects may improve layout prediction accuracy <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b31">32]</ref>, but previous work has focused on restricted environments (e.g., beds that are nearly always aligned with walls) and may not generalize to more cluttered scenes. Other work has used point cloud data to directly predict 3D layout <ref type="bibr" target="#b24">[25,</ref><ref type="bibr" target="#b34">35]</ref>, but can be sensitive to errors in RGB-D depth estimates.</p><p>Simple scene parsing algorithms detect each category independently, which can introduce many false positives even after non-maximum suppression. Previous work has used fairly elaborate, manually engineered heuristics to prune false detections <ref type="bibr" target="#b35">[36]</ref> or used CAD models and layout cues jointly to model scenes <ref type="bibr" target="#b8">[9]</ref>. In this paper we show that a cascaded classification framework <ref type="bibr" target="#b13">[14]</ref> can be used to learn The value of the point cloud density feature is proportional to the voxel intensity, each 3D orientation histogram bin is assigned a distinct color, and COG feature intensities are proportional to the normalized energy in each orientation bin, similarly to HOG descriptors <ref type="bibr" target="#b4">[5]</ref>.</p><p>contextual relationships among object categories and the overall room layout, so that visually distinctive objects lead to holistic scene interpretations of higher quality. We propose a general framework for learning detectors for multiple object categories using only RGB-D annotations. In Sec. 2, we introduce a novel cloud of oriented gradients (COG) feature that robustly links 3D object pose to 2D image boundaries. We also introduce a new Manhattan voxel representation of 3D room layout geometry. We then use a structured prediction framework (Sec. 3) to learn an algorithm that aligns 3D cuboid hypotheses to RGB-D data, and a cascaded classifier (Sec. 4) to incorporate contextual cues from other object instances and categories, as well as the overall 3D layout. In Sec. 5 we validate our approach using the large, recently introduced SUN-RGBD dataset <ref type="bibr" target="#b34">[35]</ref>, where we detect more categories with greater accuracy than a state-of-the-art CAD-model detector <ref type="bibr" target="#b35">[36]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Modeling 3D Geometry &amp; Appearance</head><p>Our object detectors are learned from 3D oriented cuboid annotations in the SUN-RGBD dataset <ref type="bibr" target="#b34">[35]</ref>, which contains 10,335 RGB-D images and 19 labeled object categories. We discretize each cuboid into a 6 × 6 × 6 grid of (large) voxels, and extract features for these 6 3 = 216 cells. Voxel dimensions are scaled to match the size of each instance. We use standard descriptors for the 3D geometry of the observed depth image, and propose a novel cloud of oriented gradient (COG) descriptor of RGB appearance. We also propose a Manhattan voxel model of 3D room layout geometry.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Object Geometry: 3D Density and Orientation</head><p>Point Cloud Density Conditioned on a 3D cuboid annotation or detection hypothesis i, suppose voxel`contains N i`p oints. We use perspective projection to find the silhouette of each voxel in the image, and compute the area A i`o f that convex region. The point cloud density feature for voxel`then equals φ a i`= N i`/ A i`. Normalization gives robustness to depth variation of the object in the scene. We normalize by the local voxel area, rather than by the total number of points in the cuboid as in some related work <ref type="bibr" target="#b35">[36]</ref>, to give greater robustness to partial object occlusions.</p><p>3D Normal Orientations Various representations, such as spin images <ref type="bibr" target="#b18">[19]</ref>, have been proposed for the vectors normal to a 3D surface. As in <ref type="bibr" target="#b35">[36]</ref>, we build a 25-bin histogram of normal orientations within each voxel, and estimate the normal orientation for each 3D point via a plane fit to its 15 nearest neighbors. This feature φ b i captures the surface shape of cuboid i via patterns of local 3D orientations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Clouds of Oriented Gradients (COG)</head><p>The histogram of oriented gradient (HOG) descriptor <ref type="bibr" target="#b4">[5]</ref> forms the basis for many effective object detection methods <ref type="bibr" target="#b5">[6]</ref>. Edges are a very natural foundation for indoor scene understanding, due to the strong occluding contours generated by common objects. However, gradient orientations are of course determined by 3D object orientation and perspective projection, so HOG descriptors that are naively extracted in 2D image coordinates generalize poorly.</p><p>To address this issue, some previous work has used 3D Voxels in similar positions of chairs COG Binning HOG Binning COG Binning HOG Binning <ref type="figure">Figure 2</ref>. For two corresponding voxels (red and green) on two chairs, we illustrate the orientation histograms that would be computed by a standard HOG descriptor <ref type="bibr" target="#b4">[5]</ref> in 2D image coordinates, and our COG descriptor in which perspective geometry is used to align descriptor bins. Even though these object instances are very similar, their 3D pose leads to wildly different HOG descriptors.</p><p>CAD models to hallucinate the edges that would be expected from various synthetic viewpoints <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b0">1]</ref>. Other work has restrictively assumed that parts of objects are nearplanar so that image warping may be used for alignment <ref type="bibr" target="#b6">[7]</ref>, or that all objects have a 3D pose aligned with the global "Manhattan world coordinates" of the room <ref type="bibr" target="#b12">[13]</ref>. Some previous 3D extensions of the HOG descriptor <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b30">31]</ref> assume that either a full 3D model or mesh model is given. In recent independent research <ref type="bibr" target="#b36">[37]</ref>, 3D cuboid hypotheses were used to aggregate standard 2D features from a deep convolutional neural network, but the relationship between these features and 3D object orientation was not modeled. Our cloud of oriented gradient (COG) feature accurately describes the 3D appearance of objects with complex 3D geometry, as captured by RGBD cameras in any orientation. Gradient Computation We compute gradients by applying filters [−1, 0, 1], [−1, 0, 1] T to the RGB channels of the unsmoothed 2D image. The maximum responses across color channels are the gradients (dx, dy) in the x and y directions, with corresponding magnitude p dx 2 + dy 2 .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>3D Orientation Bins</head><p>The standard HOG descriptor <ref type="bibr" target="#b4">[5]</ref> uses evenly spaced gradient bins, with 0 • being the horizontal image direction. As shown in <ref type="figure">Fig. 2</ref>, this can produce very inconsistent descriptors for objects in distinct poses. For each cuboid we construct nine 3D orientation bins that are evenly spaced from 0 • −180 • in the half-disk sitting vertically along its horizontal axis. We then use perspective projection to find corresponding 2D bin boundaries. For each point that lies within a given 3D voxel, we accumulate its unsigned 2D gradient in the corresponding projected 2D orientation bin. To avoid image processing operations that can be unstable for objects with non-planar geometry, we accumulate standard gradients with warped histogram bins, rather than warping images to match fixed orientation bins.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Normalization and Aliasing</head><p>We bilinearly interpolate gradient magnitudes between neighboring orientation bins <ref type="bibr" target="#b4">[5]</ref>. To normalize the histogram φ c i`f or voxel`in cuboid i, we then set φ c i`← φ c i`/ p ||φ c i`| | 2 + ✏ for a small ✏&gt;0. Accounting for all orientations and voxels, the dimension of the COG feature is 6 3 × 9 = 1944. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.3.">Room Layout Geometry: Manhattan Voxels</head><p>Given an RGB-D image, scene parsing requires not only object detection, but also room layout (floor, ceiling, wall) prediction <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b40">41,</ref><ref type="bibr" target="#b31">32]</ref>. Such "free space" understanding is crucial for applications like robot navigation. Many previous methods treat room layout prediction as a 2D labeling task <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b32">33,</ref><ref type="bibr" target="#b40">41]</ref>, but small mistakes in 2D can lead to huge errors in 3D layout prediction. Simple RGB-D layout prediction methods <ref type="bibr" target="#b34">[35]</ref> work by fitting planes to the observed point cloud data. We propose a more accurate learningbased approach to predicting Manhattan geometries.</p><p>The orthogonal walls of a standard room can be represented via a cuboid <ref type="bibr" target="#b26">[27]</ref>, and we could define geometric features via a standard voxel discretization <ref type="figure" target="#fig_0">(Fig. 3</ref>, bottom left). However, because corner voxels usually contain the intersection of two walls, they then mix 3D normal vectors with very different orientations. In addition, this discretization ignores points outside of the hypothesized cuboid, and may match subsets of a room that have wall-like structure.</p><p>We propose a novel Manhattan voxel <ref type="figure" target="#fig_0">(Fig. 3</ref>, bottom right) discretization for 3D layout prediction. We first discretize the vertical space between floor and ceiling into 6 equal bins. We then use a threshold of 0.15m to separate points near the walls from those in the interior or exterior of the hypothesized layout. Further using diagonal lines to split bins at the room corners, the overall space is discretized in 12×6 = 72 bins. For each vertical layer, regions R 1:4 model the scene interior whose point cloud distribution varies widely across images. Regions R 5:8 model points near the assumed Manhattan wall structure: R 5 and R 6 should contain orthogonal planes, while R 5 and R 7 should contain parallel planes. Regions R 9:12 capture points outside of the predicted layout, as might be produced by depth sensor errors on transparent surfaces.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Learning to Detect Cuboids &amp; Layouts</head><p>For each voxel`in some cuboid B i annotated in training image I i , we have one point cloud density feature φ a i`, 25 surface normal histogram features φ b i`, and 9 COG appearance features φ c i`. Our overall feature-based representation of cuboid i is then φ(</p><formula xml:id="formula_0">I i ,B i )={φ a i`, φ b i`, φ c i`} 216 =1</formula><p>. Cuboids are aligned via annotated orientations as illustrated in <ref type="figure">Fig. 1</ref>, using the gravity direction provided in the SUN-RGBD dataset <ref type="bibr" target="#b34">[35]</ref>. Similarly, for each of the Manhattan voxels`in layout hypothesis M i we compute point cloud density and surface normal features, and φ(</p><formula xml:id="formula_1">I i ,M i )={φ a i`, φ b i`} 72 =1 .</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Structured Prediction of Object Cuboids</head><p>For each object category c independently, using those images which contain visible instances of that category, our goal is to learn a prediction function h c : I → B that maps an RGB-D image I to a 3D bounding box B =( L, ✓, S). Here, L is the center of the cuboid in 3D, ✓ is the cuboid orientation, and S is the physical size of the cuboid along the three axes determined by its orientation. We assume objects have a base upon which they are usually supported, and thus ✓ is a scalar rotation with respect to the ground plane.</p><p>Given n training examples of category c, we use an nslack formulation of the structural support vector machine (SVM) objective <ref type="bibr" target="#b17">[18]</ref> with margin rescaling constraints:</p><formula xml:id="formula_2">min wc,⇠≥0 1 2 w T c w c + C n n X i=1 ⇠ i subject to w T c [φ(I i ,B i ) − φ(I i ,B i )] ≥ ∆(B i ,B i ) − ⇠ i , for allB i ∈B i ,i =1,...,n.</formula><p>(1) Here, φ(I i ,B i ) are the features for oriented cuboid hypothesis B i given RGB-D image I i , B i is the ground-truth annotated bounding box, and B i is the set of possible alternative bounding boxes. For training images with multiple instances, as in previous work on 2D detection <ref type="bibr" target="#b37">[38]</ref> we add images multiple times to the training set, each time removing the subset of 3D points contained in other instances.</p><p>Given some ground truth cuboid B and estimated cuboid B, we define the following loss function:</p><formula xml:id="formula_3">∆(B,B)=1− IOU(B,B) · ✓ 1 + cos(✓ − ✓) 2 ◆ .<label>(2)</label></formula><p>Here, IOU(B,B) is the volume of the 3D intersection of the cuboids, divided by the volume of their 3D union. The loss is bounded between 0 and 1, and is smallest when the IOU(B,B) is near 1 and the orientation error ✓ −✓ ≈ 0. Loss approaches 1 if either position or orientation is wrong. We solve the loss-sensitive objective of Eq. (1) using a cutting-plane method <ref type="bibr" target="#b17">[18]</ref>. We also experimented with detectors based on a standard binary SVM with hard negative mining, but found that the loss-sensitive S-SVM classifier is more accurate (see <ref type="figure">Fig. 5</ref>) and also more efficient in handling the large number of negative cuboid hypotheses.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Cuboid Hypotheses</head><p>We precompute features for candidate cuboids in a sliding-window fashion using discretized 3D world coordinates, with 16 candidate orientations. We discretize cuboid size using empirical statistics of the training bounding boxes: {0.1, 0.3, 0.5, 0.7, 0.9} width quantiles, {0.25, 0.5, 0.75} depth quantiles, and {0.3, 0.5, 0.8} height quantiles. Every combination of voxel size, and 3D location and orientation, is then evaluated.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Structured Prediction of Manhattan Layouts</head><p>We again use the S-SVM formulation of Eq. (1) to predict Manhattan layout cuboids M =( L, ✓, S). The loss function ∆(M,M ) is as in Eq. (2), except we use the "freespace" definition of IOU from <ref type="bibr" target="#b34">[35]</ref>, and account for the fact that orientation is only identifiable modulo 90 • rotations. Because layout annotations do not necessarily have Manhattan structure, the ground truth layout is taken to be the cuboid hypotheses with largest free-space IOU.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Layout Hypotheses</head><p>We predict floors and ceilings as the 0.001 and 0.999 quantiles of the 3D points along the gravity direction, and discretize orientation into 18 evenly spaced angles between 0 and 180 • . We then propose layout candidates that capture at least 80% of all 3D points, and are bounded by the farthest and closest 3D points. For typical scenes, there are 5,000-20,000 layout hypotheses. See the supplemental material for more details.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Cascaded Learning of Spatial Context</head><p>If the detectors learned in Sec. 3 are independently applied for each category, there may be many false positives, where a "piece" of a large object is detected as a smaller object (see <ref type="figure" target="#fig_1">Fig. 4</ref>). Song et al. <ref type="bibr" target="#b35">[36]</ref> reduce such errors via a heuristic reduction in confidence scores for small detections on large image segments. To avoid such manual engineering, which must often be tuned to each category, we propose to directly learn the relationships among detections of different categories. As room geometry is also an important cue for object detection, we integrate Manhattan layout hypotheses for total scene understanding <ref type="bibr" target="#b34">[35,</ref><ref type="bibr" target="#b24">25]</ref>.</p><p>Typically, structured prediction of spatial relationships is accomplished via undirected Markov random fields (MRFs) <ref type="bibr" target="#b25">[26]</ref>. As shown in <ref type="figure" target="#fig_1">Fig. 4</ref>, this generally leads to a fully connected graph <ref type="bibr" target="#b27">[28]</ref> because there are relationships among every pair of object categories. An extremely challenging MAP estimation (or energy minimization) problem must then be solved at every training iteration, as well as for each test image, so learning and prediction is costly.</p><p>We propose to instead adapt cascaded classification <ref type="bibr" target="#b13">[14]</ref> to the modeling of contextual relationships in 3D scenes. In this approach, "first-stage" detections as in Sec. 3 become input features to "second-stage" classifiers that estimate confidence in the correctness of cuboid hypotheses. This can be interpreted as a directed graphical model with hidden variables. Marginalizing the first-stage variables recovers a standard, fully-connected undirected graph. Crucially however, the cascaded representation is far more efficient: training decomposes into independent learning problems for each node (object category), and optimal test classification is possible via a rapid sequence of local decisions. The first-stage detectors provide a most-probable layout hypothesis, as well as a set of detections (following nonmaximum suppression) for each category. For a bounding box B i with confidence score z i , there may be several overlapping bounding boxes of categories c ∈{1,...,C}. Letting i c be the instance of category c with maximum confidence z ic , features i for bounding box B i are created via a quadratic function of z i , S 1:3 (i, i c ), A(B i ,M), and a radial basis expansion of D(B i ,M). Relationships between second-stage layout candidates and object cuboids are modeled similarly. See the supplemental material for details. Contextual Learning Due to the directed graphical structure of the cascade, each second-stage detector may be learned independently. The objective is simple binary classification: is the candidate detection a true positive, or a false positive? During training, each detected bounding box for each class is marked as "true" if its intersection-overunion score to a ground truth instance is greater than 0.25, and is the largest among those detections. We train a standard binary SVM with a radial basis function (RBF) kernel</p><formula xml:id="formula_4">K(B i ,B j )=exp −γ|| i − j || 2 .<label>(3)</label></formula><p>The bandwidth parameter γ is chosen using validation data. While we use a RBF kernel for all reported experiments, the performance of a linear SVM is only slightly worse, and cascaded classification still provides useful performance gains for that more scalable training objective.</p><p>To train the second-stage layout predictor (the bottom node in <ref type="figure" target="#fig_1">Fig. 4)</ref>, we combine the object-layout features with the Manhattan voxel features from Sec. 2.3, and again use S-SVM training to optimize the free-space IOU.</p><p>Contextual Prediction During testing, given the set of cuboids found in the first-stage sliding-window search, we apply the second-stage cascaded classifier to each cuboid B i to get a new contextual confidence score z 0 i . The overall confidence score used for precision-recall evaluation is then z i + z 0 i , to account for both the original belief from the geometric and COG features and the correcting power of contextual cues. The second-stage layout prediction is directly provided by the second-stage S-SVM classifier.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experiments</head><p>We test our cascaded model on the SUN RGB-D dataset <ref type="bibr" target="#b34">[35]</ref> and compare with the state-of-the-art sliding shape <ref type="bibr" target="#b35">[36]</ref> cuboid detector, and the baseline layout predictor from <ref type="bibr" target="#b34">[35]</ref>. The older NYU Depth dataset <ref type="bibr" target="#b33">[34]</ref> is a subset of SUN RGB-D, but SUN RGB-D has improved annotations and many new images. Since unlike prior work we do not use CAD models, we easily learn and evaluate RGB-D appearance models of 10 object categories, five more than <ref type="bibr" target="#b35">[36]</ref>. Object cuboid and 3D layout hypotheses are generated and evaluated as described in previous sections.</p><p>We evaluate detection performance via the intersectionover-union with ground-truth cuboid annotations, and consider the predicted box to be correct when the score is above 0.25. To evaluate the layout prediction performance, we calculate the free space intersection-over-union with human annotations. We provide several comparisons to demonstrate the effectiveness of our scene understanding system, and the importance of both appearance and context features. Sliding-Shape ! ! ! ! ! ! Geom Geom + HOG Geom+COG Geom+COG(SVM) Geom+COG+Context-5</p><p>Geom+COG+Context-10 Geom+COG+Context-10+Layout  <ref type="table">Table  Sofa</ref> Chair Toilet  The Importance of Appearance We trained our detector with geometric features only (Geom), and with the COG feature added (Geom+COG). There is a very clear improvement in detection accuracy for all object categories (see <ref type="table">Table 1</ref> and precision-recall curves in <ref type="figure">Fig. 5</ref>). Object detectors based solely on noisy point clouds are imperfect, and the RGB image contains complementary information.</p><p>HOG versus COG To demonstrate the effectiveness of the COG feature, we also use naïve 2D bins to extract HOG features for each 3D cuboid and train a detector (Geom+HOG). Since fixed 2D bins do not align with changes in 3D object pose, this feature is less informative, and detection performance is much worse than when using COG bins corrected for perspective projection. We visualize the learned COG features for different categories in <ref type="figure">Fig. 6</ref>. We can see many descriptive appearance cues such as the oriented exterior boundaries of each object, and hollow regions for sofa, chair, toilet, and bathtub.</p><p>Cubical Voxels versus Manhattan Voxels We use the free-space IOU <ref type="bibr" target="#b34">[35]</ref> to evaluate the performance of layout prediction algorithms. Using standard cubical voxels, our performance (72.33) is similar to the heuristic SUN RGB-D baseline (73.4, <ref type="bibr" target="#b34">[35]</ref>). Combining Manhattan voxels with structured learning, performance increases to 78.96, demonstrating the effectiveness of this improved discretization. Furthermore, if we also incorporate contextual cues from detected objects, the score improves to 80.23. We provide some layout prediction examples in <ref type="figure" target="#fig_5">Fig. 7</ref>.</p><p>The Importance of Context To show that the cascaded classifier helps to prune false positives, we evaluate detections using the confidence scores from the first-stage classifier, as well as the updated confidence scores from</p><formula xml:id="formula_5">P g R g R r IoU</formula><p>Sliding-Shape+Plane-Fitting <ref type="bibr" target="#b34">[35]</ref> 37. <ref type="bibr" target="#b7">8</ref>   <ref type="table">Table 2</ref>. Evaluation of total scene understanding <ref type="bibr" target="#b34">[35]</ref>. We choose a threshold for object confidence scores that maximizes Pg, and compute all other metrics. Our highly accurate object and layout predictions also lead to improved overall scene interpretations.</p><p>the second-stage classifier (Geom+COG+Context-5). As shown in <ref type="table">Table 1</ref> and <ref type="figure">Fig. 5</ref>, adding a contextual cascade clearly boosts performance. Furthermore, when more object categories are modeled (Geom+COG+Context-10), performance increases further. This result demonstrates that even if a small number of objects are of primary interest, building models of the broader scene can be very beneficial. We show some representative detection results in <ref type="figure">Fig. 8</ref>. In the first image our chair detector is confused and fires on part of the sofa, but with the help of contextual cues of other detected bounding boxes, these false positives are pruned away. For a fixed threshold across all object categories, we have as many true detections as the sliding-shape baseline while producing fewer false positives. Total Scene Understanding By capturing contextual relationships between pairs of objects, and between objects and the overall 3D room layout, our cascaded classifier enables us to perform the task of total scene understanding <ref type="bibr" target="#b34">[35]</ref>. We generate a single global scene hypothesis by applying the same threshold (tuned on validation data) to all second-stage object proposals, and choose the highestscoring layout prediction. We report the precision, recall, and IOU evaluation metrics defined by <ref type="bibr" target="#b34">[35]</ref> in <ref type="table">Table 2</ref>. In every case, we show clear improvements over baselines. Computation Speed Our algorithm, implemented in MATLAB, spends most of its running time on feature computation. For a typical indoor image, our algorithm will spend 10 to 30 minutes to compute features for one object category and Manhattan Voxel discretization, and 2 seconds to predict 3D cuboids and layout hypotheses. This speed could be dramatically improved in various ways, such as exploiting integral images for feature computation <ref type="bibr" target="#b35">[36]</ref> or using GPU hardware for parallelization.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>We propose an algorithm for 3D cuboid detection and Manhattan room layout prediction from RGB-D images. Using our novel COG descriptor of 3D appearance, we trained accurate 3D cuboid detectors for ten object categories, as well as a cascaded classifier that learns contextual cues to prune false positives. Our scene representations are learned directly from RGB-D data without external CAD models, and may be generalized to many other categories. <ref type="table">Table  Toilet  Bed</ref> Desk Dresser Nightstand Bookshelf Bathtub</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Chair Sofa</head><p>Ground Truth Sliding Shape <ref type="bibr" target="#b35">[36]</ref> Geom+COG Geom+COG+Context-10 <ref type="figure">Figure 8</ref>. Detections with confidence scores larger than the same threshold for each algorithm. Notice that using contextual information helps prune away false positives and preserves true positives.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 3 .</head><label>3</label><figDesc>Models for 3D layout geometry. Top: Ground truth annotation. Bottom: Top-down view of the scene and two voxel-based quantizations. We compare a regular voxel grid (left) to our Manhattan voxels (right; dashed red line is the layout hypothesis).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 4 .</head><label>4</label><figDesc>An illustration of how cascaded classification captures contextual relationships among objects. From left to right: (i) A traditional undirected MRF representation of contextual relationships. Colored nodes represent four object categories, and black nodes represent the room layout. (ii) A directed graphical representation of cascaded classification, where the first-stage detectors are hidden variables (dashed) that model contextual relationships among object and layout hypotheses (solid). Marginalizing the hidden nodes recovers the undirected MRF. (iii) First-stage detections independently computed for each category as in Sec. 3. (iv) Second-stage detections (Sec. 4) efficiently computed using our directed representation of context, and capturing contextual relationships between objects and the overall scene layout.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>Contextual Features For an overlapping pair of detected bounding boxes B i and B j , we denote their volumes as V (B i ) and V (B j ), their volume of their overlap as O(B i ,B j ), and the volume of their union as U (B i ,B j ).W e characterize their geometric relationship via three features: S 1 (i, j)= O(Bi,Bj ) V (Bi) , S 2 (i, j)= O(Bi,Bj ) V (Bj ) , and the IOU S 3 (i, j)= O(Bi,Bj ) U (Bi,Bj ) . To model object-layout context [25], we compute the distance D(B i ,M) and angle A(B i ,M) of cuboid B i to the closest wall in layout M .</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 5 .Figure 6 .</head><label>56</label><figDesc>Precision-recall curves for 3D cuboid detection of the 5 object categories considered by<ref type="bibr" target="#b35">[36]</ref> (top), and 5 additional categories (bottom). For the first 5 categories, we also test the importance of various features, and the gains from modeling context. See legend at top. Visualization of the learned 3D COG features for all 10 categories. Reference orientation bins with larger weights are darker, and the 3D visualization is similar to each category's appearance. Cuboid sizes are set to the median of all training instances.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 7 .</head><label>7</label><figDesc>Comparison of our Manhattan voxel 3D layout predictions (blue) to the SUN RGB-D baseline (<ref type="bibr" target="#b34">[35]</ref>, green) and the ground truth annotations (red). Our learning-based approach is less sensitive to outliers and degrades gracefully in cases where the true scene structure violates the Manhattan world assumption.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Figure 1. Given input RGB and Depth images (left), we align oriented cuboids and transform observed data into a canonical coordinate frame. For each voxel in a 6×6×6 grid, we then extract (from left to right) point cloud density features, 3D normal orientation histograms, and our COG model of back-projected image gradient orientations. On the left, COG bins are colored to show alignment between instances.</figDesc><table>Point-Cloud Density 
+
+3D Normal 
+COG 
+
+</table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements This research supported in part by ONR Award Number N00014-13-1-0644.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Seeing 3D chairs: Exemplar part-based 2D-3D alignment using a large dataset of CAD models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Aubry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Maturana</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Efros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Fast dynamic programming for labeling problems with ordering constraints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Veksler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1728" to="1735" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">3D extended histogram of oriented gradients (3dhog) for classification of road users in urban scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Buch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Orwell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">A</forename><surname>Velastin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Manhattan world: Compass direction from a single image by Bayesian inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Coughlan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Yuille</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="1999" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page" from="941" to="947" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Histograms of oriented gradients for human detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Dalal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Triggs</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="886" to="893" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K I</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<title level="m">The PASCAL Visual Object Classes Challenge 2012 (VOC2012) Results</title>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">3D object detection and viewpoint estimation with a deformable 3D cuboid model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Dickinson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="611" to="619" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Unfolding an indoor origami world</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">F</forename><surname>Fouhey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="687" to="702" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Joint 3D object and layout inference from a single RGB-D image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">German Conference on Pattern Recognition (GCPR)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Support surface prediction in indoor scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="2144" to="2151" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Learning rich features from RGB-D images for object detection and segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="345" to="360" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Recovering the spatial layout of cluttered rooms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Hedau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Forsyth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="1849" to="1856" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Thinking inside the box: Using appearance models and context based on room geometry</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Hedau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Forsyth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="224" to="237" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Cascaded classification models: Combining models for holistic scene understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Heitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gould</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Saxena</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Koller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="641" to="648" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Geometric context from a single image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Efros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="654" to="661" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">3D-based reasoning with blocks, support, and stability</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gallagher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Saxena</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Chen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1" to="8" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">A linear approach to matching cuboids in RGBD images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Cutting-plane training of structural SVMs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Joachims</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Finley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-N</forename><forename type="middle">J</forename><surname>Yu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Machine Learning</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">77</biblScope>
+			<biblScope unit="page" from="27" to="59" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Using spin images for efficient object recognition in cluttered 3D scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">E</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1999" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">21</biblScope>
+			<biblScope unit="page" from="433" to="449" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">3D scene understanding by voxel-CRF</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">K</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">A large-scale hierarchical multi-view RGB-D object dataset</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Lai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="1817" to="1824" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Geometric reasoning for single image structure recovery</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">C</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kanade</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="2136" to="2143" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">FPM: Fine pose partsbased model with 3D CAD models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Lim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="478" to="493" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Parsing IKEA objects: Fine pose estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Lim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Pirsiavash</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Holistic scene understanding for 3D object detection with RGBD cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1417" to="1424" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Structured learning and prediction in computer vision. Foundations and Trends in Computer Graphics and Vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Nowozin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">H</forename><surname>Lampert</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page" from="185" to="365" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Sampling bedrooms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">D</forename><surname>Pero</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Guan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Brau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schlecht</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Barnard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="2009" to="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Objects in context</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Galleguillos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Wiewiora</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Russakovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Satheesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bernstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note>ImageNet Large Scale Visual Recognition Challenge. IJCV</note>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Building a database of 3D scenes from user annotations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">C</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="2711" to="2718" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Histograms of oriented gradients for 3D object retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Scherer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Walter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Schreck</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Europe on Computer Graphics, Visualization and Computer Vision</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Box in the box: Joint 3D layout and object reasoning from single images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="353" to="360" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Efficient structured prediction for 3D indoor scene understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Hazan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="2815" to="2822" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Indoor segmentation and support inference from RGBD images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Silberman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="746" to="760" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">SUN RGB-D: A RGB-D scene understanding benchmark suite</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Samuel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Sliding shapes for 3D object detection in depth images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="634" to="651" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Deep sliding shapes for amodal 3D object detection in RGB-D images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Structured output regression for detection with partial occulsion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">3D shapenets for 2.5D object recognition and next-best-view prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1406.5670</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Localizing 3d cuboids in single-view images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">C</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Estimating the 3D layout of indoor scenes and its clutter from depth sensors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Kan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1273" to="1280" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

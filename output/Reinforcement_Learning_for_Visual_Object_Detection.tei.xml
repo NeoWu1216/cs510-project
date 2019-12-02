@@ -1,0 +1,1042 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Reinforcement Learning for Visual Object Detection</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stefan</forename><surname>Mathe</surname></persName>
+							<email>stefan.mathe@imar.ro</email>
+							<affiliation key="aff1">
+								<orgName type="department">Institute of Mathematics of the Romanian Academy</orgName>
+							</affiliation>
+							<affiliation key="aff2">
+								<orgName type="department">Department of Computer Science</orgName>
+								<orgName type="institution">University of Toronto</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aleksis</forename><surname>Pirinen</surname></persName>
+							<email>aleksis.pirinen@math.lth.se</email>
+							<affiliation key="aff0">
+								<orgName type="department" key="dep1">Department of Mathematics</orgName>
+								<orgName type="department" key="dep2">Faculty of Engineering</orgName>
+								<orgName type="institution">Lund University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Cristian</forename><surname>Sminchisescu</surname></persName>
+							<email>cristian.sminchisescu@math.lth.se</email>
+							<affiliation key="aff0">
+								<orgName type="department" key="dep1">Department of Mathematics</orgName>
+								<orgName type="department" key="dep2">Faculty of Engineering</orgName>
+								<orgName type="institution">Lund University</orgName>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="department">Institute of Mathematics of the Romanian Academy</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Reinforcement Learning for Visual Object Detection</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:45+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>One of the most widely used strategies for visual object detection is based on exhaustive spatial hypothesis search. While methods like sliding windows have been successful and effective for many years, they are still brute-force, independent of the image content and the visual category being searched. In this paper we present principled sequential models that accumulate evidence collected at a small set of image locations in order to detect visual objects effectively. By formulating sequential search as reinforcement learning of the search policy (including the stopping condition), our fully trainable model can explicitly balance for each class, specifically, the conflicting goals of exploration -sampling more image regions for better accuracy -, and exploitation -stopping the search efficiently when sufficiently confident about the target's location. The methodology is general and applicable to any detector response function. We report encouraging results in the PASCAL VOC 2012 object detection test set showing that the proposed methodology achieves almost two orders of magnitude speed-up over sliding window methods.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Classically, detection has been formulated as the problem of maximizing a confidence function over a set of hypothesized target locations, where the confidence can be learned in a fully supervised <ref type="bibr" target="#b11">[12]</ref> or weakly supervised <ref type="bibr" target="#b33">[34]</ref> setup. In the sliding window formulation, the hypothesis set consists of a large set of rectangular windows, and the maximization problem is solved by exhaustive search. Since this process is generally too expensive in practice, many methods have been proposed to accelerate it, from methodologies that leverage properties of the confidence function, to proposal methods or cascade techniques. All these methods retain the exhaustive search property over the hypothesis space, aiming either to reduce the number of hypotheses to start with, or search these efficiently.</p><p>In contrast, biological systems have a pattern of search that can be characterized as 'saccade and fixate' <ref type="bibr" target="#b16">[17]</ref>, where a small set of scene locations are investigated sequentially, in order to accumulate sufficient evidence on the target location. Set aside efficiency (only a few regions of an image are explored) and biological plausibility, it appears still interesting to formally derive mathematical models that could optimally balance efficiency and accuracy, by integrating evidence, sequentially, in a principled way. The challenge is to be able to operate with delayed rewards, which rule out supervision at each step. At the same time, avoid the need to completely pre-specify the environment, which for visual scenes would be impossible -given the complexity of images and visual object categories, the models should be effectively trained.</p><p>By formulating sequential search as reinforcement learning of the category and the image-dependent search policy including the stopping conditions, in this work we develop fully trainable methods that can explicitly balance the conflicting goals of exploration -sampling more image regions for better accuracy -, and exploitation -stopping the search efficiently when sufficiently confident in the target's location. The methodology is general, applicable to any detector response function, and can learn search strategies and stopping conditions that are image and visual category specific. Two orders of magnitude speed-ups over sliding window methods are achieved in the challenging PASCAL VOC 2012 object detection benchmark.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>One class of efficient detectors focuses on the use of branch-and-bound heuristics <ref type="bibr" target="#b22">[23]</ref> to prioritize exploration of the search space towards promising image regions. Unlike the present work, such techniques are only applicable to confidence function classes for which strong bounds are available. Additionally, in the absence of the target in the image, methods in this class degenerate to exhaustive search. Motivated by these limitations, other authors have proposed to use cascades of classifiers <ref type="bibr" target="#b38">[39,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b14">15,</ref><ref type="bibr" target="#b29">30]</ref>, to progressively narrow the search space, where weak but fast classifiers are applied early to eliminate image regions unlikely to contain the target, while investing computational resources to run more complex classifiers on promising regions. Such methods drastically reduce the computation cost, but classifiers early in the cascade still have to be applied exhaustively over all image regions. Instead of focusing on region exploration strategies, other methods have sought to optimize the evaluation of the confidence function. This includes sharing computation among neighboring image regions <ref type="bibr" target="#b39">[40,</ref><ref type="bibr" target="#b34">35]</ref> or among the different classifiers for multi-class detection problems <ref type="bibr" target="#b19">[20]</ref>.</p><p>Recent trends in object detection focus on a rapid content-based reduction of the set of candidates -in earlier methods, windows, cropped at different positions, and of different aspect ratios, in an image -to a smaller set (still thousands of hypotheses in most methods) which exhibits the statistical regularities of the objects found in the real world. Typical methodologies include parametric figureground segmentation with Gestalt, 'object-like' filtering <ref type="bibr" target="#b4">[5]</ref>, superpixels <ref type="bibr" target="#b37">[38,</ref><ref type="bibr" target="#b31">32]</ref> or edge-based cues <ref type="bibr" target="#b20">[21]</ref>. In this work we will rely on the parametric segmentation method of Carreira et al. <ref type="bibr" target="#b4">[5]</ref> to generate a set of free-form figure-ground proposals that capture most objects of interest, although our method can use any other state of the art proposal generation method <ref type="bibr" target="#b37">[38,</ref><ref type="bibr" target="#b31">32,</ref><ref type="bibr" target="#b20">21]</ref>.</p><p>In contrast to methods based on branch and bound and cascades of classifiers, sequential search methods like <ref type="bibr" target="#b12">[13]</ref> attempt to sparsely sample the image through a local search guided by the contextual relations among regions, previously shown to improve detection accuracy <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b30">31]</ref>. <ref type="bibr" target="#b12">[13]</ref> propose search policies that map contextual windows to the ground truth target location based on random forests, whereas <ref type="bibr" target="#b36">[37,</ref><ref type="bibr" target="#b8">9]</ref> learn a mapping from images to bounding box masks using a cascaded deep learning model.</p><p>Palleta et al. <ref type="bibr" target="#b24">[25]</ref> and Butko and Movellan <ref type="bibr" target="#b2">[3]</ref> developed remarkable early sequential models based on POMDPs for recognition and face detection. However, those models are not fully trainable and require a complete and accurate specification of the environment, which makes them challenging to apply in complex multi-class visual detection setups. More recently, reinforcement learning <ref type="bibr" target="#b35">[36]</ref> has been applied to visual analysis problems like image classification <ref type="bibr" target="#b23">[24,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b28">29]</ref>, face detection <ref type="bibr" target="#b13">[14]</ref>, tracking and recognizing objects in video <ref type="bibr" target="#b1">[2]</ref>, learning a sequential policy for RGB-D semantic segmentation <ref type="bibr" target="#b0">[1]</ref>, or scanpath prediction <ref type="bibr" target="#b26">[27]</ref>.</p><p>In independent work performed in parallel with ours <ref type="bibr" target="#b27">[28]</ref>, <ref type="bibr" target="#b3">[4]</ref> also focus on object detection using reinforcement Qlearning. We differ, among others, in using policy search based on an analytic gradient computation with continuous as opposed to discrete reward (both in a supervised and weakly-supervised image labeling setup <ref type="bibr" target="#b25">[26]</ref>), by operating on regions instead of deforming bounding boxes, in using different actions (infinite set via function approximation vs. 9 in <ref type="bibr" target="#b3">[4]</ref>), a different state representation (a set of 10 boxes in <ref type="bibr" target="#b3">[4]</ref> vs. our manipulation of disjoint sets), and in the training procedure based on reinforcement learning with delayed rewards as opposed to an additional apprenticeship signal in <ref type="bibr" target="#b3">[4]</ref>. This results in a different model behavior in both training and testing, as <ref type="bibr" target="#b3">[4]</ref> requires the control of actions via short steps in order to prevent the apprenticeship learning process to immediately locate the target from any position. In testing <ref type="bibr" target="#b3">[4]</ref> use 10 steps to locate the target, whereas our model takes 3.1 steps on average.</p><p>Relevant to our work is also the one of Karayev et al. <ref type="bibr" target="#b17">[18]</ref> who differently however, focus on object detection in an anytime recognition framework where a multi-class detector can be stopped, asynchronously, during its execution. <ref type="bibr" target="#b17">[18]</ref> sequentially schedule multi-class models, optimizing the order of applying sliding window object detectors (exhaustively evaluated at all image locations, in a cascade), stopping short of running detectors for some classes. In contrast, we spatially optimize each specific sequential class detector (stopping short of searching all image locations) and run the detectors for all classes in the standard way. Methodologically, there are significant differences: <ref type="bibr" target="#b17">[18]</ref> use Q-learning and regress expected value of (state, action), we do policy search with analytic gradient to directly optimize expected reward. We have infinite action spaces (any image location), <ref type="bibr" target="#b17">[18]</ref> operate over finite actions (1+#detectorclasses in <ref type="bibr" target="#b17">[18]</ref>, or 1+#feature-types in <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b7">8]</ref>); <ref type="bibr" target="#b17">[18]</ref> can stop anytime, whereas we learn a stopping condition for each class. From a system viewpoint, the methods are complementary, as one can benefit both from an efficient ordering of class detectors <ref type="bibr" target="#b17">[18]</ref> and from efficient individual class detectors, as we propose, but we will not investigate this here.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Problem Formulation</head><p>Given an input image, we formulate action detection as the problem of maximizing a confidence function f c : R → R over the set of image regions R:</p><formula xml:id="formula_0">r * = arg max r∈R f c (r)<label>(1)</label></formula><p>The set of image regions R can be defined either at the coarse level of bounding boxes or at the finer level of freeform image regions obtained with a state of the art proposal generation method <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b31">32]</ref>.</p><p>Good choices for the confidence function f c that achieve state-of-the-art performance, are associated with a high computational price tag. Therefore, solving the optimization problem (1) can still be expensive even for the comparatively smaller (versus e.g. bounding boxes) set of region proposals R obtained by a segmentation algorithm. To address this issue, in §3.1 we present a model to learn efficient search strategies, rigorously formulated in a reinforcement  learning setup. Our model operates in an integrate, fixate and evaluate regime, and only explores a few locations before deciding on the presence of a target.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Sequential Detection Model</head><p>In this section, we present the key components of our optimal sequential model for image exploration. <ref type="bibr" target="#b0">1</ref> Our model is given a set of image regions R indexed by the set B = {1, . . . , |R|} (with | · | the set cardinality), the confidence function as introduced in <ref type="formula" target="#formula_0">(1)</ref>, f c (r) = θ ⊤ c q(r) with parameters θ c , and a feature extractor q : R → R m of dimensionality m. The objective of the model is to locate the target with a minimal number of evaluations of these two computationally expensive functions At each time step t during a detection sequence (except the last step), our model generates a fixate action A f t , based on its internal state S t . Each fixation action specifies a location in the image that the model decides to explore, and results in a set of observations O t , which is a set of image regions in the proximity of this location. The observed regions are the only regions that are inspected by the algorithm. In particular, they are the only regions on which the confidence function f c and feature extractor q need to be evaluated. The observations O t are then used to update the 1 Please see our accompanying report <ref type="bibr" target="#b25">[26]</ref> for detailed derivations. state S t , summarizing all past observations and actions.</p><p>When enough information has been collected about the image, the model issues a special done action, indicating that it has decided on the location of the detection target. The done action is associated with a detection target bounding box b t and a detection confidence value c t . The model has a set of trainable parameters θ = (θ c , θ d , θ e , θ p , Σ p , σ c ) controlling, respectively, the detector response confidence, the stopping criteria, the informativeness of an image region with respect to the target location, the image location of the most probable next fixation and its variance, and the variance of the confidence c t associated to the model output.</p><p>Each fixate action A f t can potentially reduce the uncertainty in localizing the detection target, but is associated with a computational cost due to the need to integrate the set of observations O t into the state. The goal of our model is to balance the conflicting needs of information gathering (fixate actions) with the need to correctly locate the target (done actions).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Model Structure</head><p>We now proceed to describe in detail the actions, states, observations and the decision process of our model. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>States:</head><p>The state of our model is represented as a tuple with three elements: the observed region history H t , the selected evidence region history E t and the fixation history F t . This tuple S t = (H t , E t , F t ) summarizes the history of observations and actions since the beginning of the search sequence.</p><p>The observed region history H t : At each time step t, the model keeps track of a history H t ⊆ B of image regions observed so far. The confidence function f c is evaluated on these regions alone and used to decide when to terminate the search. The history H t is also used by the model to decide on promising locations to fixate during the next step, as these might provide context to guide the search.</p><p>The selected evidence region history E t : The model decides on the next location to fixate based on an evidence region e t ∈ H t from the observation history. This evidence region is deemed by the model to provide the necessary context that is indicative of the target's location. However, to encourage diversity during search, each region should be used as evidence at most once. For this reason, the model keeps track of the set E t ⊆ H t of regions selected so far, and evidence regions are always selected from the set H t \ E t .</p><p>The fixation history F t : The set of observed regions at When the target has not yet been found, regions that do not contain it are often exploited to guide the search to new promising locations (e.g. the street provides the context for finding the bus). When a small target lies inside a wider region (e.g. the bird in the tree), the model uses the wider region as a contextual cue to find the target, in a coarse to fine fashion. Similarly, fine-to-coarse search strategies involving several exploratory fixations are used to provide the foveal coverage needed to observe large targets (e.g. the airplane). See <ref type="table">Table 1</ref> for quantitative results and §4 for discussion. each time step t depends on the history F t of past fixation locations, c.f . <ref type="bibr" target="#b1">(2)</ref>. We therefore include this history into the state S t .</p><p>Actions: Actions in our model are represented as tuples. There are two kinds of actions, distinguished by their first element, which can be one of two discrete symbols: fixate or done.</p><p>Fixate actions are represented as a three element tuple</p><formula xml:id="formula_1">A f t = (fixate, e t , z t )</formula><p>, where e t ∈ B represents the index of the evidence region and z t ∈ R 2 is the image coordinate of the next fixation. Done actions are represented as</p><formula xml:id="formula_2">A d t = (done, b t , c t ) where b t ∈ B</formula><p>is the index of the region representing the detection output and c t ∈ R represents the detection confidence. To summarize, the action space of our model consists of the union of all fixate and done</p><formula xml:id="formula_3">tuples, i.e. A = A f ∪ A d .</formula><p>Observations: Following a fixate action, the set O t of image regions in the neighbourhood of the fixation location z t become observed.</p><p>To define this neighbourhood, we use a circular area of radius T R around the fixation center z t . We say that a pixel is fixated at time t if it falls within the area associated with z t . In order for a region r to become observed at time t, a sufficiently large fraction h(r) of its pixels must have been fixated during the current or previous steps:</p><formula xml:id="formula_4">h(r) = |{x ∈ r| (∃) z ∈ F t , z − x 2 ≤ T R }| |r| (2) O t = {i ∈ B | h(r i ) ≥ T F }<label>(3)</label></formula><p>where F t = {z 1 , .., z t } is the history of locations fixated by the model up to time step t, and T F is a threshold that controls the minimum fraction of fixated pixels in an observed segment.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Stochastic Policy</head><p>The model decides on the next action to take based on the current state. Its stochastic decision policy π θ (S t , A t ) proceeds in three phases, each having its own set of learned parameters. The model evaluates whether to terminate search (termination decision). If positive, a done action is performed, else a fixate action follows. We will review each of these, next.</p><p>Termination decision: The model may decide to terminate search at any given time step, based on the current state S t , and produce a detection result. Rather than using an ad-hoc termination policy, e.g. a preset number of fixations (search locations), our model uses a learnt decision function that balances detection confidence against computational load:</p><p>• Detection confidence: If the model has already observed a region which is deemed to contain the detection target with high confidence, it may decide to terminate the search early. To capture this aspect, we compute the maximum confidence over the regions observed so far, i.e. asmax {f c (r i )} i∈Ht , where asmax(X) = x∈X xe αx x∈X e αx for any set X and smoothness meta-parameter α.</p><p>• Computational load: The running cost of our detector has two components: first, the number of confidence function evaluations performed so far, which is proportional to the ratio |H t | / |R| of regions observed at the current time step t; second, the number of search policy evaluations. Since the policy is evaluated once per time step, this cost is proportional to the number of time steps t.</p><p>In order to allow the model to balance these termination criteria, we define a four-element feature vector for the current state:</p><formula xml:id="formula_5">v (S t ) = asmax {f c (r i )} i∈Ht t |H t | |R| 1 ⊤<label>(4)</label></formula><p>The search termination probability (done action) is given by a logistic classifier with parameters θ d :</p><formula xml:id="formula_6">p θ (d t = 1|S t ) = sigm θ ⊤ d v (S t )<label>(5)</label></formula><p>where d t is an binary variable indicating the decision to terminate the search at the current time step and sigm(x) = (1 + e −x ) −1 is the sigmoid function.</p><p>Done action: Upon termination (d t = 1), the model outputs a bounding box b t from the set H t of observed regions, to represent the detection target location, together with a confidence score c t . We use a soft maximum bounding box selection criterion, with smoothness meta-parameter α:</p><formula xml:id="formula_7">p θ (b t = k|d t = 1, S t ) = e αfc(r k ) i∈Ht e αfc(ri)<label>(6)</label></formula><p>The corresponding confidence c t is normally distributed around the confidence for the selected bounding box:</p><formula xml:id="formula_8">p θ (c t |d t = 1, b t = k, S t ) = N (c t |f c (r k ), σ c )<label>(7)</label></formula><p>where σ c ∈ R is a model parameter that controls the variance of the confidence predictions. Finally, the probability of a done action is given by:</p><formula xml:id="formula_9">π θ (A t = (done, b t , c t ) |S t ) = p θ (d t = 1|S t ) · · p θ (b t |d t = 1, S t )p θ (c t |d t = 1, b t , S t )<label>(8)</label></formula><p>Fixate action: If the search is not terminated (d t = 0), the model selects a new evidence region e t ∈ (H t \ E t ) from the set of observed regions, that it deems informative for the target location. We define an evidence function f e : B → R, f e (i) = exp θ ⊤ e q(r i ) that evaluates the informativeness of image region i with respect to the target location, where θ e are learned model parameters. We pick the region e t from a multinomial distribution defined by the evidence function over the set H t \ E t of image regions not selected during previous steps:</p><formula xml:id="formula_10">p θ (e t |S t ) = f e (e t ) i∈Ht\Et f e (i)<label>(9)</label></formula><p>Once selected, the evidence region e t is used to define a Gaussian probability distribution for the next fixation location z t ∈ R 2 . For convenience, let us denote by</p><formula xml:id="formula_11">µ(e t ) = x 1 (e t ) + x 2 (e t ) 2<label>(10)</label></formula><p>the center of the bounding box tightly enclosing the evidence region r et , defined by its top-left and bottom-right corners x 1 (e t ) and x 2 (e t ), respectively. Similarly, let</p><formula xml:id="formula_12">∆(e t ) = diag x 1 (e t ) − x 2 (e t ) 2<label>(11)</label></formula><p>be the diagonal matrix encoding half the width and height of this bounding box. Then, the probability for the next fixation location z t is:</p><formula xml:id="formula_13">p θ (z t |S t , e t ) = N ·|f p (e t ), ∆(e t ) ⊤ Σ p ∆(e t )<label>(12)</label></formula><p>where Σ p is a learned covariance matrix that controls the spread of fixations, and the Gaussian center f p (e t ) is based on a linear combination of the evidence region features q(r et ) with learned parameters θ p :</p><formula xml:id="formula_14">f p (e t ) = ∆(e t )θ ⊤ p q(e t ) + µ(e t )<label>(13)</label></formula><p>We make the position function invariant to the scale of the image region r i by normalizing with respect to its bounding box size, defined by the top-left and bottom-right corners c.f . first term in <ref type="bibr" target="#b12">(13)</ref>, and relative to the bounding box center (second term in <ref type="bibr" target="#b12">(13)</ref>). Summarizing, the probability of a fixate action is given by:</p><formula xml:id="formula_15">π θ (A t = (fixate, e t , z t ) |S t ) = = p θ (d t = 0|S t ) p θ (e t |S t ) p θ (z t |S t , e t )<label>(14)</label></formula><p>Algorithm 1 Policy sampling algorithm</p><formula xml:id="formula_16">1: procedure SAMPLE (S t = (H t , E t , F t )) 2: d t ∼ p(d t |S t ) using (4),<label>(5)</label></formula><p>3: <ref type="formula" target="#formula_8">(7)</ref> 6:</p><formula xml:id="formula_17">if d t = 1 then 4: b t ∼ p(b t |S t , d t ) using (6). 5: c t ∼ p(c t |S t , d t , b t ) using</formula><formula xml:id="formula_18">return A t = (done, b t , c t ) 7: else 8:</formula><p>e t ∼ p(e t |S t , d t ) using <ref type="formula" target="#formula_10">(9)</ref> 9:</p><p>z t ∼ p(z t |S t , d t , e t ) using <ref type="formula" target="#formula_0">(12)</ref> 10:</p><formula xml:id="formula_19">return A t = (fixate, e t , z t ) 11:</formula><p>end if 12: end procedure Algorithm 2 State transition algorithm</p><formula xml:id="formula_20">1: procedure OBSERVE (S t = (H t , E t , F t ) , A t = (fixate, e t , z t )) 2: O t ← {i ∈ B | h(r i ) ≥ T F } 3: H t+1 ← H t ∪ O t 4: E t+1 ← E t ∪ {e t } 5: F t+1 ← F t ∪ {z t } 6: return S t+1 = (H t+1 , E t+1 , F t+1 ) 7: end procedure</formula><p>The model policy is completely specified by equations <ref type="bibr" target="#b7">(8)</ref>, <ref type="bibr" target="#b13">(14)</ref>, which define a probability distribution over all possible actions A t . Notice that out policy is highly (deeply) non-linear in the features and the parameters. The stochastic policy is given by a Gaussian distribution on top of highly non-linear predictions (in contrast notice that methodologies like <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b3">4]</ref> are deterministic).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Inference and Learning</head><p>Inference is carried out by repeated sampling of the policy π θ (A t |S t ), until a done action is achieved (Algorithm 1). At each step the state S t is updated according to the action A t (Algorithm 2). When the search is finished, the region b t and the confidence c t are generated and returned as the detector output. For learning we are given a set of images, represented as sets of regions B j , together with confidence function f c aimed to be maximal at target locations. For notational simplicity, without loss of generality, we will consider the equations for one image, containing n (possibly 0) detection targets, and the corresponding ground truth regions {g i } n i=1 . We wish to find the model parameters θ = (θ c , θ d , θ e , θ p , Σ p , σ c ) maximizing the target detection accuracy based on the detected target location b t and confidence c t at the last step (when d t = 1). At the same time, we aim to minimize the number of region evaluations. To capture the trade-off, and to avoid explicitly instructing the model how to achieve it, we formulate the training objective as a delayed reward, as typical in a reinforcement learning setup. Our reward function is sensitive to the detection location and the confidence at the final state, and incurs a penalty for each region evaluation:</p><formula xml:id="formula_21">r t (S t , A t ; {g i } n i=1 ) = =      −β · |O t \ H t | if d t = 0 sigm (c t ) · [max i=1,n iou (g i , r bt )] if d t = 1 ∧ n &gt; 0 −sigm (c t ) if d t = 1 ∧ n = 0<label>(15)</label></formula><p>where iou(·, ·) is the intersection over union function on regions and β is a penalty paid by the model for each confidence function evaluation.We found it straightforward to estimate the exploitation-exploration trade-off parameters, for each class detector, based on cross-validation. Typical values are e.g. β = 10 −3 and α = 30.</p><p>The first branch associates a negative reward to each fixate action, proportional to the computational cost of evaluating the newly observed region set O t \ H t . The last two branches correspond to the done action, with different rewards for images in which the target is present and absent. In the former case (branch 2), the model receives a reward that is proportional to its confidence and the ground truth overlap. In the latter case (branch 3), the location is ignored, and the model receives a higher reward if its confidence is smaller. Concluding, the reward function defined in <ref type="bibr" target="#b14">(15)</ref> balances detection accuracy and computational complexity.</p><p>During training, we maximize the expected reward function on the training set, defined as:</p><formula xml:id="formula_22">F (θ) = E p θ (s)   |s| t=1 r t   − λ 2 θ ⊤ θ<label>(16)</label></formula><p>where s = ((S 0 , A 0 ), . . . , (S k , A k ), . . .) represents a variable length sequence of states 2 , sampled by running the model <ref type="figure" target="#fig_1">(Algorithm 1 and 2)</ref>, starting from an initial state S 0 = (H 0 , E 0 , F 0 ) and λ is an L2 regularizer. We set the initial H 0 to the set of segments observed by fixating the image center, and both E 0 and F 0 to ∅. For one image, the gradient of the expected reward can be approximated as <ref type="bibr" target="#b40">[41,</ref><ref type="bibr" target="#b35">36]</ref>: Training our sequential model involves computing the expected reward and its gradient, c.f . <ref type="bibr" target="#b16">(17)</ref>, <ref type="bibr" target="#b15">(16)</ref>. For each image, this involves simulating the model until the search is terminated, by generating sequences in the state-action space. At each time step t, an action A t is sampled from the policy, using Algorithm 1. More precisely, first the distribution p θ (d t |S t ) is sampled to decide whether the search is to be terminated (done action, i.e. d t = 1). If so, then the output region index b t and the confidence c t are sampled from p θ (b t |d t = 1, S t ) and p θ (c t |d t = 1, S t ), respectively. Otherwise (not done, i.e. d t = 0), an evidence region is selected by sampling p θ (e t |d t = 0, S t ), and then the next fixation location is sampled from p θ (z t |d t = 0, e t , S t ). Finally, the state of the model is updated, as described in Algorithm 2. Multiple sample sequences are generated in this way, for each image, and used to estimate the expectations. <ref type="bibr" target="#b2">3</ref> </p><formula xml:id="formula_23">∇ θ F (θ) = 1 M M i=1 |s i | t=1 ∇ θ logπ θ (A i t |S i t )    |s i | t=1 r i t    + λθ</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments and Results</head><p>In this section, we present experiments to validate our search method on the challenging Pascal VOC 2012 object detection Benchmark <ref type="bibr" target="#b9">[10]</ref>, over the withheld test set available via the evaluation server. In most of our experiments, the region space R consists of all segments extracted using a figure-ground region proposal method, and any state of the art method applies. Without loss of generality, we select the CPMC algorithm <ref type="bibr" target="#b4">[5]</ref> as their segments can be mapped with reasonable accuracy to detection targets (according to our studies, the average intersection over union overlap of the best segment enclosing rectangle with the ground truth bounding box, is 0.687).</p><p>Pipelines: To quantify the performance of different standard search models, we either solve the maximization problem (1) exactly, by performing exhaustive sliding window search (SW), exhaustive search over the CPMC region proposal set (RP), or by using our sequential reinforcement learning search model (RL).</p><p>Experimental procedure: We now present and discuss the details of our experiments.</p><p>Proposal generation: To obtain our RP hypotheses, we run the public implementation <ref type="bibr" target="#b4">[5]</ref> over the input image. For the sliding window (SW) baseline, region hypotheses are windows obtained by iterating over various window sizes and aspect ratios, and, for each scale and aspect ratio setting, by sliding the window with a fixed stride over the image. Our sliding window enumeration strategy results in 25,000 windows per image. For region proposal, we use an optimized version of CPMC, which operates on a reduced search space formed by free-form regions. <ref type="bibr" target="#b3">4</ref> Feature extraction: For our feature extractor q, we use the deep neural network of Krizhevsky et al. <ref type="bibr" target="#b21">[22]</ref>. For a region, we invoke the network over the contents of the bounding box, and to capture context, on the entire image where the bounding box has been masked out (filled by its mean color). For each neural network evaluation, we record the output of the last fully connected layer. We concatenate the resulting feature vector with a representation of the bounding box size and aspect ratio, and obtain a final vector of 8204 values. Deep neural networks can be refined to further increase detection accuracy <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b32">33]</ref>. In this work we have focused on optimal search models and have therefore opted to illustrate our model with a simpler linear SVM model trained using a generic feature extractor <ref type="bibr" target="#b21">[22]</ref>. Note however that our method is sufficiently general to operate in conjunction with any confidence function.</p><p>Training the sequential reinforcement learning detector: We find the optimal parameter vector θ that maximizes the expected reward (16) on the training set of the Pascal VOC 2012 Object detection challenge, using a BFGS optimizer. However, due to the high number of parameters, the model is prone to overfit the data. Therefore, in practice, we have chosen to initialize our confidence function parameters θ c by pre-training using a linear SVM where positive instances are ground truth bounding boxes and negative instances are sampled from other image locations (from the region proposal set R).</p><p>We initialize θ p by performing a regression from image regions to the centers of ground truth bounding boxes. We bias θ c towards their initial values while the rest of the parameters i.e. (θ d , θ e , σ c , Σ p ) are initialized by uniform random sampling, in the range [0, 1] and optimized using a 0 mean quadratic penalty c.f . <ref type="bibr" target="#b15">(16)</ref>. We validate the observation model parameters T R as in <ref type="bibr" target="#b1">(2)</ref> and T F as in (3) on the Pascal VOC validation set, setting them to 64 pixels and 0.25, respectively. In practice the sensitivity associated to these parameters is not high: even if the model runs for several fixations, only a small fraction of the the total number of regions |R| is observed. Empirically, we found the model to produce fairly short and effective search patterns with a number of 3.1 image locations inspected on average. As our policy is stochastic, multiple object instances can be found. Moreover, in evaluation, all visited regions above a threshold (e.g. all attended regions) are identified (locate and restart strategies are also possible).</p><p>Computational efficiency and accuracy: The running time and accuracy of our method is shown in <ref type="table">table 1.  method   metric  aeroplane  bicycle  bird  boat  bottle  bus  car  cat  chair  cow  dining table  dog  horse  motorbike   person  potted plant  sheep  sofa  train  tv</ref>  The accuracy of our sequential detector is close to that of the much more expensive sliding window baseline, although it is more than 70 times faster on an Intel Xeon 2.2Ghz CPU. This speedup takes into account the overhead of the RP algorithm (6.1 seconds) and the small overhead needed to sample the policy of our sequential detector (32 ms). We explicitly chose to give speed-ups in running times (as opposed to e.g. number of inspected locations or detector evaluations) as these also cover the overheads (e.g. in our case the additional work for the segment proposal generation step or estimating the next action), for fair comparisons with sliding windows or region proposal methods.</p><p>Besides comparisons with the SW and RP baselines, presented in table 1, it could be useful to relate to other efficient search methods like <ref type="bibr" target="#b12">[13]</ref>. As code is not available and there are quite significant methodological, as well as region and feature representation differences, one can still consider overall speed-ups reported for similar datasets. For example, by operating over free-form regions obtained from selective search <ref type="bibr" target="#b37">[38]</ref>, <ref type="bibr" target="#b12">[13]</ref> achieve a 9x acceleration, respectively, over sliding-windows methods in the PAS-CAL VOC Object Detection 2007 dataset. Both us and <ref type="bibr" target="#b12">[13]</ref> could additionally benefit from embedding our accelerated spatial class detectors into the complementary, effective multi-class detector scheduling mechanism for anytime recognition proposed in <ref type="bibr" target="#b17">[18]</ref>. This could further produce a 2x speed-up at roughly similar AP loss.</p><p>Qualitative analysis: We note that the length of the search sequence is greatly dependent on the image (see <ref type="figure" target="#fig_3">fig. 2</ref>). If the target is close to the image center (e.g. the bicycle in <ref type="figure" target="#fig_3">fig. 2</ref>), the method tends to terminate the search after the first fixation, as it has already confidently located the object. If the target is located near the periphery, our model tends to continue the search over a longer time horizon. This behavior illustrates the model's capacity to adapt the search sequence length to the input image, as opposed to other fixed-lenght search methods in the literature.</p><p>Our visualizations of the results reveal three ways in which an evidence region (shown in green in <ref type="figure" target="#fig_3">fig. 2</ref>) may guide the search: (a) The contextual region may not contain the target, but instead provide cues on its location (e.g. the ocean for the boat, or the road for the bus). In this case, the model navigates from the surrounding context to the object itself. (b) The contextual region may include the target (e.g. the tree branches in which the bird is hiding), and inform the model to fixate a subregion likely to represent it. This situation corresponds to a coarse-to-fine search for the target. (c) Finally, the target may be too big, and fixations inside its region may initially not foveate it sufficiently for an observation to be made. In such cases, object sub-parts are often chosen as evidence regions to guide the search to other subparts (e.g. the various features of the front of the railway engine), until the object is included in the observation set and therefore the confidence function is evaluated on its entire extent. In this case, the model behavior resembles a perceptual grouping process in which smaller scale parts are integrated to deduce the extent of a large object.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusions</head><p>We have presented a reinforcement learning model for visual object detection. In contrast to methods that operate exhaustively over a hypothesis space, we have derived a fully trainable sequential model that can efficiently sample only a few image locations in order to accumulate evidence on the target location. Our model is image and category specific and can explicitly balance the trade-off between exploration (improving accuracy) and exploitation (efficiently terminating search when sufficient evidence has been gathered). Our methodology is general and applicable to any detector response function. We report encouraging results in the PASCAL VOC 2012 object detection dataset, showing that the proposed methodology achieves almost two orders of magnitude speed-up over sliding window methods.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 1 .</head><label>1</label><figDesc>Sequential detector based on reinforcement learning. At each time step, the model may terminate search (dt = 1) based on the history Ht of observed regions (Algorithm 1) and produce a detection hypothesis bt with confidence ct, receiving a reward measuring the detection quality. Otherwise, an evidence region et is chosen from the set Ht \ Et of unselected regions and used to predict the next fixation location zt. The set Ot of all regions in the neighbourhood of zt become observed (Algorithm 2) and a negative reward is received, reflecting the computational cost of extracting features for these regions.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>The model components are shown in fig. 1, and several examples of search patterns are illustrated in fig. 2.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 2 .</head><label>2</label><figDesc>Sequences of fixation locations zt (orange circles) generated by our model, together with the corresponding evidence regions et (green boxes), and the final detected bounding box bt (yellow), for several images. The model may terminate the search early, if the target is found by the first central fixation (first image in the second row).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head></head><label></label><figDesc>s i = ((S i 0 , A i 0 ), . . . , (S i k , A i k ), .. .) and r i t , represent sequences of states, actions and corresponding re-wards, sampled by model simulation (total of M sampled sequences).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Table 1. Detection accuracy (reported as Average Precision, AP) and running times of different methods in the test set associated to the PASCAL VOC 2012 object detection benchmark. Shown are results for the proposed sequential detection model (RL) as well as the classical sliding window (SW) and region proposal (RP) approach. The average running time of our sliding window baseline is 2, 691 seconds, regardless of the class. In the current experiments, we chose to optimize speed-up (two orders of magnitude), but our method can also be tuned for accuracy c.f .<ref type="bibr" target="#b14">(15)</ref>. For instance, similar accuracy with exhaustive search methods can be achieved with a 18x speed-up.</figDesc><table>monitor 
+mean 
+
+SW 
+detection AP (%) 49.2 46.1 21.8 12.8 6.7 46.8 25.4 50.4 9.4 27.1 21.3 47.9 39.5 47.7 22.4 10.9 26.4 25.1 45.1 41.4 31.2 
+RP 
+detection AP (%) 44.5 36.3 28.0 14.4 3.6 44.7 27.0 57.6 8.8 26.6 20.2 47.7 39.7 45.1 22.6 8.7 25.6 23.6 42.1 39.2 30.3 
+
+RL 
+
+detection AP (%) 47.4 31.4 21.0 9.5 
+2.5 44.7 19.4 50.3 6.1 18.1 21.1 46.8 35.8 40.4 18.7 8.5 17.8 18.6 41.5 38.8 27.0 
+evaluated regions 102 
+105 
+110 
+109 
+119 
+99 
+115 
+103 
+120 
+98 
+112 
+106 
+113 
+101 
+107 
+111 
+105 
+110 
+103 
+102 
+107 
+running time (s) 
+37.6 38.8 40.0 39.8 41.9 36.4 40.8 37.1 42.3 36.6 39.9 38.0 40.2 36.5 38.2 39.5 37.6 39.3 36.9 37.0 38.7 
+speedup (SW) 
+69.4 69.3 67.3 67.6 64.2 73.3 66.0 72.5 63.6 71.2 67.4 70.9 66.9 73.7 70.3 68.1 71.6 68.4 72.9 72.8 69.6 
+speedup (RP) 
+8.3 
+8.1 
+7.9 
+7.8 
+7.3 
+8.5 
+7.5 
+8.3 
+7.3 
+8.6 
+7.7 
+8.1 
+7.6 
+8.4 
+8.0 
+7.8 
+8.1 
+7.8 
+8.2 
+8.3 
+8.0 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">As the model decides when to terminate search, individually, for each search path.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">For a training set of images, we will naturally aggregate (sum over) such estimates, for each image.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="4">Notice however that the optimization only applies to the segment generation step. Therefore, as of recent trends in region proposal-based detection, we work with larger pools typically having thousands of segments, and avoid the expensive segment filtering and ranking steps.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0" />
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Second-Order Constrained Parametric Proposals and Sequential Search-Based Structured Prediction for Semantic Segmentation in RGB-D Images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Banica</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sminchisescu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">CVPR</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Learning attentional policies for tracking and recognition in video with deep networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bazzani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">.</forename><forename type="middle">N</forename><surname>Freitas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Larochelle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Muriono</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Infomax control of eye movements</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">J</forename><surname>Butko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">R</forename><surname>Movellan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE TAMD</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="91" to="107" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Active object localization with deep reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Caicedo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">CPMC: Automatic Object Segmentation Using Constrained Parametric Min-Cuts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Carreira</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sminchisescu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Exploiting hierarchical context on a large database of object categories</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Choi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Willsky</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Discriminative models for multi-class object layout</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Desai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Fowlkes</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Sequentially generated instance-dependent image representations for classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Dulac-Arnold</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Denoyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Thome</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cord</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Gallinari</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICLR</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Scalable object detection using deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Toshev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">The PASCAL Visual Object Classes Challenge 2012 (VOC2012) Results</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">V</forename><surname>Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<ptr target="http://www.pascal-network.org/challenges/VOC/voc2012/.7" />
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Cascade object detection with deformable part models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">F</forename><surname>Felzenszwalb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girschick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Rich feature hierarchies for accurate object detection and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girschick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">An active search strategy for efficient object class detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gonzalez-Garcia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vezhnevets</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ferrari</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Reinforcement learning based visual attention with application to face detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Goodrich</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Combining efficient object localization and image classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Harzallah</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Jurie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Learning spatial context: Using stuff to find things</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Heitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Koller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Neurobiology of attention</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Itti</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Rees</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">K</forename><surname>Tsotsos</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2005" />
+			<publisher>Elsevier</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Timely object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Karayev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Baumgartner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Fritz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Anytime recognition of objects and scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Karayev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Fritz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Shufflets: Shared mid-level parts for fast object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kokkinos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Learning to propose objects</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krahenbuhl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Beyond sliding windows: Object localization by efficient subwindow search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">H</forename><surname>Lampert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">B</forename><surname>Blaschko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Hofmann</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Learning to combine foveal glimpses with a third-order boltzmann machine</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Larochelle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Q-learning of sequential attention for visual object recognition from informative local descriptors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">F</forename><surname>Lucas Paletta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Seifert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Deep reinforcement learning methods for visual object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mathe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Pirinen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sminchisescu</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+		<respStmt>
+			<orgName>Lund University</orgName>
+		</respStmt>
+	</monogr>
+	<note type="report_type">Technical report</note>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Action from still image dataset and inverse optimal control to learn task specific visual scanpaths</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mathe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sminchisescu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<monogr>
+		<title level="m" type="main">Multiple instance reinforcement learning for efficient weakly-supervised detection in images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mathe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sminchisescu</surname></persName>
+		</author>
+		<idno>abs/1412.0100</idno>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Recurrent models of visual attention</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Heess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">A coarse-to-fine approach for fast deformable object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pedersoli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gonzales</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Objects in context</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Calleguillos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Wiewiora</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Generating object segmentation proposals using global and local search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Rantalankila</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kannala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Rahtu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Shaoqing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Kaiming</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Action is in the eye of the beholder: Eye-gaze driven model for spatiotemporal action localization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Shapovalova</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Raptis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Sigal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Mori</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Learning hierarchical models of scenes, objects, and parts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Sudderth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Freeman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Willsky</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+		<title level="m" type="main">Reinforcement Learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Sutton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Barto</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1998" />
+			<publisher>MIT Press</publisher>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Deep neural networks for object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Toshev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Selective search for object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">R</forename><surname>Uijlings</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">E</forename><surname>Van De Sande</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Gevers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">W</forename><surname>Smeulders</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">104</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Multiple kernels for object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Gulshan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Varma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Efficient histogram-based sliding window</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Tao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Simple statistical gradient-following algorithms for connectionist reinforcement learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Williams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Machine Learning</title>
+		<imprint>
+			<date type="published" when="1992" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

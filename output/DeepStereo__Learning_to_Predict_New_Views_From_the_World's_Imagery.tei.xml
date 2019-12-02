@@ -1,0 +1,1118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">DeepStereo: Learning to Predict New Views from the World&apos;s Imagery</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">John</forename><forename type="middle">Flynn</forename><surname>Zoox</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">Ivan Neulander Google Inc</orgName>
+								<orgName type="institution" key="instit2">Noah Snavely Google Inc</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">James</forename><forename type="middle">Philbin</forename><surname>Zoox</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">Ivan Neulander Google Inc</orgName>
+								<orgName type="institution" key="instit2">Noah Snavely Google Inc</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">DeepStereo: Learning to Predict New Views from the World&apos;s Imagery</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:39+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Deep networks have recently enjoyed enormous success when applied to recognition and classification problems in computer vision <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b32">33]</ref>, but their use in graphics problems has been limited ([23, 7]  are notable recent exceptions). In this work, we present a novel deep architecture that performs new view synthesis directly from pixels, trained from a large number of posed image sets. In contrast to traditional approaches, which consist of multiple complex stages of processing, each of which requires careful tuning and can fail in unexpected ways, our system is trained end-to-end. The pixels from neighboring views of a scene are presented to the network, which then directly produces the pixels of the unseen view. The benefits of our approach include generality (we only require posed image sets and can easily apply our method to different domains), and high quality results on traditionally difficult scenes. We believe this is due to the end-to-end nature of our system, which is able to plausibly generate pixels according to color, depth, and texture priors learnt automatically from the training data. We show view interpolation results on imagery from the KITTI dataset <ref type="bibr" target="#b11">[12]</ref>, from data from [1] as well as on Google Street View images. To our knowledge, our work is the first to apply deep learning to the problem of new view synthesis from sets of real-world, natural imagery.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Estimating 3D shape from multiple posed images is a fundamental task in computer vision and graphics, both as an aid to image understanding and as a way to generate 3D representations of scenes that can be rendered and edited. In this work, we aim to solve the related problem of new view synthesis, a form of image-based rendering (IBR) where the goal is to synthesize a new view of a scene by warping and combining images from nearby posed images. This can be used for applications such as cinematography, virtual reality, teleconferencing <ref type="bibr" target="#b3">[4]</ref>, image stabilization <ref type="bibr" target="#b20">[21]</ref>, * Contributed while at Google. New view synthesis is an extremely challenging, underconstrained problem. An exact solution would require full 3D knowledge of all visible geometry in the unseen view which is in general not available due to occluders. Additionally, visible surfaces may have ambiguous geometry due to a lack of texture. Therefore, good approaches to IBR typically require the use of strong priors to fill in pixels where the geometry is uncertain, or when the target color is unknown due to occlusions.</p><p>The majority of existing techniques for this problem involve traditional multi-view stereo and/or image warping methods and often explicitly model the stereo, color, and occlusion components of each target pixel <ref type="bibr" target="#b38">[39,</ref><ref type="bibr" target="#b0">1]</ref>. A key problem with these approaches is that they are prone to generating unrealistic and jarring rendering artifacts in the new view. Commonly seen artifacts include tearing around occluders, elimination of fine structures, and aliasing. Handling complex, self-occluding (but commonly seen) objects such as trees is particularly challenging for traditional ap-proaches. Interpolating between wide baseline views tends to exacerbate these problems.</p><p>Deep networks have enjoyed huge success in recent years, particularly for image understanding tasks <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b32">33]</ref>. Despite these successes, relatively little work exists on applying deep learning to computer graphics problems and especially to generating new views from real imagery. One possible reason is the perceived inability of deep networks to generate pixels directly, but recent work on denoising <ref type="bibr" target="#b39">[40]</ref>, super-resolution <ref type="bibr" target="#b5">[6]</ref>, and rendering <ref type="bibr" target="#b22">[23]</ref> suggests that this is a misconception. Another common objection is that deep networks have a huge number of parameters and are prone to overfitting in the absence of enormous quantities of data, but recent work <ref type="bibr" target="#b32">[33]</ref> has shown state-of-the-art deep networks whose parameters number in the low millions greatly reducing the potential for overfitting.</p><p>In this work we present a new approach to new view synthesis that uses deep networks to regress directly to output pixel colors given posed input images. Our system is more resilient to the failure modes of traditional approaches, and is able to interpolate between views separated by a wide baseline. We posit this is due to the end-to-end nature of the training, and the ability of deep networks to learn extremely complex non-linear functions of their inputs <ref type="bibr" target="#b27">[28]</ref>. Our method makes minimal assumptions about the scene being rendered: largely, that the scene should be static and should exist within a finite range of depths. Even when these requirements are violated, the resulting images degrade gracefully and often remain visually plausible. When uncertainty cannot be avoided, our method prefers to blur detail, which generates much more visually pleasing results compared to tearing or repeating, especially when animated. Additionally, although we focus on its application to new view problems here, we believe that the deep architecture presented can be readily applied to other stereo and graphics problems given suitable training data.</p><p>For the view synthesis problem, there is an abundance of readily available training data-any set of posed images can be used as a training set by leaving one image out and trying to reproduce it from the remaining images. Based on this key idea, we train two models using two corpuses: large amounts of data mined from Google's Street View, a massive collection of posed imagery spanning much of the globe <ref type="bibr" target="#b17">[18]</ref>, and posed imagery from the KITTI odometry dataset <ref type="bibr" target="#b11">[12]</ref>, which we repurpose for view synthesis. Because of the variety of Street View scenes seen during training, our system is robust and generalizes to new types of imagery, as well as to image collections used in prior work. Suprisingly, even a model trained on the less varied KITTI datset generalizes well to very different data.</p><p>To evaluate our method, we use held-out KITTI imagery to form a new view synthesis benchmark, and perform quantitative comparisons to more traditional IBR methods using this benchmark. We also qualitatively compare images generated by our model with the corresponding captured images, and compare our results qualitatively to existing state-of-the-art IBR methods <ref type="bibr" target="#b0">[1]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>Learning depth from images. The problem of view synthesis is strongly related to the problem of predicting depth or 3D shape from imagery. In recent years, learning methods have been applied to this shape prediction problem, often from just a single image-a very challenging vision task. Automatic single-view methods include the Make3D system of Saxena et al. <ref type="bibr" target="#b29">[30]</ref>, which uses aligned photos and laser scans as training data, and the automatic photo pop-up work of Hoiem et al. <ref type="bibr" target="#b14">[15]</ref>, which uses images with manually annotated geometric classes. More recent methods have used Kinect data for training <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b19">20]</ref> and deep learning methods for single view depth or surface normal prediction <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b37">38]</ref>. However, the single-view problem remains very challenging. Moreover, gathering sufficient training data is difficult and time-consuming.</p><p>Other work has explored the use of machine learning for the stereo problem (i.e., using more than one frame). Learning has been used to estimate the parameters of more traditional models such as MRFs <ref type="bibr" target="#b42">[43,</ref><ref type="bibr" target="#b40">41]</ref>, as well as for deriving low-level correlation filters for disparity estimation <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b18">19]</ref>. Zbontar and LeCun <ref type="bibr" target="#b41">[42]</ref> train a convolutional network on KITTI data to predict image patch similarity. This patch similarity network is used as the basis of a stereo matching cost, which, combined with traditional stereo filtering, achieves impressive results. Unlike this prior work, we learn to synthesize new views directly using a new deep architecture, and do not require known depth or disparity as training data.</p><p>View interpolation. There is a long history of work on image-based rendering in vision and graphics based on a variety of methods, including light fields <ref type="bibr" target="#b24">[25,</ref><ref type="bibr" target="#b13">14]</ref>, image correspondence and warping <ref type="bibr" target="#b30">[31]</ref>, and explicit shape and appearance estimation <ref type="bibr" target="#b36">[37,</ref><ref type="bibr" target="#b43">44,</ref><ref type="bibr" target="#b31">32]</ref>. Much of the recent work in this area has used a combination of 3D shape with image warping and blending <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b0">1,</ref><ref type="bibr" target="#b1">2]</ref>. These methods are largely hand-built and do not leverage training data. Our goal is to learn a model for predicting new viewpoints by directly minimizing the prediction error on our training set.</p><p>We are particularly inspired by the work of Fitzgibbon et al. on IBR using image-based priors <ref type="bibr" target="#b10">[11]</ref>. Like them, we consider the goal of faithfully reconstructing the output image to be the key problem to be optimized for, as opposed to reconstructing depth or other intermediate representation. We use state-of-the-art machine learning methods with a new architecture to achieve this goal. Szeliski <ref type="bibr" target="#b33">[34]</ref> suggests image prediction as a metric for stereo algo-rithms; our method directly minimizes this prediction error.</p><p>Finally, a few recent papers have applied deep learning to synthesizing imagery. Dosovitskiy et al. train a network on synthetic images of rendered 3D chairs that can generate new chair images given parameters such as pose <ref type="bibr" target="#b6">[7]</ref>. Kulkarni et al. propose a "deep convolutional inverse graphics network" that can parse and rerender imagery such as faces <ref type="bibr" target="#b23">[24]</ref>. However, we believe ours is the first method to apply deep learning to synthesizing novel natural imagery from posed real-world input images.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Approach</head><p>Given a set of N posed input images I 1 , I 2 , . . . , I N , with poses V 1 , V 2 , . . . , V N , the view synthesis problem is to render a new image from the viewpoint of a new target camera C. Despite the representative power of deep networks, naively training a deep network to synthesize new views by supplying the input images I k as inputs directly is unlikely to work well, for two key reasons.</p><p>First, the pose parameters of C and of the views V 1 , V 2 , . . . , V N would need to be supplied as inputs to the network in order to produce the desired view. The relationship between the pose parameters, the input pixels and the output pixels is complex and non-linear-the network would effectively need to learn how to interpret rotation angles and perform image reprojection. Forcing the network to learn projection is inefficient-it is a straightforward operation that we can represent outside of the network.</p><p>Second, in order to synthesize a new view, the network would need to compare and combine potentially distant pixels in the original source images, necessitating very dense, long-range connections. Such a network would have many parameters and would be slow to train, prone to overfitting, and slow to run inference on. A network structure could be designed to use the epipolar constraint internally in order to limit connections to those on corresponding epipolar lines. However, the epipolar lines, and thus the network connections, would be pose-dependent, making this very difficult and likely computationally inefficient in practice.</p><p>Using plane-sweep volumes. Instead, we address these problems by using ideas from traditional plane sweep stereo <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b34">35]</ref>. We provide our network with a set of 3D plane sweep volumes as input. A plane sweep volume (PSV) consists of a stack of images reprojected to the target camera C <ref type="figure">(Fig. 2)</ref>. Each image I k in the stack is reprojected into C at a set of varying depths</p><formula xml:id="formula_0">d ∈ {d 1 , d 2 , . . . d D } to form a plane sweep volume V k C = {P k 1 , P k 2 , . . . P k D }, where P k i</formula><p>refers to the reprojected image I k at depth d i . Reprojecting an input image into a target camera requires basic texture mapping and can be performed on a GPU. We create a separate plane sweep volume V k C for each input image I k . Each voxel v k i,j,z in each plane sweep volume V k C has RGB <ref type="figure">Figure 2</ref>: Plane sweep stereo reprojects images I 1 and I 2 from viewpoints V 1 and V 2 to the target camera C at a range of depths d ∈ d 1 . . . d D . The dotted rays indicate the pixels from the input images reprojected to a particular output image pixel, and the images above each input view show the corresponding reprojected images at different depths.</p><p>and A (alpha) components. The alpha channel indicates the availability of source pixels for that voxel (e.g., alpha = 0 for pixels outside the field of view of a source image). Using plane sweep volumes as inputs to the network removes the need to supply the pose parameters since they are now implicit inputs used in the construction of the PSV. Additionally, the epipolar constraint is trivially enforced within a PSV: corresponding pixels are now in corresponding i, j columns of the PSV. Thus, long-range connections between pixels are no longer needed, so a given output pixel depends only on a small column of voxels from each of the persource PSVs. Similarly, the computation performed to produce an output pixel p at location i, j should be largely independent of the pixel location. This allows us to use more efficient convolutional neural networks. Our model applies 2D convolutional layers to each plane within the input PSV. In addition to sharing weights within convolutional layers, we make extensive use of weight sharing across planes in the PSV. Intuitively, weight sharing across planes makes sense since the computation to be performed on each plane will be largely independent of the plane's depth.</p><p>Our model. Our network architecture <ref type="figure">(Fig. 3)</ref> consists of two towers of layers, a selection tower and a color tower. The intuition behind this dual architecture is that there are really two related tasks we seek to accomplish:</p><p>• Depth prediction. First, we want to know the approximate depth for each pixel in the output image. This enables us to determine the source image pixels we should use to generate that output pixel. In prior work, this kind of probability over depth might be computed via SSD, NCC, or variance; we learn how to compute these probabilities using training data.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>D Selection masks Selection Tower</head><p>Color Tower <ref type="figure">Figure 3</ref>: The basic architecture of our network, with selection and color towers. The final output image is produced by element-wise multiplication of the selection and color tower outputs and then computing the sum over the depth planes. <ref type="figure">Fig. 6</ref> shows the full network details.</p><formula xml:id="formula_1">∑ ⊗ ⊗ D combined color images ⊗ Network Output</formula><p>• Color prediction. Second, we want to produce a color for that output pixel, given all of the relevant source image pixels. Again, the network does not just perform, e.g., a simple average, but learns to optimally combine the source pixels using training data.</p><p>The two towers in our network correspond to these two tasks: the selection tower produces a probability map (or selection map) for each depth indicating the likelihood of each pixel having that depth. The color tower produces a full color output image for each depth; one can think of this tower as producing the best color it can for each depth, assuming that the depth is the correct one. These D color images are then combined as a per-pixel weighted sum with weights drawn from the selection maps: the selection maps decide on the best color layers to use for each output pixel. This simple new approach to view synthesis has several attractive properties. For instance, we can learn all of the parameters of both towers simultaneously, end-to-end using deep learning methods. The weighted averaging across color layers also yields some resilience to uncertainty-regions where the algorithm is not confident tend to be blurred out, rather than being filled with warped or distorted input pixels. More formally, the selection tower computes, for each pixel p i,j , in each plane P z , the selection probability s i,j,z for the pixel being at that depth. The color tower computes for each pixel p i,j in each plane P z the color c i,j,z for the pixel at that plane. The final output color for each pixel is computed as a weighted summation over the output color planes, weighted by the selection probability <ref type="figure">(Fig. 3)</ref>:</p><formula xml:id="formula_2">c f i,j = s i,j,z c i,j,z .<label>(1)</label></formula><p>The input to each tower is the set of plane sweep volumes V k C (consisting of N ×D reprojected images in total over all  <ref type="figure">Figure 4</ref>: The selection tower learns to produce a selection probability s i,j,z for each pixel p i,j in each depth plane P z . The first 2D layer operates on the individual reprojected images. Subsequent layers operate on the concatenated features per depth plane.</p><p>volumes, where N is the number of source images, and D is the number of depth planes). The first layer of each tower operates on each reprojected image P i k independently, allowing it to learn low-level image features. After the first layer, the feature maps corresponding to the N sources are concatenated per depth plane, and subsequent layers operate on these per-depth-plane feature maps. The final layers of the selection tower additionally use connections across depth planes.</p><p>The selection tower. The selection tower <ref type="figure">(Fig. 4)</ref> consists of two main stages. The early layers, as discussed, consist of a number of 2D convolutional rectified linear layers that share weights across all depth planes (and within a depth plane for the first layer.) Intuitively, the early layers will compute features that are independent of depth, such as pixel differences, so their weights can be shared. The final set of layers are connected across depth planes in order to model interactions between depth planes, such as those caused by occlusion (e.g., the network might learn to prefer closer planes that have high scores in case of ambiguities in depth). The final layer of the network is a per-pixel softmax normalization transformer over depth. The softmax transformer encourages the model to pick a single depth plane per pixel, whilst ensuring that the sum over all depth planes is 1. We found that using a tanh activation for the penultimate layer gives more stable training than the more natural choice of a linear layer. In our experiments the linear layer would often "shut down" certain depth planes 1 and never recover, presumably due to large gradients from the softmax layer. The output of the selection tower is a 3D volume of single-channel nodes s i,j,z where D z=1 s i,j,z = 1. The color tower. The color tower <ref type="figure">(Fig. 5)</ref>   <ref type="figure">Figure 5</ref>: The color tower learns to combine and warp pixels across sources to produce a color c i,j,z for each pixel p i,j in each depth plane P z . As in the selection tower, the first 2D layer operates on the individual reprojected images. Subsequent layers operate on the concatenated features per depth plane.</p><p>share weights across all planes, followed by a linear reconstruction layer. Occlusion effects are not relevant for the color layer so no across-depth interaction is needed. The output of the color tower is again a 3D volume of nodes c i,j,z . Each node in the output has three channels (RGB). The output of the color tower and the selection tower are multiplied together per node to produce the output image c f (Eq. 1). During training the resulting image is compared with the known target image I t using a per-pixel L 1 loss. The total loss is thus: L = i,j |c t i,j − c f i,j | where c t i,j is the target color at pixel i, j.</p><p>Multi-resolution patches. Rather than predict a full image at a time, we predict the output image patch-by-patch. We found that passing in a set of lower resolution versions of successively larger areas around the input patches improved results by providing the network with more context. We pass in four different resolutions. Each resolution is first processed independently by several layers and then upsampled and concatenated before entering the final layers. The upsampling uses nearest neighbor interpolation. The full details of the complete network are shown in <ref type="figure">Fig. 6</ref>.</p><p>Training. Training our network is a matter of simply taking a posed set of images, leaving one image out, and predicting it from the remaining ones. To evaluate the effect of different types of training data, we trained two networks from two distinct image sources. The first network used images from Street View. These images were posed using a combination of odometry and traditional structure-frommotion methods <ref type="bibr" target="#b17">[18]</ref>. The vehicle captures a set of images, known as a rosette, from different directions for each exposure. Each camera uses a rolling shutter sensor, which is taken into account by our camera model. We used approximately 100K of such image sets during training. The second network was trained using the posed image sequences (00-10) from from the KITTI odometry dataset <ref type="bibr" target="#b11">[12]</ref>. During training, we held out sequence 04 as a validation set for hyperparameter training, as well as sequence 10 for use as a test set for final evaluation; we trained on the remaining approximately 20k images. We used both of the color stereo cameras during training and testing.</p><p>Our network uses subsets of N + 1 images during training (where we used N = 4 for all experiments in this paper). The center image is used as the target and the other N are used as input. We used a continuously running online sample generation pipeline that selected a random subset from the training imagery and reprojected random patches from this subset. The network was trained to produce 8 × 8 patches from overlapping input patches of size 30 × 30. We used D = 96 depth planes in all results shown. Since the network is fully convolutional, there are no border effects as we transition between patches in the output image. In order to increase the variability of the patches during training, patches from many images are mixed together to create mini-batches of size 96. We trained our network using Adagrad <ref type="bibr" target="#b7">[8]</ref> with an initial learning rate of 0.0001 using the system of Dean et al. <ref type="bibr" target="#b4">[5]</ref>. In our experiments, training converged after approximately 1M steps. Due to sample randomization, it is unlikely that any patch was used more than once in training.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Results</head><p>To evaluate our model quantitatively on the task of view interpolation, we generated novel images from the same viewpoint as known (but withheld) images from our KITTI test set, consisting of 200 randomly selected images from sequence 10, camera 2. We then measured the L 1 per-pixel, per-channel, prediction error of the synthesized vs. ground truth image. To evaluate the effect of varying the camera spacing (i.e. baseline) of the source images on our method, we tried several experiments where we varied the baseline of the images used during training. The median distance between the original KITTI images is 0.8m. To generate different baselines, we used variants of the dataset where we took every other (median spacing 1.6m), or every third image (median spacing 2.4m), creating natural variations in baselines. We used the same set of held-out images independently of baseline-only the source input images used for view interpolation changed. We show the prediction error on a random sample of 200 images from the training data. As expected this is comparable but slightly lower than the test error. We show quantitative results in <ref type="table">Table 1</ref>, and qualitative results in 8.</p><p>All three KITTI-trained models did well on the natural baseline (0.8m) and the wide baseline (1.6m) test data. They all had difficulty on the very wide baseline (2.4m) test data. All images shown used the wide baseline trained model. The size of baselines that the models were trained on did  <ref type="figure">Figure 6</ref>: Full network diagram. The initial stages of both the color and selection towers are the same structure, but do not share parameters.</p><p>KITTI L 1 Prediction Error Test: 0. not appear to have a large effect. As with other methods, our method had difficulty primarily near the left and right edges of the images, e.g. last row of 8, where the relative pixel motion is very fast. Additionally it occasionally had problems with thin structures, but less often than the competing methods, e.g. second last row of 8. The Street-View-trained model did not do as well on this dataset. During training, every Street View rosette provides pixels in every direction, so the reprojected depth planes always have valid pixels. With the KITTI dataset, however, some parts of the depth planes were not visible from all cameras. Since the model had not seen such missing pixels during training, it made large errors. This chiefly affects the boundaries of the rendered images; the interiors where all sources are available look much better. It is likely that a training regime that randomly removed parts of the Street View images would mitigate this problem.</p><p>Comparison to prior work. For comparison, we implemented a baseline IBR algorithm that computes depth using <ref type="bibr" target="#b28">[29]</ref> for the four nearest input images and splats the pixels from the two nearest images into the target view. To fill any small remaining holes, we diffused neighboring valid pixels. We ran this algorithm on the KITTI test set and computed L 1 pixel differences as before <ref type="table">(Table 1</ref>, last row). Our method (trained on KITTI) outperformed the simple IBR algorithm on all spacings. We note that these scenes are difficult for stereo algorithms because of the abundance of natural vegetation, specularities and thin structures such as lampposts.</p><p>Chaurasia et al. <ref type="bibr" target="#b0">[1]</ref> attempted to run their algorithms on the same KITTI data, but their algorithms were unable to generate images on this data. They mentioned difficulty obtaining a good initial reconstruction due to challenging lighting conditions, vegatation and high image noise. As we discuss below, their algorithm works well on other types of data.</p><p>Additionally, we compare our method to one that uses a recent state-of-the-art optical flow algorithm <ref type="bibr" target="#b25">[26]</ref> to interpolate an in-between image. There is no notion of 3D pose when doing optical flow, so the interpolated image is only approximately at the viewpoint of the witheld image. Additionally <ref type="bibr" target="#b25">[26]</ref> uses only two images as input so the comparison is not completely fair. However even in interior image areas our method looks qualitatively better, e.g. the third row of 8.</p><p>Additional images, as well as an interpolated video, are included as supplemental material.</p><p>Additional datasets. Finally, we used our method to interpolate from images featured in the work of Chaurasia, et al. <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b0">1]</ref>. The results are shown in <ref type="figure">Figure 9</ref>. We again held out a known image and predicted from nearby images. The authors provided us with the result of their algorithm on these held-out images, and we compared our results using both the KITTI-trained model and the Street-View-trained model. The images in this dataset were captured with a handheld DSLR camera, and hence are quite different from our training images, particularly from the KITTI data. Despite the fact that our models were not trained directly for this task, they did a reasonable job at reproducing the input images. Our method also had difficultly with the repeating structure and occluding pillars in the second example; the Chaurasia method likely benefited from being able to use more images to resolve this ambiguity. As in the KITTI examples, the Street-View-trained model again had difficulty when some depth planes were missing pixels, as can be seen seen near image boundaries.</p><p>Overall, our model produces plausible outputs that are difficult to immediately distinguish from the original imagery. Our model can handle a variety of traditionally difficult surfaces, including trees and glass as shown in <ref type="figure" target="#fig_0">Figure 1</ref>. Although the network does not attempt to model specular surfaces, the images in <ref type="figure" target="#fig_1">Figure 8</ref> show that performance degrades gracefully in their presence. Noticeable artifacts in our results include a slight loss of resolution and the occasional disappearance of thin foreground structures. Moving objects, which occur often in training, are handled gracefully by our model: they are blurred in a manner that evokes motion blur (e.g. the flag in <ref type="figure">Figure 9</ref>). On the other hand, violating the maximum camera motion assumption significantly degrades the quality of the interpolated results. While our network can theoretrically model occlussion, we find that it does not always perform correctly and that thin objects occasionally fade into the background. This can be seen at the top of the lamppost in the fourth row of <ref type="figure" target="#fig_1">Figure 8</ref>.</p><p>In order to better demonstrate what the network learns, we have included crops of the the input reprojected images and layer outputs from the color and selection towers for a single depth plane in <ref type="figure">Figure 7</ref>. The particular depth planes shown have been chosen so that the cropped regions have strong selection probability at that plane, as shown in the selection layer output. As shown in that figure, the color layer does more than simply average the input reprojected images: it learns to warp and robustly combine the input to produce the color image for that depth plane. This ability allows us to have depth planes that are separated by more than one pixel of disparity.</p><p>Computational Costs. The network renders images in small patches, as rendering an entire image would be prohibitively expensive in RAM, and takes about 12 minutes on a multi-core workstation to render a 512 × 512 pixel image. If the convolutional nature of the network were fully exploited, approximately 15 TFlops (multiply-adds) would be needed to render the same image.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Discussion</head><p>We have shown that it is possible to train a deep network end-to-end to perform novel view synthesis. Our method is versatile and requires only sets of posed imagery. Results comparing real views with synthesized views show the gen-Two reprojected inputs.</p><p>Selection and color layers. Average. <ref type="figure">Figure 7</ref>: Layer outputs at one depth plane, showing reprojected input views (left), the outputs of the selection and color layers at a given depth (middle), and a comparison to the average (right). Note that while averaging produces ghosting, the color layer can tolerate misalignment.</p><p>erality of our approach. Our results are competitive with existing image-based rendering methods, even though our training data is considerably different from the test sets. One drawback of our method is speed, which is minutes per image. However, based on an analysis of the total FLOPs required, we believe that an optimized GPU implementation could render a 512 × 512 image in just a few seconds. We have not performed extensive experiments on the depths of the internal network layers, reducing these (while maintaining quality) may offer large speed-ups. Separable convolutions <ref type="bibr" target="#b15">[16]</ref> and quantization <ref type="bibr" target="#b35">[36]</ref> could also be used to speed up inference.</p><p>Our method currently requires reprojecting each input image to a set of depth planes; we currently use 96 depth planes, which limits the resolution of the output images that we can produce. Increasing resolution would require a larger number of depth planes, which would mean that the network takes longer to train and run. This is a drawback shared with other volumetric stereo methods. However, our method requires reprojected images per rendered frame, rather than just once when creating the scene. We plan to explore pre-computing parts of the network and warping to new views before running the final layers.</p><p>Another interesting direction of future work is to explore different network architectures. For instance, one could use a recurrent network to process the reprojected depth images one depth plane at a time. Such a network would not need expensive connections across depth. We believe that, with some of these improvements, our method could offer realtime performance on a GPU.</p><p>Our network is trained using four input views per target view. We currently cannot change the number of input views after training, which is suboptimal when there are denser sets of cameras that can be exploited, as in sequences from <ref type="bibr" target="#b0">[1]</ref>. One idea is to choose the set of input views per pixel; however, this risks introducing discontinuties at transitions between chosen views. Alternatively, a more complex recurrent model could handle arbitrary numbers of input views, though this would likely complicate training. It   <ref type="bibr" target="#b28">[29]</ref> and an optical flow algorithm <ref type="bibr" target="#b25">[26]</ref>. The optical flow interpolates images halfway between the two input images.</p><p>Reference Image DeepStereo KITTI DeepStereo Street View Chaurasia <ref type="bibr" target="#b0">[1]</ref> Figure 9: Comparison of real to synthesized images from Chaurasia <ref type="bibr" target="#b0">[1]</ref>, showing results from the Kitti-and Street-Viewtrained model with those from Chaurasia <ref type="bibr" target="#b0">[1]</ref>.</p><p>would also be interesting to investigate using the outputs of the internal layers of the network. For instance, it is likely that the network learns a strong pixel similarity measure in the select tower that could be incorporated into a more tra-ditional stereo framework. Finally, similar networks could likely be applied to other problems, such as synthesizing intermediate frames in video or predicting a depth map, given appropriate training data.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>The top image was synthesized from several input panoramas. A portion of four of the inputs is shown on the bottom row. or 3-dimensionalizing monocular film footage.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 8 :</head><label>8</label><figDesc>Comparison of real to synthesized KITTI images, showing results from the Kitti-and Street-View-trained model, a depth splatting algorithm from computed depth maps</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>is simpler and consists of only 2D convolutional rectified linear layers that</figDesc><table>D combined 
+color images 
+
+⩉ 
+
+⩉ 
+
+2D conv 
++ Relu 
+
+2D conv 
++ Relu 
+
+Reprojected 
+Images at a 
+single depth 
+
+D input planes 
+
+Input 
+Output 
+
+2D conv 
++ Relu 
+
+Shared 
+Weight 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">The depth planes would receive zero weight for all inputs and pixels.</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Depth synthesis and local warps for plausible image-based navigation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Chaurasia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Duchêne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Sorkine-Hornung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Drettakis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Silhouette-aware warping for image-based rendering. Computer Graphics Forum</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Chaurasia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Sorkine</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Drettakis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. EGSR)</title>
+		<meeting>EGSR)</meeting>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">30</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">A space-sweep approach to true multi-image matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">T</forename><surname>Collins</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="1996" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Efficient dense stereo with occlusions for new view-synthesis by four-state dynamic programming</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Criminisi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Blake</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Torr</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Large scale distributed deep networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Monga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Devin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ranzato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Senior</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Tucker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><forename type="middle">V</forename><surname>Le</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<editor>P. Bartlett, F. Pereira, C. Burges, L. Bottou, and K. Weinberger</editor>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1232" to="1240" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Learning a deep convolutional network for image super-resolution</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Dong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">C</forename><surname>Loy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Learning to generate chairs with convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dosovitskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Springenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Adaptive subgradient methods for online learning and stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Duchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Hazan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Singer</surname></persName>
+		</author>
+		<idno>UCB/EECS-2010-24</idno>
+		<imprint>
+			<date type="published" when="2010-03" />
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+		<respStmt>
+			<orgName>EECS Department, University of California, Berkeley</orgName>
+		</respStmt>
+	</monogr>
+	<note type="report_type">Technical Report</note>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Depth map prediction from a single image using a multi-scale deep network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Eigen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Puhrsch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Floating textures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Eisemann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Decker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Magnor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Bekaert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Aguiar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Ahmed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Theobalt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Sellent</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Graphics Forum (Proc. of Eurographics EG)</title>
+		<imprint>
+			<date type="published" when="2008-04" />
+			<biblScope unit="volume">27</biblScope>
+			<biblScope unit="page" from="409" to="418" />
+		</imprint>
+	</monogr>
+	<note>Received the Best Student Paper Award at Eurographics</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Image-based rendering using image-based priors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wexler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Are we ready for autonomous driving? the kitti vision benchmark suite</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Lenz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Ambient point clouds for view interpolation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Goesele</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ackermann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fuhrmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Haubold</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Klowsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Steedly</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SIGGRAPH</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">The lumigraph</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">J</forename><surname>Gortler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Grzeszczuk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">F</forename><surname>Cohen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SIGGRAPH</title>
+		<imprint>
+			<date type="published" when="1996" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Automatic photo pop-up</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SIGGRAPH</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<monogr>
+		<title level="m" type="main">Speeding up convolutional neural networks with low rank expansions. CoRR, abs/1405</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jaderberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">3866</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">DepthTransfer: Depth extraction from video using non-parametric sampling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Karsch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">B</forename><surname>Kang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Street view motion-from-structure-from-motion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Klingner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Martin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Roseborough</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013-12" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<monogr>
+		<title level="m" type="main">Unsupervised learning of depth and motion. CoRR, abs/1312</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">R</forename><surname>Konda</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Memisevic</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">3429</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">2d-to-3d image conversion by learning depth from examples</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Konrad</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Ishwar</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR Workshops</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">First-person hyperlapse videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kopf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">F</forename><surname>Cohen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SIGGRAPH</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kulkarni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Whitney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Pushmeet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tenenbaum</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1503.03167</idno>
+		<title level="m">Deep convolutional inverse graphics network</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Tenenbaum. Deep convolutional inverse graphics network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">D</forename><surname>Kulkarni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Whitney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename></persName>
+		</author>
+		<idno>abs/1503.03167</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Light field rendering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Levoy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Hanrahan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SIG-GRAPH</title>
+		<imprint>
+			<date type="published" when="1996" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Beyond Pixels: Exploring New Representations and Applications for Motion Analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">6</biblScope>
+		</imprint>
+		<respStmt>
+			<orgName>Massachusetts Institute of Technology</orgName>
+		</respStmt>
+	</monogr>
+	<note type="report_type">PhD thesis</note>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Stereopsis via deep learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Memisevic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Conrad</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS workshop on Deep Learning and Unsupervised Feature Learning</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">On the number of linear regions of deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Montufar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Pascanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Fast cost-volume filtering for visual correspondence and beyond</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rhemann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Hosni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bleyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Gelautz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2011-06" />
+			<biblScope unit="volume">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title level="m" type="main">Make3d: Learning 3d scene structure from a single still image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Saxena</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2002" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="page">31</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">View morphing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">R</forename><surname>Dyer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SIGGRAPH</title>
+		<imprint>
+			<date type="published" when="1996" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">The visual turing test for scene reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Shan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Adams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Furukawa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. 3D Vision</title>
+		<meeting>3D Vision</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Going deeper with convolutions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Reed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rabinovich</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Prediction error as a quality metric for motion and stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="1999" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+		<title level="m" type="main">Stereo matching with transparency and matting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Golland</surname></persName>
+		</author>
+		<idno>1999. 3</idno>
+		<imprint>
+			<biblScope unit="volume">IJCV</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Improving the speed of neural networks on cpus</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vanhoucke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Senior</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">Z</forename><surname>Mao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Deep Learning and Unsupervised Feature Learning Workshop</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<monogr>
+		<title level="m" type="main">Threedimensional scene flow</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Vedula</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Rander</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Collins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kanade</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2002" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">27</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title level="m" type="main">Designing deep networks for surface normal estimation. CoRR, abs/1411</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">F</forename><surname>Fouhey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">4958</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">On new view synthesis using multiview stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Woodford</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Reid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Torr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Image denoising and inpainting with deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Chen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<monogr>
+		<title level="m" type="main">Continuous markov random fields for robust stereo estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yamaguchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Hazan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">A</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<idno>abs/1204.1393</idno>
+		<imprint>
+			<date type="published" when="2012" />
+			<publisher>CoRR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<monogr>
+		<title level="m" type="main">Computing the stereo matching cost with a convolutional neural network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zbontar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Estimating optimal parameters for mrf stereo from a single image pair</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="volume">29</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">High-quality video view interpolation using a layered representation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">B</forename><surname>Kang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Uyttendaele</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Winder</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SIGGRAPH</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

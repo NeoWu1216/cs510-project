@@ -1,0 +1,1455 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Siamese Instance Search for Tracking</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ran</forename><surname>Tao</surname></persName>
+							<email>r.tao@uva.nl</email>
+							<affiliation key="aff0">
+								<orgName type="institution">QUVA Lab</orgName>
+								<address>
+									<addrLine>Science Park 904</addrLine>
+									<postCode>1098 XH</postCode>
+									<settlement>Amsterdam</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Efstratios</forename><surname>Gavves</surname></persName>
+							<email>egavves@uva.nl</email>
+							<affiliation key="aff0">
+								<orgName type="institution">QUVA Lab</orgName>
+								<address>
+									<addrLine>Science Park 904</addrLine>
+									<postCode>1098 XH</postCode>
+									<settlement>Amsterdam</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Arnold</forename><forename type="middle">W M</forename><surname>Smeulders</surname></persName>
+							<email>a.w.m.smeulders@uva.nl</email>
+							<affiliation key="aff0">
+								<orgName type="institution">QUVA Lab</orgName>
+								<address>
+									<addrLine>Science Park 904</addrLine>
+									<postCode>1098 XH</postCode>
+									<settlement>Amsterdam</settlement>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Siamese Instance Search for Tracking</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:46+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>In this paper we present a tracker, which is radically different from state-of-the-art trackers: we apply no model updating, no occlusion detection, no combination of trackers, no geometric matching, and still deliver state-of-theart tracking performance, as demonstrated on the popular online tracking benchmark (OTB) and six very challenging YouTube videos. The presented tracker simply matches the initial patch of the target in the first frame with candidates in a new frame and returns the most similar patch by a learned matching function. The strength of the matching function comes from being extensively trained generically, i.e., without any data of the target, using a Siamese deep neural network, which we design for tracking. Once learned, the matching function is used as is, without any adapting, to track previously unseen targets. It turns out that the learned matching function is so powerful that a simple tracker built upon it, coined Siamese INstance search Tracker, SINT, which only uses the original observation of the target from the first frame, suffices to reach state-of-theart performance. Further, we show the proposed tracker even allows for target re-identification after the target was absent for a complete video shot.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>At the core of many tracking algorithms is the function by which the image of the target is matched to the incoming frames. The matching function for tracking ideally provides good matching even if the target in the video is occluded, changes its scale, rotates in and out-of-plane or, undergoes uneven illumination, camera motion and other disturbing factors <ref type="bibr" target="#b40">[41,</ref><ref type="bibr" target="#b51">52]</ref>. One way to proceed is to model each of these distortions explicitly in the matching by introducing affine transformations <ref type="bibr" target="#b28">[29]</ref>, probabilistic matching <ref type="bibr" target="#b5">[6]</ref>, eigen images <ref type="bibr" target="#b37">[38]</ref>, illumination invariants <ref type="bibr" target="#b31">[32]</ref>, occlusion detection <ref type="bibr" target="#b32">[33]</ref>. While one explicit matching mechanism may be well-fitted to solve one distortion, it is likely to disturb another.</p><p>In this work, rather than explicitly modeling the match- <ref type="figure">Figure 1</ref>: The tracker simply finds the patch that matches best to the original patch of the target in the first frame, using a learned matching function. The matching function is learned once on a rich video dataset. Once it has been learned, it is applied as is, without any adapting, to new videos of previously unseen target objects. We do not apply offline target learning and the target is not included in the training video dataset.</p><p>ing for particular distortions, we propose to learn the matching mechanism. More specifically, we suggest that we learn from external videos that contain various disturbing factors the invariances without, however, explicitly modeling these invariances. If the set of external videos is sufficiently large, the goal is to learn a generically applicable matching function a priori. We take extra care that there is absolutely no overlap between the videos we use for training and any of the tracking videos for evaluation. Namely, we do not aim to do any offline learning of the tracking targets, since in that case we would essentially learn an object detector. Instead, in the learning we focus on the generic set of object appearance variations in videos. In this way, we optimize the matching function between an arbitrary target and patches from subsequent frames. Once the matching function has been learnt on the external data we do not adapt it anymore and, we apply it as is to new tracking videos of previously unseen target objects.</p><p>We focus on learning the matching function suited for application in trackers. Hence, our aim is not to build a fully fledged tracker which might need explicit occlusion detection <ref type="bibr" target="#b33">[34]</ref>, model updating <ref type="bibr" target="#b55">[56,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b13">14]</ref>, tracker combination <ref type="bibr" target="#b55">[56]</ref>, forget mechanisms <ref type="bibr" target="#b31">[32,</ref><ref type="bibr" target="#b13">14]</ref> and other. We rather focus on the matching function alone, similar to the simplicity of the normalized cross-correlation (NCC) tracker <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b1">2]</ref>. In this paper, we simply match the initial target in the first frame with the candidates in a new frame and return the most similar one by the learnt matching function, without updating the target, tracker combination, occlusion detection and alike. <ref type="figure">Figure 1</ref> illustrates the tracking algorithm. This approach to tracking bears some similarity to instance search <ref type="bibr" target="#b42">[43,</ref><ref type="bibr" target="#b43">44,</ref><ref type="bibr" target="#b35">36,</ref><ref type="bibr" target="#b45">46]</ref>, where the target specified in the query image is searched for in a pile of images. Introducing matching learning <ref type="bibr" target="#b43">[44]</ref> allows for accurate instance search of generic objects even when the relevant images in the search set show drastically different views of the target object from the query image. Here we intend to learn a generic matching function to cope with all sorts of appearance variations from tracking examples. After learning, the matching function is capable of comparing patches recorded under very different conditions for new objects, or, even for new object types that the function has not seen before.</p><p>We summarize the contributions of the work as follows. First, we propose to learn a generic matching function for tracking, from external video data, to robustly handle the common appearance variations an object can undergo in video sequences. The learnt function can be applied as is, without any adapting, to new tracking videos of previously unseen target objects. Second, on the basis of the learnt generic matching function, we present a tracker, which reaches state-of-the-art tracking performance. The presented tracker is radically different from state-of-the-art trackers. We apply no model updating, no occlusion detection, no combination of trackers, no geometric matching and alike. In each frame, the tracker simply finds the candidate patch that matches best to the initial patch of the target in the first frame by the learned matching function. Third, to learn the matching function, we use a two-stream Siamese network <ref type="bibr" target="#b2">[3]</ref>, which we design specifically for tracking. Further, in the absence of any drifting that one would expect by on-the-fly model updating, the proposed tracker allows for successful target object re-identification after the target was absent for a long period of time, e.g., a complete shot.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>Matching functions in tracking One of the most basic concept of tracking is the direct matching between the intensity values of the target patch and the patches taken from the incoming image. The oldest tracking algorithm does just that by normalized cross-correlation <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b1">2]</ref>. Its simplicity is also its strength, still being in use as part of the TLD-tracker <ref type="bibr" target="#b22">[23]</ref>. Subsequent trackers have reconsid-ered the matching function by focusing on the various distortions to the target image faced in tracking. The Lucas and Kanade tracker <ref type="bibr" target="#b28">[29]</ref> adds an affine transformation to the matching function. MST <ref type="bibr" target="#b5">[6]</ref> relies on probabilistic matching. FRT <ref type="bibr" target="#b0">[1]</ref> uses the earth mover's distance matching. And IVT <ref type="bibr" target="#b37">[38]</ref> matches by the metric of eigen images obtained during tracking. L1T <ref type="bibr" target="#b29">[30]</ref> is successful with L1metric matching on graphs of fragments. SPT <ref type="bibr" target="#b49">[50]</ref> uses super-pixels for matching, HBT <ref type="bibr" target="#b11">[12]</ref> uses HOG-features in a probabilistic approach, and FBT <ref type="bibr" target="#b31">[32]</ref> uses color invariants for robustness against illumination variations. Different from all methods above, which pursue explicit modeling of the matching function, this paper aims to learn the matching function from example videos annotated with the correct boxes.</p><p>Recent tracking methods In recognition of the hardness of the task, composite trackers have been introduced. TLD <ref type="bibr" target="#b22">[23]</ref> integrates the NCC matching for recovery with a differential tracker and a complex updating model. Struck <ref type="bibr" target="#b13">[14]</ref> is based on structural SVM with the displacement as the continuous output, with a cautious update mechanism. More recently, MEEM <ref type="bibr" target="#b55">[56]</ref> successfully learns and updates a discriminative tracker, keeping a set of historical snapshots as experts who derive the per frame prediction based on an entropy regularized optimization. Alien <ref type="bibr" target="#b33">[34]</ref> is a successful long-term tracker relying on oversampling of local features and RANSAC-based geometric matching. In the very recent MUSTer <ref type="bibr" target="#b17">[18]</ref> one component stores shortterm memories of the target for short-term tracking using integrated correlation filters, where the long-term memory is based on RANSAC matching again. Finally, the AND-OR tracker <ref type="bibr" target="#b50">[51]</ref> proposes a discriminative learning of hierarchical, compositional and-or graphs that account for the appearance and structural variations of the object. In this paper, we focus on simple tracking inference scheme, namely finding the patch that matches best to the initial target in the first frame. The complexity, instead, is incorporated externally, where the matching function is trained to be robust against appearance variations. Hence, rather than learning on-the-fly, we learn what can be encountered in general without requiring target-specific learning. Once learned, the matching function can be built in the successful, aforementioned composite trackers to enhance their performance.</p><p>Deep learning in tracking <ref type="bibr" target="#b48">[49]</ref> uses a stacked denoising autoencoder to learn tracking features. The features are performing poorly, however. <ref type="bibr" target="#b24">[25]</ref> learns a target classifier online, which is fundamentally hampered by a lack of data. <ref type="bibr" target="#b16">[17]</ref> focuses on learning target-specific saliency map using pre-trained ImageNet network. <ref type="bibr" target="#b46">[47]</ref> pre-trains a convolutional neural network for measuring generic objectness on ImageNet 2014 detection set and adapts the network online to predict the target-specific objectness. Compared to previous works, this work focuses on a different part of a tracker. We employ deep neural networks to learn a generic matching function from rich external data to compare patches for use in tracking.</p><p>Instance Search Instance search from one example, also known as particular object retrieval, is related to object tracking, especially when localized <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b42">43]</ref>. The most popular paradigm is based on matching local image descriptors between the query and the candidate image <ref type="bibr" target="#b39">[40,</ref><ref type="bibr" target="#b35">36,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b36">37,</ref><ref type="bibr" target="#b44">45,</ref><ref type="bibr" target="#b42">43]</ref> and is especially accurate for buildings <ref type="bibr" target="#b35">[36]</ref>. Recently, <ref type="bibr" target="#b43">[44]</ref> proposed to learn a robust representation for instance search of less textured, more generic objects, showing good accuracy despite the significant appearance changes between the query and the database images. We derive some inspiration from <ref type="bibr" target="#b43">[44]</ref>. We propose to learn a robust matching function for matching arbitrary, generic objects that may undergo all sorts of appearance variations. We focus, however, on tracking. Instead of focusing on a specific category e.g., shoes, and learning from images with a white background <ref type="bibr" target="#b43">[44]</ref>, we learn in this work a universal matching model suited for tracking that applies to all categories and all realistic imaging conditions.</p><p>Siamese architecture <ref type="bibr" target="#b2">[3]</ref> proposes the two-stream Siamese architecture for signature verification. Later, the two-stream network architecture has been applied to face verification <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b41">42]</ref>, ground-to-aerial image matching <ref type="bibr" target="#b26">[27]</ref>, local patch descriptor learning <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b52">53]</ref> and stereo matching <ref type="bibr" target="#b53">[54]</ref>. In this work, we design a Siamese networkarchitecture to learn robust and generic representation for object tracking, aiming to be invariant to all sorts of appearance variations in practical tracking scenarios.</p><p>Fast localization Tracking also bears resemblance to the object localization problem. Usually, it requires efficient processing of multiple regions in one frame. <ref type="bibr" target="#b25">[26]</ref> proposes efficient region computation by reordering the encoding, pooling and classification steps for the 'shallow' representations such as Fisher vector <ref type="bibr" target="#b34">[35]</ref>. Recent work by Girshick <ref type="bibr" target="#b9">[10]</ref> proposes an efficient way of processing multiple regions in one single pass through the deep neural network for fast object detection. Inspired by <ref type="bibr" target="#b9">[10]</ref>, we incorporate the region-of-interest pooling layer into our network for fast processing of multiple regions in one frame for tracking.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Siamese Instance Search Tracker</head><p>In the following we describe the proposed method for tracking, which is coined Siamese INstance search Tracker, SINT for abbreviation. We first present the matching function, which is the core of the tracker. Then we describe the simple online tracking inference.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Matching Function</head><p>To learn a matching function robust to all sorts of distortions as described earlier, we need a model that operates on pairs of data, (x j , x k ). A network architecture that has been <ref type="figure">Figure 2</ref>: The proposed Siamese invariance network to learn the generic matching function for tracking. 'conv', 'maxpool', 'roipool' and 'fc' stand for convolution, max pooling, region-of-interest pooling and fully connected layers respectively. Numbers in square brackets are kernel size, number of outputs and stride. The fully connected layer has 4096 units. All conv layers are followed by rectified linear units (ReLU) <ref type="bibr" target="#b30">[31]</ref>.</p><p>successfully shown to work well on pairs of data is the twostream Siamese architecture <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b4">5]</ref>. A Siamese architecture builds on top of convolutional networks. Next, we analyze the different components of the proposed two-stream network which we coin Siamese Invariance Network. Network architecture We use a Siamese architecture composed of two branches. The Siamese network processes the two inputs separately, through individual networks that usually take the form of a convolutional neural network. For individual branches, we design and compare two different network architectures, a small one similar to AlexNet <ref type="bibr" target="#b23">[24]</ref> and a very deep one inspired by VGGNet <ref type="bibr" target="#b38">[39]</ref>  <ref type="figure">(Figure 2)</ref> 1 . In the following we highlight the distinctive designs of the networks as compared to the successful AlexNet and VG-GNet.</p><p>Being largely a localization task the tracking problem is naturally susceptive to rough discretizations. Aiming for precise localization, we design our network with very few maxing pooling layers, fewer than the networks in <ref type="bibr" target="#b23">[24,</ref><ref type="bibr" target="#b38">39]</ref>. Indeed, as max pooling maintains only the strongest of the activations from a local neighborhood to use as input for the subsequent layers, the spatial resolution of the activations is aggressively reduced, at the very least by 50% only in the simple case of 2 × 2 local neighborhoods. An advantage of max pooling is it introduces invariance to local deformations. However, this is more important for object categorization, where the objects vary a lot in appearance. In tracking even if the target object changes its appearance over time, it still remains the same object in all frames. Moreover, it is important to be able to follow the small appearance changes, such as local deformations, of the object over time. Regarding the two architectures we propose, for the AlexNet-like small net we do not include any max pooling layer, while for the VGG-like large net, we only have two max pooling at the very early stage (see <ref type="figure">Figure 2)</ref>, as the lower level layers learn filters of very small receptive fields and their max pooling layers are important to maintain robustness to local noise.</p><p>In tracking one typically needs to evaluate hundreds of candidate regions for the next frame. Although one can simply pass through the candidate regions independently, this would lead to a severe computation overhead, especially since there is a significant overlap between the candidate regions. Therefore, we employ a region pooling layer <ref type="bibr" target="#b9">[10]</ref> for the fast processing of multiple overlapping regions. Each branch of the Siamese architecture takes as input one image and a set of bounding box regions. The network first processes the entire image for a few layers, then the region pooling layer converts the feature map from a particular region into a fixed-length representation. Having a fixed length representation, one can now proceed to the subsequent layers.</p><p>The layers in a deep network capture progressively more abstract representations <ref type="bibr" target="#b54">[55]</ref>. Typically, the filters of the lower layers get activated the most on lower level visual patterns, such as edges and angles, whereas higher layers get activated the most on more complex patterns, such as faces and wheels. Also, the deeper one layer is, the more invariant it is to appearance changes but also less discriminative, especially for instance-level distinction. In tracking we do not know the type of target object we want to track, whether it is highly textured with rich low level patterns or not. We do not know either the complexity of the background, whether there are confusing objects in which case higher discrimination would probably be more helpful. For this reason we propose to use the outputs from multiple layers as the intermediate representation that is then fed to the loss function. Similar observations have also been made in <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b14">15]</ref> for different tasks, semantic segmentation and fine-grained localization specifically. All activations are pooled using the region pooling layers.</p><p>Given that modern convolutional neural networks use rectified linear units that do not bound the output values, the nonlinear activations can vary a lot in the range of values they produce. As such and without considerations, the network output and the loss function will be heavily influ-enced by the scale of the generated features and not their representation quality. To avoid this we propose to add an ℓ 2 normalization layer before the loss layer. The normalization layer is applied on each of the layer activations that are fed to the loss layer and has the property of maintaining the direction of the feature, while forcing features from different scales to lie on the same unit sphere.</p><p>Compared to standard convolutional neural networks, AlexNet and VGGNet <ref type="bibr" target="#b23">[24,</ref><ref type="bibr" target="#b38">39]</ref>, our architecture has several differences, highlighted above. However, we also explicitly design our networks to be compatible to AlexNet and VGGNet. In this way, we are able to initialize the weights of our networks using the ImageNet-pretrained AlexNet and VGGNet to avoid training from scratch, something that would likely lead to overfitting. Last, note that we keep the parameters of the two convolutional network branches tied together, as there would be an increased danger of overfitting otherwise.</p><p>Network input Our training data consist of videos of objects, whose bounding box location is provided to us. To emulate the instance search paradigm and to avoid confusion, we coin the first stream of our network as query stream, whereas the second stream of our network as search stream. For the query stream we randomly pick one frame from the video and use the annotated patch of the target. Since we want to be robust to as many types of variations that we might face when tracking novel objects as possible, for the search stream we randomly pick another video frame that does not need to be adjacent to the frame of the query stream. From the frame of the search stream we sample boxes and the ones that overlap more than ρ + with the ground truth are deemed positives, while the ones that overlap less than ρ − with the ground truth are deemed negatives. From these we form positive and negative pairs of data that we use for the training.</p><p>Loss In the end, the two branches in the Siamese Invariance Network are connected with a single loss layer. For tracking we want the network to generate feature representations, that are close by enough for positive pairs, whereas they are far away at least by a minimum for negative pairs. Bearing these requirements in mind and inspired by <ref type="bibr" target="#b4">[5]</ref>, we employ the margin contrastive loss</p><formula xml:id="formula_0">L(x j , x k , y jk ) = 1 2 y jk D 2 + 1 2 (1 − y jk ) max(0, ǫ − D 2 ),<label>(1)</label></formula><formula xml:id="formula_1">where D = f (x j ) − f (x k ) 2 is the Euclidean distance of two ℓ 2 -normalized latent representations, y jk ∈ {0, 1}</formula><p>indicates whether x j and x k are the same object or not, and ǫ is the minimum distance margin that pairs depicting different objects should satisfy.</p><p>Data As tracking is an inherently online task, where no training data related to the target object are available, it is important to emphasize that the network is learnt on external videos that do not appear in the tracking evaluation sets. The data should be varying enough, covering a good amount of semantics and not focus on particular objects, otherwise the tuned network parameters will overfit to particular object categories. Furthermore, as we do not explicitly learn types of invariances, namely we do not learn "illumination invariance" separately from "scale invariance", therefore in the external data we do not need any specific variation labels. The only requirement is the box annotations within the video following a particular object.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Tracking Inference</head><p>Once we have completed the learning of the matching function, we are ready to deploy it as is to tracking, without any further adapting. We propose a simple tracking strategy. As the only reliable data we have for the target object is its location at the first frame, at each frame we compare the sampled candidate boxes with the target object at the first frame. We pass all the candidate boxes from the search stream of our network and pick the candidate box that matches best to the original target,</p><formula xml:id="formula_2">x t = arg max xj,t m(x t=0 , x j,t ),<label>(2)</label></formula><p>where x j,t are all the candidate boxes at frame t, m is the learned matching function, m(x, y) = f (x) T f (y).</p><p>Candidate sampling We employ the radius sampling strategy <ref type="bibr" target="#b13">[14]</ref>. More specifically, around the predicted location of the previous frame we sample locations evenly on circles of different radii. Different from <ref type="bibr" target="#b13">[14]</ref>, to handle scale variations we generate at each sampled location multiple candidate boxes at different scales. Box refinement Provided that the box prediction is accurate enough, <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b10">11]</ref> showed that a refinement step of the boxes can improve localization accuracy significantly. To this end we adopt their strategy and refine at each frame the predicted bounding box further. As in <ref type="bibr" target="#b10">[11]</ref> we train four Ridge regressors for the (x, y) coordinates of the box center and the width and height (w, h) of the box based on the first frame. The regressors are not updated during tracking in order to avoid the risk of contaminating the regressors with noisy data. For each frame, the regressors take the representation of the picked candidate box as input and produce a refined box.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experimenents</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Implementation Details</head><p>Candidate Sampling We use the radius sampling strategy <ref type="bibr" target="#b13">[14]</ref> to generate candidate boxes. We use 10 radial and 10 angular divisions. The search radius is set to be the longer axis of the initial box in the first frame. At each sample location, we generate three scaled versions of the initial box with the scales being { √ 2 2 , 1, √ 2}. Network training We use the ALOV dataset <ref type="bibr" target="#b40">[41]</ref> for training and validation. We choose ALOV for training as it covers many types of variations one could expect in tracking. We exclude the 12 videos in ALOV that are also in tracking benchmark (OTB) <ref type="bibr" target="#b51">[52]</ref>, as we evaluate the proposed tracker on OTB. After removing the 12 videos, the training set and the tracking evaluation set have no common objects. From every two frames in a video, we generate multiple pairs. One element in a pair is the groundtruth bounding box in one frame and the other element is a box sampled in the other frame. The pair is considered to be positive if the sampled box has a intersection-over-union overlap larger than 0.7 with the corresponding groundtruth box and considered to be negative if the overlap is smaller than 0.5. The training pairs and validation pairs are generated from different videos, and therefore from different objects. For training, in total we have sampled from ALOV dataset 60, 000 pairs of frames and each pair of frames has 128 pairs of boxes. For validation, we have gathered 2, 000 pairs of frames and the same as for training each pair of frames contains 128 pairs of boxes.</p><p>Instead of training the two-stream Siamese network from scratch, we load the pre-trained network parameters and fine tune the Siamese network. Specifically, we use the networks pre-trained for ImageNet classification, available in the Caffe library <ref type="bibr" target="#b20">[21]</ref>. The initial fine tuning learning rate is 0.001 and the weight decay parameter is 0.001. The learning rate is decreased by a factor of 10 after every 2 epochs. We stop tuning when the validation loss does not decrease any more.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Dataset and evaluation metrics</head><p>Dataset To evaluate the tracking performance, we use the online tracking benchmark (OTB) <ref type="bibr" target="#b51">[52]</ref>. OTB is a collection of 50 videos. 51 tracking sequences are defined with bounding box annotations. The dataset covers various challenging aspects in object tracking, such as fast motion, deformation, background clutter and occlusion. Evaluation metrics We follow the evaluation protocol of <ref type="bibr" target="#b51">[52]</ref>, where two metrics are used: success plot and precision plot. Both metrics measure the percentage of successfully tracked frames. For the success plot, a frame is declared to be successfully tracked if the estimated bounding box and the groundtruth box have an intersection-overunion overlap larger than a certain threshold. For precision plot, tracking on a frame is considered successful if the distance between the centers of the predicted box and the groundtruth box is under some threshold. A plot is given by varying the threshold values. Tracking algorithms are AUC Prec@20  <ref type="table">Table 1</ref>: Evaluation of different architectural and design choices of the Siamese invariance network for tracking on the OTB dataset <ref type="bibr" target="#b51">[52]</ref>. We use the recommended evaluation methods, namely the area under the curve (AUC) for the success plot and the precision at 20 (Prec@20) for the precision plot.</p><p>ranked based on the area under curve (AUC) score for the success plot and precision at threshold 20 (Prec@20) for the precision plot. We use the available toolkit provided by the benchmark to generate plots and numbers. In the following, we also use success rate where needed, i.e., the percentage of successfully tracked frames.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Design evaluation</head><p>We first validate our design choices of the network. In this sets of experiments, box refinement is not considered.</p><p>Network tuned generically on external video data vs. network pre-tuned on ImageNet vs. network fine tuned target-specifically on first frame In this experiment, we show the effectiveness of the Siamese network tuned on external data. To that end, we compare the Siamese fine tuned AlexNet-style network using ALOV (denoted as "Siamese-finetuned-alexnet-fc6") with the ImageNet pretuned AlexNet ("pretrained-alexnet-fc6") and the Siamese fine tuned network using the training pairs gathered in the first frame ("firstframe-Siamese-finetuned-alexnet-fc6"). In this comparison, all three use a single layer fc6 for feature representation. As shown in the rows (a)-(c) of <ref type="table">Table 1</ref>, the Siamese fine tuned network using ALOV (c) significantly improves over the pre-tuned net (a), while fine tuning on the first frame (b) gives a marginal improvement. We conclude that Siamese networks fine tuned using large amount of external data are to be preferred.</p><p>To max pool or not to max pool? We now examine our design choice of having no maxing pooling layers in the network ("pretrained-alexnet-fc6-nomaxpooling" vs. "pretrained-alexnet-fc6" and "Siamese-finetuned-alexnet-fc6-nomaxpooling" vs. "Siamese-finetuned-alexnet-fc6"). As shown in <ref type="table">Table 1</ref>  <ref type="table">Table 2</ref>: Success rates (sr) of the tracker at three intersection-over-union overlap ratios for different network architectures. From the table it is clear that a network architecture without max pooling delivers a more precise localization and hence a better matching function.</p><p>when no max pooling layers are included, the success rate improvement is higher at higher intersection-over-union overlap ratios, see <ref type="table">Table 2</ref>. We conclude that max pooling layers are not necessary for our Siamese invariance network with small AlexNet-style architecture.</p><p>Multi-layer features vs. single-layer features Next, we evaluate whether it is more advantageous to use features from a single layer or from multiple layers. We compare "Siamese-finetuned-alexnet-conv45fc6-nomaxpooling", which uses the outputs of layers conv4, conv5 and fc6 as features, with "Siamese-finetuned-alexnet-fc6nomaxpooling", which uses the output of fc6 as feature. <ref type="table">Table 1</ref> shows that using multi-layer features is helpful ((e) vs. (f)). We conclude that using features from multiple layers is advantageous.</p><p>Large net vs. small net Lastly, we compare a VGGNetstyle architecture with an AlexNet-style architecture ("Siamese-finetuned-vgg16-conv45fc6-nomaxpooling" vs. "Siamese-finetuned-alexnet-fc6-nomaxpooling"). Both use as features the outputs of three layers. As shown in the last two rows (f) and (g) of <ref type="table">Table 1</ref>, using a deeper network improves the performance significantly.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">State-of-the-art comparison</head><p>Overall comparison In addition to the 29 trackers included in the benchmark <ref type="bibr" target="#b51">[52]</ref>, e.g., TLD <ref type="bibr" target="#b22">[23]</ref>, Struck <ref type="bibr" target="#b13">[14]</ref> and SCM <ref type="bibr" target="#b56">[57]</ref>, we also include the most recent trackers for comparison. The included recent trackers are TGPR <ref type="bibr" target="#b8">[9]</ref>, MEEM <ref type="bibr" target="#b55">[56]</ref>, SO-DLT <ref type="bibr" target="#b46">[47]</ref>, KCFDP <ref type="bibr" target="#b18">[19]</ref> and MUSTer <ref type="bibr" target="#b17">[18]</ref>. As described earlier, the proposed SINT focuses on the tracking matching function, while having a simple online inference. As a preliminary demonstration that SINT can be further improved by employing more advanced online components, we also evaluate a variant of SINT, coined SINT+, which uses an adaptive candidate sampling strategy suggested by <ref type="bibr" target="#b47">[48]</ref> and optical flow <ref type="bibr" target="#b3">[4]</ref>. In SINT+, the sampling range is adaptive to the image resolution, set to be 30/512 * w in this experiment, where w is the image width. Optical flow is used in SINT+ to filter out motion inconsistent candidates. Specifically, given the pixels covered by <ref type="figure">Figure 3</ref>: State-of-the-art comparison on OTB <ref type="bibr" target="#b51">[52]</ref>. In spite of the fact that the online part of the proposed SINT is just selecting the patch that matches best to the target in the first frame, SINT is on par with state-of-the-art tracker. SINT+, using a better candidate sampling than SINT and optical flow as an additional component, achieves the best performance.  the predicted box in the previous frame and the estimated optical flow, we know where those pixels are in the current frame and we remove the candidate boxes that contain less than 25% of those pixels, as these candidates are deemed inconsistent to the motion. <ref type="figure">Figure 3</ref> shows the overall performance. For clarity, only the top performing trackers are shown. Despite relying on a simple NCC-like tracking inference, SINT reaches state-of-the-art performance, being tantalizingly close to MUSTer <ref type="bibr" target="#b17">[18]</ref> and more accurate than others by a considerable margin. SINT+, with an adaptive sampling and a simple use of optical flow, further improves SINT, outperforming clearly all state-of-the-art other trackers.</p><p>Temporal and spatial robustness To verify the robustness of the proposed tracker, we conduct the temporal robustness evaluation (TRE) and spatial robustness evaluation (SRE) defined by the benchmark. The results are summarized in <ref type="table" target="#tab_2">Table 3</ref>. Compared to MEEM and MUSTer, SINT is temporally and spatially the same as robust, if not better.</p><p>Per distortion type comparison Further, the 50 videos in the benchmark are annotated with 11 distortion types(e.g.,  <ref type="bibr" target="#b17">[18]</ref>. The bars are the performance difference between SINT and MUSTer. Positive means SINT is better. The integer number at each bar is the number of tracking sequences belonging to that group.</p><p>illumination variation, occlusion etc.). To gain more insights, we evaluate the performance of SINT for individual attributes and compare with MUSTer <ref type="bibr" target="#b17">[18]</ref>. SINT performs better in 6 and 7 out of the 11 groups for the AUC and the Prec@20 metrics respectively. Due to the space limit, <ref type="figure" target="#fig_1">Figure 4</ref> only shows the plot for AUC. It is observed that MUSTer is better mainly in "occlusion" and "deformation", whereas SINT is better in "motion blur", "fast motion", "in-plane rotation", "out of view" and "low resolution".</p><p>Failure modes of SINT When similar objects appear in view, the tracker may jump from the target to another as it only looks for the maximum similarity with the original patch of the target in the first frame ( <ref type="figure">Figure 5</ref>: left). And, when there is large occlusion, the matching function might suffer ( <ref type="figure">Figure 5</ref>: right).</p><p>SINT Groundtruth <ref type="figure">Figure 5</ref>: Failure cases of SINT: similar confusing object (left) and large occlusion (right). Examples are from OTB sequences 'Bolt' and 'Lemming' respectively. In the left example, the tracker fires on another Jamaican runner in the same uniform as the target. In the right example, the target is heavily occluded by the lighter.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Fishing Rally BirdAttack</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Soccer GD Dancing</head><p>SINT MEEM MUSTer Groundtruth <ref type="figure">Figure 6</ref>: Example frames from the 6 test sequences.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.5.">Additional sequences and re-identification</head><p>We now further illustrate the strength of the proposed SINT on 6 newly collected sequences from YouTube. We downloaded the sequences so that they are extra challenging in terms of tracking distortions as defined by <ref type="bibr" target="#b51">[52]</ref>. <ref type="figure">Figure 6</ref> shows example frames from these sequences. The sequences have considerable degrees of scale change ("Fishing", "Rally", "BirdAttack" and "GD"), fast motion ("Bir-dAttack", "Soccer" and "Dancing"), out-of-plane rotation ("Rally" and "Dancing"), non-rigid deformation ("Fishing", "BirdAttack" and "Dancing"), low contrast ("Fishing"), illumination variation ("GD" and "Dancing") and poorly textured objects ("Fishing" and "BirdAttack").</p><p>We evaluate the proposed tracker, SINT, with MEEM <ref type="bibr" target="#b55">[56]</ref> and MUSTer <ref type="bibr" target="#b17">[18]</ref> on these sequences. The performance is summarized in <ref type="table">Table 4</ref>, where we adopt the AUC score metric from the benchmark <ref type="bibr" target="#b51">[52]</ref>. Results show that SINT is again a competitive tracker, outperforming MUSTer <ref type="bibr" target="#b17">[18]</ref> and MEEM <ref type="bibr" target="#b55">[56]</ref>.</p><p>We, furthermore, observe that provided a window sampling over the whole image using <ref type="bibr" target="#b57">[58]</ref>, SINT is accurate in target re-identification, after the target was missing for a significant amount of time from the video. We illustrate this in <ref type="figure">Figure 7</ref>, where we track Yoda. As shown in <ref type="figure">Figure 7</ref>, the tracker has good capability of discovering the target when it re-enters the scene after being absent for a complete shot.  <ref type="table">Table 4</ref>: Comparison on AUC score of the proposed SINT with MEEM <ref type="bibr" target="#b55">[56]</ref> and MUSTer <ref type="bibr" target="#b17">[18]</ref>. <ref type="figure">Figure 7</ref>: The capability of the tracker to re-discover the target, illustrated on a 1500-frame, 12-shot Star Wars video. One object (Yoda) is appearing in 6 of the shots, while being absent in the intermediate ones.</p><p>Red dots indicate Yoda is present while black dots indicate Yoda is absent. Y-axis is the matching score with the target at the first frame. The results show good capability of the tracker to discover the target when it re-enters the scene.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>This work presents Siamese INstance search Tracker, SINT. It tracks the target, simply by matching the initial target in the first frame with candidates in a new frame and returns the most similar one by a learned matching function. The strength of the tracker comes from the powerful matching function, which is the focus of the work. The matching function is learned on ALOV <ref type="bibr" target="#b40">[41]</ref>, based on the proposed two-stream very deep neural network. We take extra care that there is absolutely no overlap between the training videos and any of the videos for evaluation. Namely, we do not aim to do any pre-learning of the tracking targets. Once learned, the matching function is used as is, without any adapting, to track arbitrary, previously unseen targets. It turns out the matching function is very effective in coping with common appearance variations an object can have in videos. The simple tracker built upon the matching function, reaches state-of-the-art performance on OTB <ref type="bibr" target="#b51">[52]</ref>, without updating the target, tracker combination, occlusion detection and alike. Further, SINT allows for target reidentification after the target was absent for a complete shot, demonstrated on a 1500-frame, 12-shot Star Wars video.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 4 :</head><label>4</label><figDesc>SV OCC DEF MB FM IPR OV BC LR Per attribute comparison on AUC score of the proposed SINT with MUSTer</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 3 :</head><label>3</label><figDesc>Robustness evaluation on OTB, measured in AUC/Prec@20. OPE is one-pass evaluation. TRE and SRE are temporal and spatial robustness evaluation.</figDesc><table>The results 
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head></head><label></label><figDesc>MEEM [56] MUSTer [18] SINT</figDesc><table>Fishing 
+4.3 
+11.2 
+53.7 
+Rally 
+20.4 
+27.5 
+53.4 
+BirdAttack 
+40.7 
+50.2 
+66.7 
+Soccer 
+36.9 
+48.0 
+72.5 
+GD 
+13.8 
+34.9 
+35.8 
+Dancing 
+60.3 
+54.7 
+66.8 
+
+mean 
+29.4 
+37.8 
+58.1 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">Due to the space limit, only the very deep network is shown here. We put the illustration of the other AlexNet-like network in the supplementary material.</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Robust fragmentsbased tracking using the integral histogram</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Adam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Rivlin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Shimshoni</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Template matching using fast normalized cross correlation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Briechle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><forename type="middle">D</forename><surname>Hanebeck</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of SPIE: Optical Pattern Recognition XII</title>
+		<meeting>SPIE: Optical Pattern Recognition XII</meeting>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Signature verification using a siamese time delay neural network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bromley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">W</forename><surname>Bentz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Guyon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Moore</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Säckinger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Shah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Pattern Recognition and Artificial Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="issue">04</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="1993" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Large displacement optical flow: descriptor matching in variational motion estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="500" to="513" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Learning a similarity metric discriminatively, with application to face verification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chopra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Hadsell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Real-time tracking of non-rigid objects using mean shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Comaniciu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ramesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Meer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2000" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Pattern classification and scene analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">O</forename><surname>Duda</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">E</forename><surname>Hart</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1973" />
+			<publisher>Wiley</publisher>
+			<biblScope unit="volume">3</biblScope>
+			<pubPlace>New York</pubPlace>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Object detection with discriminatively trained partbased models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">F</forename><surname>Felzenszwalb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1627" to="1645" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Transfer learning based visual tracking with gaussian processes regression</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Ling</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xing</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1504.08083</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+	<note type="report_type">Fast r-cnn. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Rich feature hierarchies for accurate object detection and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Hough-based tracking of non-rigid objects</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Godec</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">M</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Matchnet: Unifying feature and metric learning for patchbased matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Leung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sukthankar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Struck: Structured output tracking with kernels</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hare</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Saffari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Hypercolumns for object segmentation and fine-grained localization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hariharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Efficient learning of linear predictors for template tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Holzer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ilic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Tan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Navab</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Online tracking by learning discriminative saliency map with convolutional neural network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>You</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kwak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Han</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Multi-store tracker (muster): A cognitive psychology inspired approach to object tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Hong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Mei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Prokhorov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Enable scale and aspect ratio adaptability in visual tracking with detection proposals</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Wen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Hamming embedding and weak geometric consistency for large scale image search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Douze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Karayev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Guadarrama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1408.5093</idno>
+		<title level="m">Caffe: Convolutional architecture for fast feature embedding</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Randomized visual phrases for object search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Meng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yuan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Tracking-learningdetection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Kalal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Mikolajczyk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Matas</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<publisher>TPAMI</publisher>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Learning discriminative feature representations by convolutional neural networks for visual tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Porikli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Codemaps-segment, classify and search objects locally</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Gavves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">E</forename><surname>Van De Sande</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">G</forename><surname>Snoek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">W</forename><surname>Smeulders</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Learning deep representations for ground-to-aerial geolocalization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Cui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Tech</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Fully convolutional networks for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">An iterative image registration technique with an application to stereo vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">D</forename><surname>Lucas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kanade</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IJCAI</title>
+		<imprint>
+			<date type="published" when="1981" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Robust visual tracking using l1 minimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Mei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Ling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Rectified linear units improve restricted boltzmann machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Nair</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Robust tracking using foreground-background texture discrimination</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">T</forename><surname>Nguyen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">W</forename><surname>Smeulders</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Vision</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Robust occlusion handling in object tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Object tracking by oversampling local features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Pernici</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">D</forename><surname>Bimbo</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Improving the fisher kernel for large-scale image classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Perronnin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sánchez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mensink</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Object retrieval with large vocabularies and fast spatial matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Philbin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Chum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Isard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Query adaptive similarity for large scale object retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Qin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wengert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title level="m" type="main">Incremental learning for robust visual tracking. IJCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">A</forename><surname>Ross</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R.-S</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-H</forename><surname>Yang</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Video google: A text retrieval approach to object matching in videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Visual tracking: an experimental survey</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">W</forename><surname>Smeulders</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">M</forename><surname>Chu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cucchiara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Calderara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dehghan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<biblScope unit="page" from="1442" to="1468" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Deepface: Closing the gap to human-level performance in face verification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Taigman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ranzato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wolf</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Locality in generic instance search from one example</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Tao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Gavves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">G</forename><surname>Snoek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">W M</forename><surname>Smeulders</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Attributes and categories for generic instance search from one example</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Tao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">W M</forename><surname>Smeulders</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-F</forename><surname>Chang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">To aggregate or not to aggregate: Selective match kernels for image search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Tolias</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Avrithis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Image search with selective match kernels: aggregation across single and multiple images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Tolias</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Avrithis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jgou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<monogr>
+		<title level="m" type="main">Transferring rich feature hierarchies for robust visual tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D.-Y</forename><surname>Yeung</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1501.04587</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Understanding and diagnosing visual tracking systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D.-Y</forename><surname>Yeung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Jia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">Learning a deep compact image representation for visual tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D.-Y</forename><surname>Yeung</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">Superpixel tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-H</forename><surname>Yang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">Online object tracking, learning and parsing with and-or graphs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TPAMI</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<analytic>
+		<title level="a" type="main">Online object tracking: A benchmark</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-H</forename><surname>Yang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b52">
+	<analytic>
+		<title level="a" type="main">Learning to compare image patches via convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zagoruyko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Komodakis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b53">
+	<analytic>
+		<title level="a" type="main">Computing the stereo matching cost with a convolutional neural network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Žbontar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b54">
+	<analytic>
+		<title level="a" type="main">Visualizing and understanding convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">D</forename><surname>Zeiler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b55">
+	<analytic>
+		<title level="a" type="main">Meem: Robust tracking via multiple experts using entropy minimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sclaroff</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b56">
+	<analytic>
+		<title level="a" type="main">Robust object tracking via sparsity-based collaborative model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zhong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-H</forename><surname>Yang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b57">
+	<analytic>
+		<title level="a" type="main">Edge boxes: Locating object proposals from edges</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

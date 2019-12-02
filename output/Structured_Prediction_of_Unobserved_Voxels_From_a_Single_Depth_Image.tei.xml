@@ -1,0 +1,1574 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Structured Prediction of Unobserved Voxels From a Single Depth Image</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Michael</forename><surname>Firman</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">University College London</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Oisin</forename><surname>Mac</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">University College London</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Aodha</forename><surname>Simon</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">University College London</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Julier</forename><surname>Gabriel</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">University College London</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Brostow</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">University College London</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Structured Prediction of Unobserved Voxels From a Single Depth Image</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:46+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Building a complete 3D model of a scene, given only a single depth image, is underconstrained. To gain a full volumetric model, one needs either multiple views, or a single view together with a library of unambiguous 3D models that will fit the shape of each individual object in the scene.</p><p>We hypothesize that objects of dissimilar semantic classes often share similar 3D shape components, enabling a limited dataset to model the shape of a wide range of objects, and hence estimate their hidden geometry. Exploring this hypothesis, we propose an algorithm that can complete the unobserved geometry of tabletop-sized objects, based on a supervised model trained on already available volumetric elements. Our model maps from a local observation in a single depth image to an estimate of the surface shape in the surrounding neighborhood. We validate our approach both qualitatively and quantitatively on a range of indoor object collections and challenging real scenes.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>We broadly categorize space in our world as being 'occupied' and opaque, or 'empty' and transparent. Depth cameras such as the Microsoft Kinect are able to give an estimate of which regions of a scene are composed of free, empty space. However, each pixel in a depth image only makes an estimate of occupancy in front of the first solid surface encountered along that camera ray. Occlusion prevents any information from being measured about the occupancy of space beyond that first surface.</p><p>There are many applications, however, which critically require a complete representation of the world geometry. When a robot hand or autonomous vehicle interacts with an unknown object in an unknown environment, a full 3D understanding is required to navigate and prevent collisions. In photo-editing, the full geometry would enable realistic shadows from a new light source to be automatically added to an image or stereo pair after capture.</p><p>A large amount of computer vision research has been devoted to reconstructing a full 3D world model from RGB or depth images of a scene captured from multiple viewpoints, thus coping with the effects of occlusion (e.g. <ref type="bibr" target="#b44">[45,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b25">26]</ref>). Instead, we focus on the task of classifying each voxel in a local 3D scene as being either 'occupied' or 'empty,' given just a single depth image from one viewpoint. An example result of our algorithm is displayed in <ref type="figure" target="#fig_0">Figure 1</ref>.</p><p>In effect, we strive to predict the voxelized output of KinectFusion <ref type="bibr" target="#b27">[28]</ref>, but without moving around. We achieve this by learning a mapping from features on a depth image to a structured prediction of geometry in the region of a query point. We take inspiration from recent work that segments objects from images using silhouettes learned from different object classes <ref type="bibr" target="#b33">[34]</ref>. They showed that shape can transcend class categories, enabling shape predictions to be made without requiring semantic understanding. As we care about shape, independent of semantic understanding, we are free to use training objects that are different from the objects present at test time.</p><p>The key contributions that underpin our novel depth image to voxel geometry framework are: i) Voxlets: a representation of local multi-voxel geometry. We use a structured Random Forest to learn a mapping from a point in a 3D reprojection of a depth image to a structured prediction of the geometry in the region around that point without requiring any semantic information. ii) Dataset: we introduce both a real world dataset and a new measure for evaluating volumetric completion algorithms. The dataset contains 90 scans of different object configurations. iii) Fitted predictions: we perform experiments evaluating the efficacy of different methods of selecting structured elements to use in the scene. We demonstrate that our proposed method outperforms naive alternatives.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related work</head><p>Here we review related methods for completing unknown regions of visual data. While similar, we do not cover the problem of 2D image completion. Work in 2D completion usually relies on the availability of extremely large numbers of similar images <ref type="bibr" target="#b23">[24]</ref>, or on the assumption that the necessary structure for completion is present in the input data <ref type="bibr" target="#b4">[5]</ref>. Image completion typically aims for a visually plausible output, as opposed to how well it predicts the unobserved ground truth. As we are concern with full 3D occupancy estimation we do not cover works related to 2D scene shape estimation e.g. <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b12">13]</ref>. Additionally, our approach utilizes standard consumer hardware, so we do not review work that requires specialized equipment <ref type="bibr" target="#b58">[59]</ref>. 3D primitives 'Geons' were proposed by <ref type="bibr" target="#b1">[2]</ref> as a set of primitives, such as cylinders and cuboids, used by humans in their recognition of object shapes. While in theory, geons could be used by computers as building blocks to describe natural objects, in practice, this was found to be challenging <ref type="bibr" target="#b9">[10]</ref> due to their "idealized nature", requirement for part segmentation, labeling errors, and the coarseness of features used to extract geons in the first place. However, fitting bounding boxes has recently become a popular method to explain the arrangement of objects in a scene. Recent work has successfully incorporated high-level information such as gravity, intersection, and stability <ref type="bibr" target="#b45">[46,</ref><ref type="bibr" target="#b29">30,</ref><ref type="bibr" target="#b28">29]</ref>. Other work has also made use of trained detectors <ref type="bibr" target="#b24">[25,</ref><ref type="bibr" target="#b54">55]</ref> and semantics <ref type="bibr" target="#b38">[39]</ref> to help propose bounding box locations. Gupta et al. <ref type="bibr" target="#b19">[20]</ref> estimate voxel occupancy from a 2D image, which is regularized using cuboid bounding box hypotheses. The obvious problem with bounding box style methods is that they can only give coarse shape information, which is ill suited for geometry completion.</p><p>Our work also makes use of 3D primitives. However, unlike geons which are fixed, we learn a flexible distribution of shape from training data, and are thus able to make higher quality predictions compared to bounding boxes. Specific shape models If prior knowledge is available, in the form of exact 3D models of all the objects present in the scene, then an instance-level model can be fitted to the observed depths. When aligned correctly, this can produce a perfect prediction of the unobserved geometry <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b2">3]</ref>. However, this alignment can be challenging in the presence of heavy occlusion. If an exact model of the object of interest is not present in the database, it is possible to fit objects of the same class <ref type="bibr" target="#b53">[54,</ref><ref type="bibr" target="#b20">21]</ref>. Global reasoning can be applied to find the best layout of objects, but this is still limited to the objects and primitives available in the proposal set <ref type="bibr" target="#b16">[17]</ref>. Deformation based methods such as <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b43">44]</ref> directly deform a target mesh to the observed data but can fail when an incorrect model is retrieved from the database. It is possible to apply these deformation based approaches on a part level as opposed to the whole object level <ref type="bibr" target="#b46">[47,</ref><ref type="bibr" target="#b56">57]</ref>. Generative models of 3D shape can be more expressive, but also require segmented individual objects for training <ref type="bibr" target="#b42">[43,</ref><ref type="bibr" target="#b59">60]</ref>.</p><p>All of these methods rely on the availability of some form of segmented training data, and on accurate detection to localize each object or part of interest in the scene during testing. We set out to get as much shape information as possible without semantics, remaining free of having to accurately localize a predefined set of classes at test time. Surface completion Silberman et al. <ref type="bibr" target="#b50">[51]</ref> tackle the completion of an incomplete multi-view reconstruction as a 2D surface completion problem. By detecting planes, they can complete their contours in a 2D projection using a novel CRF method. However, they assume piecewise-planar scenes, and require multiple views as input. Davis et al. <ref type="bibr" target="#b8">[9]</ref> complete surfaces by operating directly on the signed distance field, the zero level-set of which defines the surface location. They diffuse the signed distance field across holes in the mesh to fill in the gaps. <ref type="bibr" target="#b22">[23]</ref> use a data-driven approach, finding matches in the mesh to fill the missing region. Symmetry can be leveraged to complete some types of objects, e.g. <ref type="bibr" target="#b37">[38,</ref><ref type="bibr" target="#b57">58,</ref><ref type="bibr" target="#b34">35]</ref>. However, this can be brittle, and if symmetry is not detected, no predictions can be made.</p><p>In contrast to our approach, all of these methods are only suitable when the amount of missing data is small relative to the observed data. Voxel space reasoning Finally, the two algorithms most similar to ours both make predictions of full scene geometry from a single depth image. Kim et al. <ref type="bibr" target="#b32">[33]</ref> use a 'voxel CRF' model with an aim of improving 3D semantic segmentation, which they evaluate on 2D floor plans and image reprojections. For training, they use semantically labeled floor plans and images. They model the probability of a voxel being occupied as a Gaussian centered on the first observed voxel along a camera ray. Higher-order terms in the CRF are used to enforce planar structures and to encourage  'objects' to remain contiguous.</p><p>Similarly, Zheng et al. <ref type="bibr" target="#b60">[61]</ref> go from a single depth image to a voxel representation of a scene. They complete missing voxels by extruding visible points in the detected Manhattan World directions of the scene, related to the completion method of <ref type="bibr" target="#b34">[35]</ref>. While we compare against a version of this baseline, such voxel completion by extrusion is fundamentally limited to the Manhattan World propagation of the observed volume.</p><p>Unlike <ref type="bibr" target="#b32">[33]</ref>, our algorithm does not require any semantic or appearance information. Also, in contrast to the rulebased approach of <ref type="bibr" target="#b60">[61]</ref>, we make structured predictions in 3D space, and reason about shape variation by learning from 3D training data.</p><p>Depth datasets While large datasets such as NYU-Depth V2 <ref type="bibr" target="#b49">[50]</ref> and the recently introduced SUN RGB-D dataset <ref type="bibr" target="#b52">[53]</ref> exist for single depth images, few real world datasets are available containing complete 3D reconstructions <ref type="bibr" target="#b13">[14]</ref>. At an object level, turntable datasets exist that capture the full 360 • shape of individual objects. For example, the Washington RGBD Object dataset <ref type="bibr" target="#b36">[37,</ref><ref type="bibr" target="#b35">36]</ref> contains hundreds of individual objects, but without detailed camera poses, making reconstruction difficult. The Bigbird dataset <ref type="bibr" target="#b51">[52]</ref> is comprised of household objects along with ground truth camera poses and registered meshes. At a scene level, the few datasets featuring full reconstructions only have a limited number of examples e.g. <ref type="bibr" target="#b48">[49]</ref>. Finally, existing synthetic datasets tend to consist of single objects in isolation <ref type="bibr" target="#b59">[60]</ref>.</p><p>In this work, we introduce a new dataset for benchmarking purposes, consisting of 90 different configurations of real objects, captured in tabletop scenarios, with complete 360 • 3D reconstructions.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Voxlets algorithm overview</head><p>We model the geometry around an object as a regular grid of voxels V = {v i }. Following works such as <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b42">43]</ref>, each v i ∈ [−d max ,d max ] denotes the value of the Truncated Signed Distance Function (TSDF) at that location in the volume, where the zero level-set of V represents a surface. Each voxel, v i , stores the distance to the nearest surface, truncated to a maximum value of ±d max . Here, v i is negative if it is inside solid opaque matter, and positive if it is in free space. Our algorithm maps a 3D point s, from just the observed depth image D, to a prediction of the TSDF in a voxel neighborhood about that point. The aggregation of such predictions for multiple points in the input gives our final TSDF estimate for the scene. A 2D overview of our approach is depicted in <ref type="figure" target="#fig_2">Figure 2</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Support regions</head><p>The support region R ⊂ V is a set of voxels in the neighborhood of s, for which our model can make a prediction of the TSDF. Each R is a fixed-size cuboid of voxels, whose x-axis is aligned with the measured normal direction at s <ref type="figure" target="#fig_2">(Figure 2(b)</ref>). The size of R is defined so that it is large enough to capture local occupancy information at an object level, but not so large that it would span the entire scene. In a 2D world, the location of s and the direction of its normal can unambiguously define the location and orientation of R. In 3D however, there is an unconstrained degree of freedom, namely rotation of the cuboid about the axis of the normal. We resolve this by aligning the cuboid such that its z direction is coincident with the world z-axis, i.e. the 'up' direction of the scene. The top and bottom limits of each cuboid region R are therefore parallel with the world's ground plane.</p><p>Voxlets At test time, we extract a feature description for R from the observed geometry. Using a trained discriminative model, we can then make a prediction of the occluded geometry inside of R. We call this prediction of geometry a voxlet. The voxlet, which comes out of the forest in canonical alignment, is then transformed from its local coordinate system into world space to fill the voxels in R <ref type="figure" target="#fig_2">(Figure 2(d)</ref>). The accumulation of multiple such predictions at different locations forms our final estimate of the full TSDF.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Learning a mapping from features to voxlets</head><p>We pose unobserved geometry estimation, given partial observed information, as a supervised learning problem. More specifically, our goal is to learn a function f : X → Y, that maps a feature vector x ∈ X , computed from partially observed geometry at a point, to the output space y ∈ Y representing the corresponding 3D geometry in a local region R. Unlike standard classification, where the goal is to predict a category label for each x, our output space is a multi-dimensional vector y ∈ R w⇥d⇥h that encodes the TSDF values in R. The dimensionality of y is prohibitively large, making it difficult to use standard multivariate regression approaches, e.g. <ref type="bibr" target="#b5">[6]</ref>. Inspired by the recent work of Dollár and Zitnick <ref type="bibr" target="#b10">[11]</ref>, we use a structured Random Forest to learn the function f .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Training</head><p>Our training set, {(x 1 , y 1 ),...,(x n , y n )}, comprises regions sampled from full 360 • 3D reconstructions of objects, captured across several different scenes. To train the structured forest, we pass a bagged subset of the training set to each tree, starting at the root node. Each node is then tasked with splitting the data so that the x's sent to its children are as similar as possible in shape, i.e. have similar y's. Instead of minimizing the structured loss directly, <ref type="bibr" target="#b10">[11]</ref> approximates this loss at each node using a classification loss. To split the data at a node, we sample a different random subset of the dimensions of each y i , reduce their dimensionality to M dimensions, and then cluster into two temporary classes. Then a standard classification loss can be used on this new discretization to evaluate the quality of different candidate splits for each x i . In practice, we efficiently perform this dimensionality reduction and clustering at each node using randomized PCA <ref type="bibr" target="#b21">[22]</ref>. Each training example at that node is then assigned to one of the two possible clusters based on the sign of the values of its first principal component. This process is repeated until we cannot split the data any further. Finally, as in <ref type="bibr" target="#b10">[11]</ref>, each leaf node stores the medoid of all the examples that have arrived there. We refer to this as a voxlet. We store the medoid for efficiency reasons, but it is also possible to store multiple modes, e.g. <ref type="bibr" target="#b17">[18]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Features</head><p>To extract a feature descriptor for a given point s in the scene, we first re-project the entire observed depth image D into 3D space using the known camera intrinsics. We create a TSDF voxel grid V D from these re-projected points using the method described in <ref type="bibr" target="#b27">[28]</ref>. Our feature vector x is extracted directly from V D in the 3D neighborhood around s. The values from V D at these locations form the dimensions of x. These values can come from outside the region R, helping to give spatial context to the prediction. We do not use appearance information, instead favoring shape cues provided by D. These features are fast to compute and capture the surface shape in the neighborhood of s.</p><p>In contrast to other 3D volume features e.g. <ref type="bibr" target="#b47">[48,</ref><ref type="bibr" target="#b6">7]</ref>, we sample offsets from a sphere centered at s. This sphere, of radius r max , is aligned to the normal and world up direction at s <ref type="figure" target="#fig_2">(Figure 2(b)</ref>). For computational efficiency, we sample a subset of 260 offsets within the sphere as possible candidate features.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Predicting occupancy at test time</head><p>Each tree in our forest makes a prediction about how the volume surrounding a point in the input depth image is occupied. Our trees perform inference very efficiently, but in practice, it is unnecessary to make a prediction densely for every location in the input, because closely neighboring locations tend to yield similar predictions. We ignore locations where the normal points away from the camera, and also reject locations that point upward (as defined by the scene's 'up' direction). We then sample a set of locations throughout the input image, spanning the spectrum of depths, to ensure uniform scene coverage. We only predict occupancy for regions about these locations. For each location in the set, we simply traverse each tree to its leaf node, and return the prediction stored there <ref type="figure" target="#fig_2">(Figure 2(c)</ref>). In <ref type="figure">Figure 3</ref>, we illustrate a few voxlets and their world positions in a real scene.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Choosing the best prediction</head><p>Each leaf node in each tree in our forest stores a voxlet, i.e. the medoid of the examples that landed at that node. For a given location in the input depth image, each tree will vote for a different voxlet. We propose three strategies to combine these region predictions from the different trees: Forest Mean: We simply take the mean of the voxlets as the forest prediction. We note that the truncation of the signed distance function helps to make this style of accumulation robust. A single incorrect estimation at a voxel can only be wrong by a maximum amount of 2d max , where d max is the level at which the distance function is truncated. Forest Medoid: The previous approach can produce artifacts as a result of the averaging. Selecting the medoid voxlet of all of the trees (i.e. the medoid of the medoids) results in more robustness to outliers. Observed Fit: Neither of the previous two approaches forces predicted voxlets to be consistent with the observed geometry from the input depth image D. To achieve this consistency, we choose a single proposal, from all the trees, that is most consistent with the observed geometry according to an error measure E. To evaluate E we first compute the 3D reprojection of the points in the input depth image, and find the subset of these points P that fall into the current support region R. We then compute the error as</p><formula xml:id="formula_0">E = 1 |P| X p2P y(p) 2 ,<label>(1)</label></formula><p>where y(p) is the TSDF value of that tree's prediction at location p. This measure rewards proposals which have a level-set of zero at the same location as the observed geometry. We evaluate these three strategies in Section 7.2.</p><p>For the final prediction of the output TSDF grid V, regardless of strategy, we average the predictions of the overlapping voxlets <ref type="figure" target="#fig_2">(Figure 2(e)</ref>). We use a weighted average, which assigns more weight to voxlet predictions which more closely match the observed geometry. Specifically, we weight each prediction by exp(−αE). When α =0the averaging is equivalent to a naive averaging with no weighting. As α →∞ , the most consistent voxlets get a higher weighting at the expense of less highly ranked voxlets. For all our experiments we use α = 100. If a voxel in the output grid V has no predictions made for it, we mark it as empty (i.e. d max ). Finally, marching cubes <ref type="bibr" target="#b39">[40]</ref> is used to convert the final predicted TSDF to a mesh for visualization.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Implementation details</head><p>Given the large dimensionality of output space Y i.e. the size of the support region R, we perform an initial dimensionality reduction using PCA to 400 dimensions. We empirically found this to have little impact on the quality of our results, yet it provides a large speed up at training time and reduces storage requirements. We use an ensemble of 40 trees with simple axis aligned feature tests at each node, and keep splitting while there is a minimum of 5 examples at a node, up to a maximum depth of 30. When clustering the data at each node, we set the subset of random dimensions, M , for the randomized PCA to 20. At test time, we only make predictions for a subset of N = 300 locations in the input depth image, sampling each point with a probability proportional to its depth. The effect of varying N is analyzed in the supplementary material. We truncate the TSDF at d max =0 .02m. When extracting features, we set the radius of the sphere r max to 0.075m and 0.35m for the tabletop and NYU-Depth V2 datasets respectively.</p><p>In our experiments, to increase coverage, we predict one of two different size voxlets (requiring two different forests). The first voxlet is centered at s and is longer in the y-direction, being of shape (x × 2x × x). This is the direction that is approximately parallel to the normal at s <ref type="figure" target="#fig_2">(Figure  2(b)</ref>). This allows the voxlet to make a larger prediction backwards into the scene, compared to sideways which typically already has observed data. The second voxlet has shape (x × 2x × 2.5x) and its base is fixed to the ground plane. It is more suitable for making predictions for semi occluded geometry. For a given sample location in a depth image at test time, we randomly choose one of the two x z y <ref type="figure">Figure 3</ref>. Predicted voxlets. Each tree predicts the occupancy at each sample location, in the form of a voxlet. Here we depict just three voxlets that have been meshed using marching cubes, but hundreds of predictions are made in practice.</p><p>forests to make a prediction. For our tabletop scenes we set x =0 .25m, while for room-size predictions of NYUv2 we use x =0 .5m. In the supplementary material we explore the effect of varying this parameter.</p><p>Predicting the occupancy for a single depth image takes less than 40 seconds using our unoptimized Python implementation on a 3.60GHz processor with 4 hyperthreaded cores. Currently, the majority of the time is spent placing predicted voxlets into the output grid which could be trivially sped up with a more efficient GPU implementation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Datasets</head><p>Unfortunately, existing RGBD datasets of real scenes were typically collected to evaluate semantic segmentation, object detection, or camera pose estimation. To our knowledge, no standard datasets exist that capture the full unoccluded geometry of a large number of scenes, without sections of missing data caused by occlusion. To overcome this, we introduce a new tabletop-object dataset, that we will make available to aid benchmarking of volumetric completion. Examples from this dataset are shown in <ref type="figure" target="#fig_3">Figure 5</ref>.</p><p>Our tabletop dataset contains the full geometry of 90 tabletop scenes, reconstructed using the KinectFusion <ref type="bibr" target="#b27">[28]</ref> implementation of <ref type="bibr" target="#b31">[32]</ref>. This is seven times larger than the volumetric dataset used in <ref type="bibr" target="#b60">[61]</ref>. Each scene consists of between 2 to 6 household objects, from a set of 50, placed on a tabletop. We manually annotated the extents of the test volume for each scene. Predictions outside this domain are not used during evaluation. The dataset is split into 60 training and 30 testing scenes, captured in three different locations. The strict split ensures that no objects appear in both the training and test sets -see the supplementary material for further examples. We include the raw color and depth frames, together with the reconstructed mesh for each scene. It is worth noting that this ground truth dataset is only accurate up to the reconstruction error of <ref type="bibr" target="#b31">[32]</ref>.</p><p>The widely used NYU-Depth V2 <ref type="bibr" target="#b49">[50]</ref> dataset does not contain complete 3D reconstructions for each scene. However, <ref type="bibr" target="#b18">[19]</ref> introduced a synthetic version with manually placed 3D geometry which we use for benchmarking.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Room extents</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Camera frustum</head><p>Observed surface Evaluation voxels <ref type="figure">Figure 4</ref>. Evaluation region. For a fair comparison across all algorithms, we score on voxels that are, jointly, within the extents of the room, inside the camera frustum, and behind the surfaces visible in the input depth image.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Experiments</head><p>We evaluate our Voxlets approach using the two datasets described in the previous section. The ultimate aim of our algorithm is to accurately classify occupied vs. empty space around objects. Therefore, we report the per-voxel precision and recall over all the test data, using the sign of the accumulated TSDF as the final binary prediction of occupancy. We also report the Intersection over Union (IoU) of the predicted occupancy compared to the ground truth, which is a good measure of overall success. The evaluation region is defined as the set of voxels within the extent of the scene which are both within the camera frustum and behind the observed surface <ref type="figure">(Figure 4</ref>). The extents are tagged manually for Section 7.2, and automatically for Section 7.3. Note that we do not evaluate on the observed empty space. In both datasets the 'up' direction is extracted from the ground truth ground plane of the volume. In practice, this plane and its orientation could be detected automatically <ref type="bibr" target="#b49">[50]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.1.">Baselines</head><p>We compare to Zheng et al. <ref type="bibr" target="#b60">[61]</ref> as it is one of the few occupancy prediction papers that does not depend on semantics. We evaluated against their best-case idealized algorithm for reconstructing voxel occupancy, as described in Section 2 of their paper. First, the image is separated into regions using a ground-truth segmentation of the scene, and the Manhattan axes of each segment are computed using <ref type="bibr" target="#b15">[16]</ref>. For each segment, their axis-aligned voxel search is then performed for each unobserved voxel, marking voxels as filled if more than two Manhattan directions hit a voxel directly observed by the camera. Unlike our method, their approach requires a segmentation of the scene. We use the ground truth object segmentation (only for these two baselines) to illustrate the toughest non-semantic rivals possible. We also compare to a bounding box baseline, which fits minimum volume bounding boxes to the points of each segment using Manhattan directions computed using <ref type="bibr" target="#b15">[16]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.2.">Tabletop results</head><p>Here we perform experiments on the tabletop dataset introduced in Section 6. In <ref type="table">Table 1</ref>   <ref type="bibr" target="#b40">[41]</ref>. We compare the different strategies for selecting voxlets from our structured forest as described in Section 5.1 (see rows 3-5 of <ref type="table">Table 1</ref>). We see that our 'Observed Fit' approach is best overall, with both better recall and IoU than other approaches. As a result of multiple conflicting overlapping predictions, 'Forest Medoid' and 'Forest Mean' tend to underpredict, resulting in higher precision but poorer recall and IoU. We favor 'Observed Fit' as it chooses the prediction that agrees most with the observed geometry at each sample point, producing better completions.</p><p>For introspection, we investigated the performance of Voxlets by replacing various stages with an oracle that has access to the ground truth occupancy (see <ref type="table">Table 1</ref>): V gt : Instead of using the structured prediction, the ground truth voxels in the local region R are extracted and then placed directly into the output grid. This represents what a perfectly-trained version of Voxlets could produce. Errors in V gt occur for two reasons. Firstly, the proposed support regions can fail to cover some areas of the scene, hurting the recall. Secondly, quantisation effects are introduced in the extraction and re-insertion of voxel volumes. V pca : The ground truth voxels in R are compressed, then decompressed, using a pre-learned PCA model. This evaluates how well PCA covers the space of voxlet shapes and shows that it does not reduce performance significantly. V nn : We find the nearest neighbor training example that is the most similar to the ground truth voxels in R at each location. These are the best possible predictions, given the training set. These scores suggest that the dataset is challenging and still contains unexploited variety. V agg : We use our structured Random Forest with an oracle at the voxlet aggregation step. Each voxlet is greedily added to the accumulator only if its inclusion increases the score for the given scene. Results suggest that more sophisticated aggregation of voxlets could further exploit the predictions.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.3.">Synthetic NYU-Depth V2 results</head><p>In <ref type="table">Table 2</ref> we present results for the synthetic NYU-Depth V2 <ref type="bibr" target="#b49">[50]</ref> dataset using the approximate but geometrically complete ground truth of <ref type="bibr" target="#b18">[19]</ref>. We have adapted these 3D-meshed scenes to make them suitable for volumetric completion by voxelizing each one using <ref type="bibr" target="#b0">[1]</ref>, and rendering a depth image from the same viewpoint as the original Kinect camera location. We randomly assign 500 scenes from the official training set for training and 200 scenes from the test set for testing. For the method of Zheng et al. <ref type="bibr" target="#b60">[61]</ref> we compute a local coordinate frame using the ground truth segmentation for each separate object. Despite this advantage, Voxlets produces superior completions. Images of these results can be seen in the supplementary material.  <ref type="table">Table 2</ref>. Quantitative results for the synthetic NYU-Depth V2 dataset of <ref type="bibr" target="#b18">[19]</ref>. All methods use single depth maps generated from the synthetic geometry as input, but the baselines use the ground truth (GT) object level segmentation to aid prediction.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.4.">Qualitative NYU-Depth V2 results</head><p>While Voxlets has been designed for tabletop scenes, we show here qualitative results on the challenging NYU-Depth V2 <ref type="bibr" target="#b49">[50]</ref> dataset. We use our model trained on the synthetic dataset of <ref type="bibr" target="#b18">[19]</ref> from the previous section. Results must be inspected by eye, because quantitatively evaluating synthetic ground truth vs. predictions made from real Kinect depth input images is not possible: the alignment between the real depth and the manually created ground truth is inaccurate. For completeness, we also compare to the methods of <ref type="bibr" target="#b38">[39,</ref><ref type="bibr" target="#b16">17]</ref> which utilize additional cues in the form of appearance and semantic classifiers. These meth-Input view of scene</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Observed Geometry</head><p>Lin et al. <ref type="bibr" target="#b38">[39]</ref> Geiger and Wang <ref type="bibr" target="#b16">[17]</ref> Zheng et al. <ref type="bibr" target="#b60">[61]</ref> GT Voxlets <ref type="figure">Figure 6</ref>. NYU-Depth V2 results. Here we qualitatively compare different occupancy predictions methods using real Kinect depth images from the NYU-Depth V2 <ref type="bibr" target="#b49">[50]</ref> dataset. Unlike <ref type="bibr" target="#b38">[39]</ref> and <ref type="bibr" target="#b16">[17]</ref>, our Voxlets algorithm does not require any appearance information. All results are rendered from the same viewpoint, and for <ref type="bibr" target="#b38">[39]</ref> and <ref type="bibr" target="#b16">[17]</ref> we do not show the predicted walls and floor.</p><p>ods were not designed specifically for occupancy estimation. For Zheng et al. <ref type="bibr" target="#b60">[61]</ref>, we use the ground truth object segmentation masks provided by <ref type="bibr" target="#b49">[50]</ref>.</p><p>Limitations As a supervised learning algorithm, Voxlets is limited by the data available at training time. Our voxlets are a fixed size, and success correlates with the test-scene having similar sized objects. Holes in the observed depth images at object boundaries can also cause problems e.g. the spiky top in the last row of <ref type="figure" target="#fig_3">Figure 5</ref>, and sharp edges can sometimes be rounded due to aggregation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="8.">Conclusions and future work</head><p>We have demonstrated that Voxlets can successfully recover 3D geometry using only a single input depth image. Our supervised algorithm efficiently combines both selection and pose estimation of local shapes, using simple feature test evaluations to predict local geometry occupancy. We have shown that objects from distinct semantic classes share enough 3D shape components to allow plausible, though not perfect, reconstructions. Though intended for tabletop objects, our results on indoor scenes are on par with more constrained algorithms.</p><p>For some applications, the quality of our predictions may already be enough, e.g. to aid robot grasping <ref type="bibr" target="#b55">[56,</ref><ref type="bibr" target="#b61">62]</ref> or navigation. It is not guaranteed that our results are physically stable, and how to best incorporate physics-based reasoning <ref type="bibr" target="#b60">[61,</ref><ref type="bibr" target="#b45">46]</ref> is still an open problem, but enforcing this prior may improve accuracy. One interesting potential application of our method is to use the predicted completion as a prior for SLAM. As new data arrives, a next-best-view algorithm <ref type="bibr" target="#b41">[42,</ref><ref type="bibr" target="#b30">31]</ref> could leverage our predictions to guide the camera to a position which captures the geometry most likely to be informative for verifying our proposals.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Our volumetric completion. (a) Intensity image, for illustration only. (b) (Input) 3D projection of the depth image, captured from the red arrow's perspective, where occlusions induce large empty spaces. (c) Ground truth occupancy captured using KinectFusion with multiple views. (d) (Output) Our Voxlets algorithm predicts a plausible completion of the occluded geometry.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 2 .</head><label>2</label><figDesc>2D overview of our algorithm. (a) We model the world as a grid of voxels representing the signed distance to the nearest surface. Here, we show an overhead view of a scene featuring two objects. (b) When observed by a depth camera, only the first voxel along each ray is seen. This leaves a region of unknown occupancy extending beyond the depth surface. At test time, we define a cuboid region of voxels, R, around each query point, s, aligned with the normal at s. (c) Our structured Random Forest makes a prediction for the signed distance of each of the voxels in R given a feature x(s) computed from the observed geometry. (d) This prediction is placed into the scene, and used to update the values of the voxels. (e) The aggregation of multiple such predictions forms our final occupancy estimate.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 5 .</head><label>5</label><figDesc>Tabletop results. Results for our tabletop dataset, where the rendered views are shown viewing in from the left of the Kinect Figure 5. Tabletop results. Results for our tabletop dataset, where the rendered views are shown viewing in from the left of the Kinect input. For clarity, we insert a ground plane during rendering and do not superimpose the observed input geometry on top of our predictions. Voxlets succeeds in capturing the coarse geometry of the objects whereas Forest Medoid under predicts and Zheng et al. [61] tends to produce floating predictions. The last row shows a failure case where Voxlets introduces incorrect geometry on the top of the box closest to the camera as there is no observed depth due to the occlusion because of the camera baseline in the Kinect sensor.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>we can see that our Voxlets</figDesc><table>Method 
+IoU 
+Precision Recall 
+Bounding Box with GT 
+0.445 
+0.840 
+0.491 
+Zheng et al. [61] with GT 
+0.528 
+0.773 
+0.630 
+Voxlets Observed Fit 
+0.585 
+0.793 
+0.658 
+Voxlets Forest Medoid 
+0.326 
+0.822 
+0.358 
+Voxlets Forest Mean 
+0.312 
+0.845 
+0.337 
+Vgt Ground truth voxels 
+0.962 
+0.991 
+0.971 
+Vpca GT voxels post PCA 
+0.908 
+0.977 
+0.927 
+Vnn Perfect forest 
+0.724 
+0.940 
+0.758 
+Vagg Perfect aggregation 
+0.701 
+0.897 
+0.766 
+
+Table 1. Quantitative results on our tabletop dataset. We also show 
+that our final 'Observed Fit' selection strategy produces superior 
+results compared to naive averaging and other methods e.g. [61], 
+even when they have access to ground truth (GT) segmentation. 
+
+algorithm outperforms both the idealized Zheng et al. [61] 
+method and the bounding box baseline. Qualitative results 
+are presented in Figures 5 and 1. Despite severe occlusions 
+and fragmentation of objects in the input depth map, we are 
+still able to produce plausible completions. Note that we do 
+not merge the observed geometry onto our predictions. Ad-
+ditional refinement to respect the observed geometry would 
+likely improve results, but efficient inference is still an open 
+area of research </table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements We wish to thank the anonymous reviewers and Neill Campbell, Peter Gehler, and the vision group at UCL for their valuable comments and suggestions. The authors are supported by EPSRC projects EP/K015664/1 and EP/I031170/1, and EU project CR-PLAY (no 611089). Michael Firman was also supported by an EPSRC Doctoral Training Grant.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Binvox</surname></persName>
+		</author>
+		<ptr target="www.cs.princeton.edu/∼min/binvox" />
+		<imprint>
+			<date type="published" when="2015-11" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Recognition-by-components: A theory of human image understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Biederman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Psychological Review</title>
+		<imprint>
+			<date type="published" when="1987" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Learning 6D object pose estimation using 3D object coordinates</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Brachmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krull</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Michel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gumhold</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Generic fitted primitives (GFP): Towards full object volumetric reconstruction for service robotics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">T</forename><surname>Cocias</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Moldoveanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Grigorescu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Graphics, Visualization and Computer Vision</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Object removal by exemplar-based inpainting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Criminisi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Toyama</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<monogr>
+		<title level="m" type="main">Decision forests for computer vision and medical image analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Criminisi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<publisher>Springer Science</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Decision forests with long-range spatial context for organ localization in CT volumes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Criminisi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bucciarelli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">MICCAI</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">A volumetric method for building complex models from range images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Levoy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer graphics and interactive techniques</title>
+		<imprint>
+			<date type="published" when="1996" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Filling holes in complex surfaces using volumetric diffusion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Davis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Marschner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Garr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Levoy</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="volume">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Panel report: The potential of geons for generic 3-D recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">J</forename><surname>Dickinson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Bergevin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Biederman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-O</forename><surname>Eklundh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Munck-Fairwood</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">K</forename><surname>Jain</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Pentland</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Image and Vision Computing</title>
+		<imprint>
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Fast edge detection using structured forests</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>PAMI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">3D object detection and localization using multimodal point pair features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Drost</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ilic</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">3DIMPVT</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Depth map prediction from a single image using a multi-scale deep network</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Eigen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Puhrsch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Firman</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1604.00999</idno>
+		<title level="m">RGBD datasets: Past, present and future</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Data-driven 3D primitives for single image understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">F</forename><surname>Fouhey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Manhattan-world stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Furukawa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Joint 3D Object and Layout Inference from a single RGB-D Image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">German Conference on Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Efficient regression of general-activity human poses from depth images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Criminisi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Support surface prediction in indoor scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">From 3D scene geometry to human workspace</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Satkin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hebert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Aligning 3D models to RGB-D images of cluttered scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">A</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Finding structure with randomness: Probabilistic algorithms for constructing approximate matrix decompositions. SIAM review</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Halko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P.-G</forename><surname>Martinsson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">A</forename><surname>Tropp</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Context-based coherent surface completion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Harary</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<monogr>
+		<title level="m" type="main">Scene completion using millions of photographs. SIGGRAPH</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Recovering free space of indoor scenes from a single image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Hedau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Forsyth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Dense 3D semantic mapping of indoor scenes from RGB-D images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Hermans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Floros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Leibe</surname></persName>
+		</author>
+		<editor>ICRA</editor>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Model based training, detection and pose estimation of texture-less 3D objects in heavily cluttered scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hinterstoisser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ilic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Holzer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Bradski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Konolige</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Navab</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">KinectFusion: real-time 3D reconstruction and interaction using a moving depth camera</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Hilliges</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Molyneaux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Newcombe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hodges</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Freeman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Davison</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">UIST</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gallagher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Saxena</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Chen</surname></persName>
+		</author>
+		<title level="m">3D reasoning from blocks to stability. PAMI</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">A linear approach to matching cuboids in RGBD images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Pairwise decomposition of image sequences for active multi-view recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Johns</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Leutenegger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Davison</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+		<title level="m" type="main">Very high frame rate volumetric integration of depth images on mobile devices</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Kahler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">A</forename><surname>Prisacariu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">Y</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H S</forename><surname>Torr</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">W</forename><surname>Murray</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">3D scene understanding by voxel-CRF</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Shape sharing for object segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Grauman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Point cloud completion using extrusions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Kroemer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">B</forename><surname>Amor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ewerton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Peters</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Humanoid Robots</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Unsupervised feature learning for 3D scene labeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Lai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">A large-scale hierarchical multi-view RGB-D object dataset</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Lai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title level="m" type="main">Single viewpoint model completion of symmetric objects for digital inspection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Law</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Aliaga</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+		<respStmt>
+			<orgName>CVIU</orgName>
+		</respStmt>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Holistic scene understanding for 3D object detection with RGBD cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Marching cubes: A high resolution 3D surface construction algorithm</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">E</forename><surname>Lorensen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">E</forename><surname>Cline</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SIGGRAPH</title>
+		<imprint>
+			<date type="published" when="1987" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Generalized connectivity constraints for spatio-temporal 3D reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">R</forename><surname>Oswald</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Stühmer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<monogr>
+		<title level="m" type="main">A probabilistic framework for next best view estimation in a cluttered environment. Visual Communication and Image Representation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Potthast</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">S</forename><surname>Sukhatme</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Shared shape spaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">A</forename><surname>Prisacariu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Reid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Completing 3D object shape from one depth image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Rock</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Thorsen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gwak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Shin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">A comparison and evaluation of multi-view stereo reconstruction algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Diebel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Scharstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Imagining the unseen: Stability-based cuboid arrangement for scene understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Shao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Monszpart</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Koo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">J</forename><surname>Mitra</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SIGGRAPH Asia</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Structure recovery by part assembly</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-H</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Fu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-M</forename><surname>Hu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SIGGRAPH Asia</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Real-time human pose recognition in parts from single depth images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cook</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Sharp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Finocchio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Moore</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kipman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Blake</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">Scene coordinate regression forests for camera relocalization in RGB-D images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Glocker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Criminisi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">Indoor segmentation and support inference from RGBD images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Silberman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Hoiem</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">A contour completion model for augmenting surface reconstructions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Silberman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Shapira</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Gal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<analytic>
+		<title level="a" type="main">Big-BIRD: A large-scale 3D database of object instances</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Singh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Narayan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Achim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Abbeel</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b52">
+	<analytic>
+		<title level="a" type="main">SUN RGB-D: A RGB-D scene understanding benchmark suite</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lichtenberg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b53">
+	<analytic>
+		<title level="a" type="main">Sliding shapes for 3D object detection in depth images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b54">
+	<analytic>
+		<title level="a" type="main">Deep sliding shapes for amodal 3D object detection in RGB-D images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b55">
+	<analytic>
+		<title level="a" type="main">Axiomatic particle filtering for goal-directed robotic manipulation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Sui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><forename type="middle">C</forename><surname>Jenkins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Desingh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IROS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b56">
+	<analytic>
+		<title level="a" type="main">Data-driven structural priors for shape completion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Sung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">G</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Angst</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Guibas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">SIGGRAPH Asia</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b57">
+	<analytic>
+		<title level="a" type="main">Shape from symmetry</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Thrun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Wegbreit</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b58">
+	<analytic>
+		<title level="a" type="main">Recovering three-dimensional shape around a corner using ultra-fast time-of-flight imaging</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Velten</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Willwacher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Veeraraghavan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">G</forename><surname>Bawendi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Raskar</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature Communications</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b59">
+	<analytic>
+		<title level="a" type="main">3D ShapeNets: A deep representation for volumetric shape modeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b60">
+	<analytic>
+		<title level="a" type="main">Beyond point clouds: Scene understanding by reasoning geometry and physics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">C</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Ikeuchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-C</forename><surname>Zhu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b61">
+	<analytic>
+		<title level="a" type="main">Single image 3D object detection and pose estimation for grasping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">G</forename><surname>Derpanis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Brahmbhatt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Phillips</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Lecce</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Daniilidis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

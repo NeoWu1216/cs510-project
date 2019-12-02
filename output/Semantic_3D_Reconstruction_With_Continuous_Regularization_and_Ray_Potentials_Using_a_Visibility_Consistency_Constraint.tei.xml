@@ -1,0 +1,935 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Semantic 3D Reconstruction with Continuous Regularization and Ray Potentials Using a Visibility Consistency Constraint</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Nikolay</forename><surname>Savinov</surname></persName>
+							<email>nikolay.savinov@inf.ethz.ch</email>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Christian</forename><surname>Häne, L &amp;apos; Ubor Ladický</surname></persName>
+							<email>christian.haene@inf.ethz.ch</email>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Marc</forename><surname>Pollefeys</surname></persName>
+							<email>marc.pollefeys@inf.ethz.ch</email>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eth</forename><surname>Zürich</surname></persName>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Switzerland</surname></persName>
+						</author>
+						<title level="a" type="main">Semantic 3D Reconstruction with Continuous Regularization and Ray Potentials Using a Visibility Consistency Constraint</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:45+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We propose an approach for dense semantic 3D reconstruction which uses a data term that is defined as potentials over viewing rays, combined with continuous surface area penalization. Our formulation is a convex relaxation which we augment with a crucial non-convex constraint that ensures exact handling of visibility. To tackle the non-convex minimization problem, we propose a majorizeminimize type strategy which converges to a critical point. We demonstrate the benefits of using the non-convex constraint experimentally. For the geometry-only case, we set a new state of the art on two datasets of the commonly used Middlebury multi-view stereo benchmark. Moreover, our general-purpose formulation directly reconstructs thin objects, which are usually treated with specialized algorithms. A qualitative evaluation on the dense semantic 3D reconstruction task shows that we improve significantly over previous methods.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>One of the major goals in computer vision is to compute dense 3D geometry from images. Recently, also approaches that jointly reason about the geometry and semantic segmentation have emerged <ref type="bibr" target="#b9">[10]</ref>. Due to the noise in the input data often strong regularization has to be performed. Optimizing jointly over 3D geometry and semantics has the advantage that the smoothness for a surface can be chosen depending on the involved semantic labels and the normal direction to the surface. Eventually, this leads to more faithful reconstructions that directly include a semantic labeling.</p><p>Posing the reconstruction task as a volumetric segmentation problem <ref type="bibr" target="#b3">[4]</ref> is a widely used approach. A volume gets segmented into occupied and free space. In case of dense semantic 3D reconstruction, the occupied space label is replaced by a set of semantic labels <ref type="bibr" target="#b9">[10]</ref>. To get smooth, noise-free reconstructions, the final labeling is normally determined by energy minimization. The formulation of the energy comes with the challenge that the observations are given in the image space but the reconstruction is volumet- <ref type="figure">Figure 1</ref>: Left to right: example image, close-ups of <ref type="bibr" target="#b9">[10]</ref>, <ref type="bibr" target="#b25">[26]</ref> and our proposed approach.</p><p>ric. Therefore each pixel of an image contains information about a ray composed out of voxels. This naturally leads to energy formulations with potential functions that depend on the configuration of a whole ray. Including such potentials in a naive way leads to (on current hardware) infeasible optimization problems. Hence, many approaches try to approximate such a potential. One often utilized strategy is to derive a per-voxel unary potential (cost for assigning a specific label to a specific voxel). However, this is only possible in a restricted setting and under a set of assumptions that often do not hold in practice. By modeling the true ray potential, more faithful reconstructions are obtained <ref type="bibr" target="#b25">[26]</ref>. Thus, efficient ways to minimize energies with ray potentials, while at the same time being able to benefit from the joint formulation of 3D modeling and semantic segmentation, are desired.</p><p>In this work, we propose an energy minimization strategy for ray potentials that can be directly used together with continuously inspired surface regularization approaches and hence does not suffer from metrication artifacts <ref type="bibr" target="#b11">[12]</ref>, common to discrete formulations on grid graphs. When using our ray potential formulation for dense semantic 3D reconstruction, it additionally allows for the usage of classspecific anisotropic smoothness priors. Continuously inspired surface regularization approaches are formulated as convex optimization problems. We identify that a convex relaxation for the ray potential is weak and unusable in practice. We propose to add a non-convex term that handles visibility exactly and optimize the resulting energy by linearly majorizing the non-convex part. By regularly reestimating the linear majorizer during the optimization, we devise an energy minimization algorithm with guaranteed convergence.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.1.">Related Work</head><p>Visibility relations in 3D reconstructions were studied for computing a single depth map out of multiple images <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b14">15]</ref>. To generate a full consistent 3D model from many depth maps, a popular approach is posing the problem in the volume <ref type="bibr" target="#b3">[4]</ref>. To handle the noise in the input data a surface regularization term is added <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b37">38]</ref>. A discrete graphbased formulation is used in <ref type="bibr" target="#b18">[19]</ref> and continuous surface area penalization in <ref type="bibr" target="#b37">[38]</ref>. One of the key questions is how to model the data term. Starting from depth maps, <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b37">38]</ref> model the 2.5D data as per-voxel unary potentials. Such a modeling utilizes information contained in the depth map only partially. Using a discrete graph formulation <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b32">33]</ref> propose to model the free space between the camera center and the measured depth with pairwise potentials.</p><p>Another approach to modeling the data term is to directly use a photo-consistency-based smoothness term <ref type="bibr" target="#b28">[29,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b12">13]</ref>. To resolve the visibility relations, image silhouettes are used. This is done either in the optimization as a constraint, meaning that the reconstruction needs to be consistent with the image silhouettes <ref type="bibr" target="#b28">[29,</ref><ref type="bibr" target="#b12">13]</ref>, or by deriving pervoxel occupancy probability <ref type="bibr" target="#b10">[11]</ref>. Silhouette consistency is achieved through a discrete graph-cut optimization in <ref type="bibr" target="#b28">[29]</ref>, and with a convex-relaxation-based approach in the continuous domain in <ref type="bibr" target="#b12">[13]</ref>. The resulting relaxed problem in the latter case is not tight and hence does not generate binary solutions. Therefore, to guarantee silhouette consistency a special thresholding scheme is required. Handling visibility has also been done in mesh-based photo-consistency minimization <ref type="bibr" target="#b4">[5]</ref>.</p><p>To fully address the 2.5D nature of the input data, the true ray potential should be used, meaning the data cost depends on the first occupied voxel along the ray. What happens behind is unobserved and hence has no influence. This was formulated in <ref type="bibr" target="#b24">[25,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b30">31]</ref> as a problem of finding a voxel labeling in terms of color and occupancy such that the first occupied voxel along a ray has a similar color as the pixel it projects to. One of the limitations all these works share is that they only compare colors of single pixels, which often does not give a strong enough signal to recover weakly textured areas. We use depth maps that are computed based on comparing image patches and interpret them as noisy input data containing outliers. We use regularization to handle the noise and outliers in the input data, but in contrast to other approaches with ray potentials that use a purely discrete graph-based formulation <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b21">22]</ref> our proposed method is the first one that combines true ray potentials with a continuous surface regular-ization term. This allows us to set a new state of the art on two commonly used benchmark datasets. Unlike in any previous volumetric depth map fusion approach, thin surfaces do not pose problems in our formulation, due to an accurate representation of the input data.</p><p>Most earlier formulations of ray potentials are for purely geometry-based 3D reconstruction. Ours is more general and also allows to incorporate semantic labels. <ref type="bibr" target="#b25">[26]</ref> shows that by using a discrete graph-based approach the true multilabel ray potential can be used as data term. Several artifacts present in the unary potential approximation <ref type="bibr" target="#b9">[10]</ref> can be resolved using a formulation over rays. However, utilizing a discrete graph-based approach it is not directly possible to use the class-specific anisotropic regularization proposed in <ref type="bibr" target="#b9">[10]</ref>. We bridge this gap and show how the full multilabel ray potential can be used together with continuously inspired anisotropic surface regularization <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b36">37]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Formulation</head><p>In this section we will introduce the mathematical formulation that we are using to represent the dense semantic 3D reconstruction as an optimization problem. The problem is posed over a 3D voxel volume Ω ⊂ N 3 . We denote the label f = 0 as the free space label and introduce the set L = {0, 1, . . . , L} of L semantic labels, which represent the occupied space, plus the free space label. The final goal of our method is to assign a label ℓ ∈ L to each of the voxels. The label assignment is formalized using indicator variables x ℓ s ∈ {0, 1} indicating if label ℓ is assigned at voxel s ∈ Ω, (x ℓ s = 1) or not. We denote the vector of all per-voxel indicator variables as x. Finally, the energy that we are minimizing in this paper has the form</p><formula xml:id="formula_0">E(x) = ψ R (x) + ψ S (x) subject to ℓ∈L x ℓ s = 1, x ℓ s ∈ {0, 1},<label>(1)</label></formula><p>where ℓ∈L x ℓ s = 1 guarantees that exactly one label is assigned to each voxel. The objective contains two terms. The term ψ R (x), the ray potential, contributes the data to the optimization problem. This is in contrast to many other formulations where the data term is specified as local pervoxel preferences for the individual labels. The second term ψ S (x) is a smoothness term, which penalizes the surface area of the transitions between different labels. For this term, we utilize formulations originating from convex continuous multi-label segmentation <ref type="bibr" target="#b1">[2]</ref>. As we will see in Sec. 4 this smoothness term allows for class-specific anisotropic penalization of the interfaces between all labels. Due to the continuous nature of the regularization term, it does not suffer from metrication artifacts like most of the graph-based formulations. The straightforward way to utilize such a smoothness term would be to use a convex relax- ation of the ray potential. Unfortunately, convex relaxations of the ray potential do not seem to lead to strong formulations (c.f . <ref type="figure">Fig.4</ref>). In this paper we show how to resolve this problem by adding a non-convex constraint. In Sec. 3 we introduce the convex relaxation formulation of the ray potential and its non-convex extension. The regularization term and optimization strategy are discussed in Sec. 4.</p><formula xml:id="formula_1">Π 1 Π 2 Π 3 x ℓ s Global View Π 1 y ℓ ri View from Camera Π 1</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Ray Potential</head><p>The main idea of the ray potential <ref type="bibr" target="#b25">[26]</ref> is that for each ray, originating from an image pixel, a cost is induced that only depends on the position of the first non-free space label along the viewing ray or the ray is all free space. This means that the potential can take only linearly many (in the number of voxels along a ray) values, which is the reason why optimization of such potentials is tractable. Note that this is not a restriction we impose, it represents the fact that it is impossible to see behind occupied space. We denote the cost of having the first occupied space label at position i with label ℓ ∈ L as c ℓ ri and the cost of having the whole ray free space as c f r . The vector of indicator variables x ℓ s belonging to ray r ∈ R is denoted as x r . To index positions along a ray, we denote s ri ∈ Ω as the positions of all the voxels belonging to ray r ∈ R, where i ∈ {0, · · · , N r } denotes the position index along the ray. Note that there exists only one x ℓ s variable per label for each voxel s ∈ Ω, if s ri evaluates to the same position for different rays it refers to the same variable. Now we can state the ray potential part of the energy as a sum of potentials over rays</p><formula xml:id="formula_2">ψ R (x) = r∈R ψ r (x r ) (2) ψ r (x r ) =   ℓ∈L\{f} Nr i=0 c ℓ ri min j≤i−1 x f srj x ℓ sri   + c f r min j≤Nr x f srj</formula><p>with L\{f} meaning the set of all labels excluding the free space label. The term (min j≤i−1 x f sri )x ℓ sri is 1 iff the first occupied label along the ray r is ℓ at position i. Similarly, min j≤Nr x f srj equals 1 iff the whole ray r is free space. Thus, in Eq. 2 only one term is non-zero, and its coefficient equals the desired cost of the ray configuration.</p><p>To make the derivations throughout the paper compact, we omit the last term without loss of generality by shifting the costs by a constant, c ℓ ri ← c ℓ ri − c f r and c f r ← 0.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Visibility Variables</head><p>Before we state a convex relaxation of the ray potential, which we eventually augment with a non-convex constraint, we rewrite the potential using visibility variables. First, we introduce the visibility variables y ℓ ri indicating that the ray r only contains free space up to the position i − 1 and the label assigned at position i is ℓ ∈ L.</p><formula xml:id="formula_3">y ℓ ri = min(y f r,i−1 , x ℓ sri )<label>(3)</label></formula><p>To anchor the definition we assume that the -1 st voxel of the ray has free space assigned, y f r,−1 = 1. Note that if we insert all the nested definitions for a free space variable we get y f ri = min j≤i x f srj . Note that this variables are per-ray local variables and multiple ones can exist per voxel in case multiple rays cross that voxel in contrast to the global per-voxel variables x s , which exist only once per voxel (c.f . <ref type="figure" target="#fig_0">Fig. 2</ref>). In the remainder of Sec. 3 we will drop the index r at most places for better readability. We now state a reformulation of the ray potential as</p><formula xml:id="formula_4">ψ r (x r ) = ℓ∈L N i=0 c ℓ i y ℓ i (4) subject to y ℓ i = min(y f i−1 , x ℓ si ) ∀ℓ ∈ L, ∀i,</formula><p>Here we introduced costs along the ray also for the free space label c f i = 0, ∀i. This does not change the potential but is required for our next step, where we reformulate the non-convex equality constraints as a series of inequality constraints. To make sure that the corresponding equalities are still satisfied in the optimum, we show that the costs c ℓ i can be replaced by non-positive ones without changing the <ref type="figure">Figure 4</ref>: Evaluation of the convex relaxation for two-label problem: (left) a reconstruction of the model obtained by our non-convex procedure, slices through the volume (0 black, 1 white, 0.5 grey) in the non-convex formulation (middle) and the convex formulation (right).</p><p>minimizer of the energy. This means that the y ℓ i are bounded from above by the linear inequality constraints and are tight from below through the minimization of the cost function, so the resulting constraints model the same optimization problem. The inequality constraints read as follows</p><formula xml:id="formula_5">0 ≤ y ℓ i ≤ y f i−1 , y ℓ i ≤ x ℓ si ∀ℓ ∈ L<label>(5)</label></formula><p>To derive the transformation to non-positive costs, we first notice that after applying min(y f i−1 , ·) to both sides of the constraint ℓ∈L x ℓ si = 1 from Eq. 1, we can plug in the constraints of Eq. 4 to obtain</p><formula xml:id="formula_6">y f i−1 = ℓ∈L y ℓ i .<label>(6)</label></formula><p>Intuitively, this means if position i−1 is in the observed visible free space then the next position is either free space or one of the occupied space labels and if i − 1 is in the occupied space then all the y ℓ i are 0 (see <ref type="figure" target="#fig_1">Fig. 3</ref>). The cost transformation is done for every ray separately. Starting with the last position i = N , we add the following expression, which always evaluates to 0, to the ray potential.</p><formula xml:id="formula_7">max ℓ ′ ∈L c ℓ ′ i y f i−1 − ℓ∈L y ℓ i = 0<label>(7)</label></formula><p>This moves one non-negative term to the previous position and make all the c ℓ i for the current position non-positive.</p><formula xml:id="formula_8">c f i−1 ← c f i−1 + max ℓ ′ ∈L c ℓ ′ i c ℓ i ← c ℓ i − max ℓ ′ ∈L c ℓ ′ i ∀ℓ ∈ L<label>(8)</label></formula><p>This is done iteratively for all i ∈ {N, . . . , 0}, leaving just a constant, which can be omitted.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Convex Relaxation and Visibility Consistency</head><p>So far our derivation has been done using binary variables x ℓ s ∈ {0, 1} and hence also all the y ℓ i ∈ {0, 1}. To minimize the energy, we relax this constraint by replacing x ℓ s ∈ {0, 1} with x ℓ s ∈ [0, 1] in Eq. 1. This directly leads to a convex relaxation of the ray potential. Unfortunately, this relaxation is weak and therefore inapplicable in practice. In <ref type="figure">Fig. 4</ref> we evaluate the convex relaxation on a two-label example (Lemon dataset), using surface area penalization via a total variation (TV) smoothness prior. The convex relaxation fails entirely, producing variable assignments to the x ℓ s that are 0.5 up to machine precision and hence no meaningful solution can be extracted. A comparison of the energies reveals that there is a significant difference between the non-convex and the convex solution (626614 and 431893, respectively), which indicates that the relaxed problem is far from the original binary one. Most importantly, our earlier convex formulation <ref type="bibr" target="#b25">[26]</ref> shares this behavior of not making a decision for any voxel, when run without initialization on a two-label problem. The aspects of initialization, heuristic assignment of unassigned variables, move making algorithm, and a coarse-to-fine scheme are essential elements of the algorithm in <ref type="bibr" target="#b25">[26]</ref>.</p><p>The reason for the weak relaxation is that Eq. 6 is unsatisfied for the solution of the convex relaxation. This equation ensures that the per camera local view is consistent with the global model (c.f . <ref type="figure" target="#fig_0">Fig. 2)</ref>. Concretely, the equation states that the change in visibility is directly linked to the cost that can be taken by the potential e.g. a surface can only be placed iff the occupancy along the ray changes. Hence we propose a formulation that directly enforces this constraint, which we will call visibility consistency constraint. Eq. 6 can be reformulated using the definition of y f i as</p><formula xml:id="formula_9">ℓ∈L\{f} y ℓ i = y f i−1 − y f i = y f i−1 − min(y f i−1 , x f si ) = max(0, y f i−1 − x f si ). (9)</formula><p>This means that we can only have an occupied space label ℓ ∈ L\{f} assigned as the visible surface at position i, if position i does not have free space assigned and y f i−1 = 1 and hence the whole ray from the camera center to the position i − 1 has free space assigned (see <ref type="figure" target="#fig_1">Fig. 3</ref>).</p><p>Since we minimize the objective with non-positive c ℓ i , the visibility consistency constraint is equivalent to the inequality</p><formula xml:id="formula_10">ℓ∈L\{f} y ℓ i ≤ max(0, y f i−1 − x f si ).<label>(10)</label></formula><p>Our final formulation for the ray potential is</p><formula xml:id="formula_11">ψ r (x r ) = ℓ∈L N i=0 c ℓ i y ℓ i (11) s.t. y ℓ i ≤ y f i−1 , y ℓ i ≤ x ℓ si , y ℓ i ≥ 0 ∀ℓ ∈ L, ∀i ℓ∈L\{f} y ℓ i ≤ max(0, y f i−1 − x f si ) ∀i</formula><p>The above potential is non-convex because of the nonconvex inequality which describes visibility consistency.</p><p>We follow the strategy of using a surrogate convex constraint for the non-convex one that majorizes the objective of the non-convex program. The majorization, as we will see in Sec. 4, happens during the iterative optimization. Therefore, at each iteration, we have a current assignment to the variables, which we denote by x (n) and y (n) . Here we introduced the notation that variable assignments at iteration n are denoted with a superscript (n). Replacing</p><formula xml:id="formula_12">ℓ∈L\{f} y ℓ i ≤ max{0, y f i−1 − x f si } by ℓ∈L\{f} y ℓ i ≤ g(x f si , y f i−1 |x f,(n) si , y f,(n) i−1 )<label>(12)</label></formula><p>with the linear majorizer,</p><formula xml:id="formula_13">g(x f si , y f i−1 |x f,(n) si , y f,(n) i−1 ) = 0 if y f,(n) i−1 ≤ x f,(n) si y f i−1 − x f si if y f,(n) i−1 &gt; x f,(n) si<label>(13)</label></formula><p>leads to a surrogate linear (and therefore convex) ray potential, which we will denote by ψ (n)</p><p>r (x, y|x (n) , y (n) ). The variables x (n) and y (n) denote the position of the linearization. We handle the corner case where both branches are feasible to always take the first branch. In numerical experiments we observed that this choice is not critical, it makes no significant difference which branch is used in this case.</p><p>Next we state a Lemma that will be a crucial part of the optimization strategy detailed in Sec. 4.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Lemma 1. Given x (n)</head><p>, with x (n) ≥ 0 point-wise, we can findỹ <ref type="bibr">(n)</ref> such that all the constraints of the ray potential Eq. 11 are fulfilled and the value of the potential is minimal.</p><p>Intuitively, the lemma states that given the global pervoxel variable assignments x ℓ s , an assignment to the per-ray variables y ℓ i can be found. This is not surprising given that the whole information about the scene is contained in the variables x ℓ s (c.f . <ref type="figure" target="#fig_0">Fig. 2)</ref>. We prove the lemma by giving a construction.</p><p>Proof. We provide an algorithm that computesỹ (n) for each ray individually. First we setỹ</p><formula xml:id="formula_14">f,(n) i = min j≤i x f,(n) sj , which satisfiesỹ f,(n) i ≤ỹ f,(n) i−1 ,ỹ (n) iℓ ≥ 0. Now we iteratively increaseỹ ℓ,(n) i such that ℓ∈L\{f}ỹ ℓ,(n) i ≤ max(0,ỹ f,(n) i−1 − x f si ) andỹ ℓ,(n) i ≤ x ℓ si .</formula><p>For an optimal assignment we do this procedure in an increasing order of c ℓ i . The observation holds by construction.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Energy Minimization Strategy</head><p>Before we discuss the proposed energy minimization, we complete the formulation by including the regularization term.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Regularization Term</head><p>There are several choices of regularization terms for continuously inspired multi-label segmentation that can be inserted into our formulation <ref type="bibr" target="#b35">[36,</ref><ref type="bibr" target="#b1">2,</ref><ref type="bibr" target="#b29">30,</ref><ref type="bibr" target="#b36">37]</ref>. They are all convex relaxations and are originally posed in the continuum and discretized for numerical optimization. The main differences are the strength of relaxation and generality of the allowed smoothness priors. We directly describe the strongest, most general version, which allows for nonmetric and anisotropic smoothness <ref type="bibr" target="#b36">[37]</ref>. We only state the smoothness term and explain the meaning of the individual variables. For a thorough mathematical derivation we refer the reader to the original publications <ref type="bibr" target="#b36">[37,</ref><ref type="bibr" target="#b9">10]</ref>.</p><formula xml:id="formula_15">ψ S (x, z) = s∈Ω ψ s (x, z) with (14) ψ s (x, z) = ℓ,m:ℓ&lt;m φ ℓm s (z ℓm s − z mℓ s ) s.t. x ℓ s = m z ℓm s k , x ℓ s = m z mℓ s−e k k , ∀k, z ℓm s ≥ 0.</formula><p>The variables z ℓm s ∈ R 3 describe the transitions between the assigned labels. They indicate how much change there is from label ℓ to label m along the direction they point to and are hence called label transition gradients. For example, if there is a change from label ℓ to label m at voxel s along the first canonical direction, the corresponding z ℓm s is [1, 0, 0] T . The z ℓm s need to be non-negative in order to allow for general, non-metric smoothness priors <ref type="bibr" target="#b36">[37]</ref>. Therefore the difference z ℓm s − z mℓ s is used to allow for arbitrary transition directions. The variable e k denotes the canonical basis vector for the k-th component, i.e. e 1 = [1, 0, 0] T . φ ℓm s : R 3 → R + 0 are convex positively 1-homogeneous functions that act as anisotropic regularization of a surface between label ℓ and m. Note that the regularization term takes into account label combinations. This enables us to select class-specific smoothness priors, which depend on the surface direction and the involved labels and are inferred from training data <ref type="bibr" target="#b9">[10]</ref>. For example, a surface between ground and building is treated differently from a transition between free space and building. The following lemma will be necessary for our optimization strategy. Lemma 2. Given x (n) , z (n) , with x ℓ,(n) s ≥ 0 ∀s, ℓ an assignmentz (n) can be determined that fulfills the constraints of the regularization term.</p><p>For the full proof of the lemma we refer the reader to the supplementary material, here we only state the main idea of the proof. In a first step we project our current solution onto the space spanned by the equality constraints. This leads to an initialization of thez (n) which fulfills the equality constraints but might lead to negative assignments to the z ℓm s .</p><p>To get a non-negative solution, we notice that as long as there is a z ℓ ′ ,m ′ s which is negative we can find ℓ ′′ and m ′′ such that we can increase z ℓ ′ ,m ′ s by ǫ along with changing z ℓ ′′ ,m ′ s , z ℓ ′ ,m ′′ s , z ℓ ′′ ,m ′′ s by the same ǫ in order not to affect the equality constraints.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Optimization</head><p>The goal of this section is to minimize the proposed energy using the non-convex ray potential Eq. 11. Optimizing non-convex functionals is an inherently difficult task. One often successfully utilized strategy is the so called majorizeminimize strategy (for example <ref type="bibr" target="#b17">[18]</ref>). The idea is to majorize the non-convex functional in some way with a surrogate convex one. Alternating between minimizing the surrogate convex energy, which we will call the minimization step in the following, and recomputing the surrogate convex majorizer, which we will denote the majorization step, leads to an algorithm that decreases the energy at each step and hence converges.</p><p>Note that we already discussed the majorization step of the ray potential in Sec. 3, Eq. 13. Together with the regularizer we end up with a surrogate convex but non-smooth program.</p><formula xml:id="formula_16">E (n) (x, y, z) = ψ (n) R (x, y|x (n) , y (n) ) + ψ S (x, z) (15) s.t. ℓ∈L x ℓ s = 1 ∀s, x ℓ s ∈ [0, 1] ∀s ∈ Ω, ∀ℓ ∈ L.</formula><p>This energy can be globally minimized using the iterative first order primal-dual algorithm <ref type="bibr" target="#b23">[24]</ref>. However, there is no guarantee that the energy during the iterative minimization decreases monotonically nor that the constraints are fulfilled before convergence. One solution is to run the convex optimization until convergence however in practice this leads to slow convergence. Therefore, we follow a different strategy where we regularly run the majorization step during the optimization of the energy. Before we can state the final algorithm we present the following lemma.</p><p>Lemma 3. Given x (n) , y (n) , z (n) , in the optimization problem Eq. 15, which do not necessarily fulfill the constraints. A feasible solutionx (n) ,ỹ (n) ,z (n) to the ray potential Eq. 11 and the regularization term Eq. 14 can be constructed in a finite number of steps.</p><p>Proof. To fulfill the constraints ℓ∈L x ℓ s = 1 and x ℓ s ∈ [0, 1] we project the variables x (n) individually per voxel s to the unit probability simplex <ref type="bibr" target="#b5">[6]</ref>. Subsequent application of Lemma 1 and 2 leads to the desired result.</p><p>Our final majorize-minimize optimization strategy can now be stated as follows.</p><p>Majorization step Using the current variables x (n) , y (n) , z (n) and Lemma 3 a feasible solutionx (n) ,ỹ (n) ,z (n) can be found. If the new energy is lower or equal than the last known energy the linearization Eq. 13 is applied and the new optimization problem is passed to the minimization step. Otherwise the whole majorization step is skipped and the old variables x (n) , y (n) , z (n) are passed to the minimization step.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Minimization step</head><p>The primal-dual algorithm <ref type="bibr" target="#b23">[24]</ref> is run on the surrogate convex program for a fixed number of p iterations. For guaranteed convergence, the primal dual gap η can be evaluated and the minimization step can be restarted until we have η ≤ f (n) with a function f (n) → 0 for n → ∞. In practice, we get a good convergence behavior without a restart.</p><p>The majorization step either does no changes to the optimization state or finds a better or equal solution with a new linearization of the non-convex part because the linearization does not change the energy. If no changes are done this can be due to two reasons. Either the current solution was worse than the last known one, or the majorization stayed the same. In the latter case the primal-dual gap could reveal convergence and as a consequence we know that we arrived at a critical point or corner point of the original non-convex energy. In any other case the minimization step is run again and due to the convexity of the surrogate convex function a better solution or the optimality certificate will be found. The above procedure could stop at a non-critical point 1 due to the kink in the maximum in Eq. 12. To guarantee convergence to a critical point, the visibility consistency constraint Eq. 6 can be smoothed slightly e.g. using <ref type="bibr" target="#b22">[23]</ref>. Again, in our experiments this was unnecessary to achieve good convergence behavior.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experiments</head><p>Before we discuss the experiments, we describe the input data and state the costs c ℓ ri used for the ray potentials.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Input Data</head><p>We are using our approach for two different tasks: standard dense 3D reconstruction and dense semantic 3D reconstruction. In both cases, the initial input is a set of images with associated camera poses. Those camera poses are either provided with the dataset (as in the Middlebury Benchmark <ref type="bibr" target="#b26">[27]</ref> or in the Thin Road Sign dataset <ref type="bibr" target="#b31">[32]</ref>) or computed via structure from motion algorithm <ref type="bibr" target="#b2">[3]</ref> (as in the semantic reconstruction experiments). We computed the depth maps using plane sweeping stereo for Middlebury Benchmark and semantic reconstruction datasets, while utilizing those already provided with the dataset for the experiment with Thin Road Sign. The patch similarity measure and Comp vs. Error (higher curve better) plots for the Dino Full dataset (for details on these plots see <ref type="bibr" target="#b26">[27]</ref>).</p><p>for stereo matching was zero-mean normalized cross correlation. For the dense semantic 3D reconstruction experiments, we computed per-pixel semantic labels using <ref type="bibr" target="#b16">[17]</ref>, trained on the datasets from <ref type="bibr" target="#b0">[1]</ref>, <ref type="bibr" target="#b27">[28]</ref> and <ref type="bibr" target="#b9">[10]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Ray Potential Costs</head><p>In case of a two-label problem, there exists only one single label ℓ ∈ L. This allows us to directly insert the visibility consistency, Eq. 9, into the objective. In this case the majorization can directly be done on the objective instead of the visibility constraint, leading to a more compact optimization problem with a smaller memory footprint. Like <ref type="bibr" target="#b9">[10]</ref>, we assume exponential noise on the depth maps and define the assignments to the costs c ℓ ri , given the position of the depth measurement along the ray r as i ′ as</p><formula xml:id="formula_17">c ℓ ri := min{0, λ|i − i ′ | − K}.<label>(16)</label></formula><p>The parameters λ ≥ 0 and K are chosen such that the potential captures the uncertainty of the depth measurement. For the multi-class case we also assume exponential noise on the depth data and independence between the depth measurement and the semantic measurement. Therefore the combined costs read as</p><formula xml:id="formula_18">c ℓ ri := min{0, λ|i − i ′ | − K} + σ ℓ ,<label>(17)</label></formula><p>with σ ℓ being the response of the semantic classifier for the respective pixel. This is the same potential that <ref type="bibr" target="#b9">[10]</ref> approximates with unary potentials.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">Middlebury Multi-View Stereo Benchmark</head><p>We evaluate our method for dense 3D reconstuction on the Middlebury benchmark <ref type="bibr" target="#b26">[27]</ref>. We ran our algorithm on all 6 datasets (using the same parameters). Two quantitative measures are defined in this benchmark paper: accuracy (Acc) and completeness (Comp). In terms of accuracy our algorithm sets a new state-of-the-art for the Dino Full and Dino Ring datasets (c.f . <ref type="figure" target="#fig_2">Fig. 5</ref>). An actual ranking of the benchmark is difficult because there is no default, commonly accepted, way to combine the two measures. Taking into account both measures we are close to the state-of-theart on all datasets (results can be found online 2 ).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.4.">Street Sign Dataset</head><p>A challenging case for volumetric 3D reconstruction are thin objects. When approximating the data term, which is naturally given as a ray potential in the 2.5D input data, by unary or pairwise potentials the data terms from both sides are prone to cancel out. Similarly, when using visual hulls a slight misalignment of the two sides might generate an empty visual hull. These are the reasons why thin objects are considered to be a hard case in volumetric 3D reconstruction. We evaluate the performance of our algorithm for such objects on the street sign dataset from <ref type="bibr" target="#b31">[32]</ref>. The dataset consists 50 images of a street sign with corresponding depth maps. As depicted in <ref type="figure">Fig 6</ref> the thin surface does not pose any problem to our method, thanks to an accurate representation of the input data in the optimization problem. To illustrate the result obtained with a standard volumetric 3D reconstruction algorithm we ran our implementation of the TV-Flux fusion from <ref type="bibr" target="#b34">[35]</ref> on the same data. Note that this dataset is particularly hard because the two sides actually interpenetrate as detailed in <ref type="bibr" target="#b31">[32]</ref>.</p><p>Example Images TV-Flux (high) TV-Flux (medium) TV-Flux (low) Our Method <ref type="figure">Figure 6</ref>: Reconstructions of the street sign dataset from <ref type="bibr" target="#b31">[32]</ref> using the TV-Flux fusion from <ref type="bibr" target="#b34">[35]</ref> with three different smoothness settings (high/medium/low), and our proposed method.</p><p>Input Image Häne et al. 2013 <ref type="bibr" target="#b9">[10]</ref> Savinov et al. 2015 <ref type="bibr" target="#b25">[26]</ref> Proposed Method <ref type="figure">Figure 7</ref>: Semantic 3D Reconstructions: we improve in weakly observed areas and resolve unary potential artifacts at the same time. Five semantic labels are used: ground, building, vegetation, clutter, free space.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.5.">Multi-Label Experiments</head><p>We evaluate our formulation for dense semantic 3D reconstruction on several real-world datasets. We show our results side-by-side with the method of <ref type="bibr" target="#b9">[10]</ref> and <ref type="bibr" target="#b25">[26]</ref> in Figs. 7 and 1. Our method uses the same smoothness prior as <ref type="bibr" target="#b9">[10]</ref>. For all the datasets we observe that the approximation of the data cost with a unary potential in <ref type="bibr" target="#b9">[10]</ref> artificially fattens corners and thin objects (e.g. pillars or tree branches). In the close-ups (c.f . <ref type="figure">Fig. 1)</ref> we see that such a data term recovers significantly less surface detail with respect to our proposed method. This problem has been addressed in <ref type="bibr" target="#b25">[26]</ref>, but their discrete graph-based approach suffers from metrication artifacts, cannot be combined with the class-specific anisotropic smoothness prior and does not lead to smooth surfaces (c.f . <ref type="figure">Fig. 1</ref>). Moreover, their coarse-to-fine scheme produces artifacts in the reconstructions. Our approach takes the best of both worlds, the ray potential part ensures an accurate position of the observed surfaces, while the anisotropic smoothness prior faithfully handles weakly observed areas.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>In this paper we proposed an approach for using ray potentials together with continuously inspired surface regularization. We demonstrated that a direct convex relaxation is too weak to be used in practice. We resolved this issue by adding a non-convex constraint to the formulation. Further, we detailed an optimization strategy and gave an extensive evaluation on two-label and multi-label datasets. Our algorithm allows for a general multi-label ray potential, at the same time it achieves volumetric 3D reconstruction with high accuracy. In semantic 3D reconstruction we are able to overcome limitations of earlier methods.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 2 :</head><label>2</label><figDesc>Variable Types: (left) the global x ℓ s , indicate the label assigned to each voxel, (right) the per-ray variables y ℓ ri describe the visible surface.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 3 :</head><label>3</label><figDesc>Example of variable assignments along a single viewing ray for a three-label problem.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 5 :</head><label>5</label><figDesc>Middlebury Multi-View Stereo Benchmark: (left) Reconstructions of the Dino Ring and Temple Ring datasets computed by our algorithm, (left-most) view 1, (right-most) view 2, (right, top) benchmark's competitive methods in inverse chronological order (smaller Acc and higher Comp numbers are better), (right, bottom) Acc vs. Ratio (lower curve better)</figDesc></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">similar to block-coordinate descent based message passing algorithms</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">http://vision.middlebury.edu/mview/eval/</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0" />
+			</div>
+
+			<div type="annex">
+<div xmlns="http://www.tei-c.org/ns/1.0" />			</div>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Segmentation and recognition using structure from motion point clouds</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">J</forename><surname>Brostow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Fauqueur</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cipolla</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">A convex approach to minimal partitions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Chambolle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pock</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">SIAM Journal on Imaging Sciences</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">5</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Discovering and exploiting 3D symmetries in structure from motion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Cohen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">N</forename><surname>Sinha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">A volumetric method for building complex models from range images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Levoy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer graphics and interactive techniques</title>
+		<imprint>
+			<date type="published" when="1996" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Gradient flows for optimizing triangular mesh-based surfaces: Applications to 3D reconstruction problems dealing with visibility</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Delaunoy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Prados</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Efficient projections onto the ℓ1-ball for learning in high dimensions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Duchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Shalev-Shwartz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Singer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Chandra</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International conference on Machine learning (ICML)</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Accurate, dense, and robust multiview stereopsis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Furukawa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ponce</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. on Pattern Analysis and Machine Intelligence</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<biblScope unit="page" from="1362" to="1376" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Massively parallel multiview stereopsis by surface normal diffusion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Galliani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Lasinger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Schindler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">An occupancy -depth generative model of multi-view images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Gargallo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sturm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Pujades</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Asian Conference on Computer Vision (ACCV)</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Joint 3D scene reconstruction and class segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Häne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Cohen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Angst</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Probabilistic visibility for multi-view stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Hernandez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Vogiatzis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cipolla</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">An experimental comparison of discrete and continuous shape optimization methods</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Klodt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Schoenemann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kolev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Schikora</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision-ECCV 2008</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="332" to="345" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Integration of multiview stereo and silhouettes via convex functionals on convex domains</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kolev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Multi-camera scene reconstruction via graph cuts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Kolmogorov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zabih</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Generalized multi-camera scene reconstruction using graph cuts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Kolmogorov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zabih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gortler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Energy Minimization Methods in Computer Vision and Pattern Recognition (EMMCVPR)</title>
+		<imprint>
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Efficient multi-view reconstruction of large-scale scenes using interest points, delaunay triangulation and graph cuts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Labatut</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-P</forename><surname>Pons</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Keriven</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Associative hierarchical CRFs for object class image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ladicky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H S</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Optimization transfer using surrogate objective functions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Lange</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">R</forename><surname>Hunter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Yang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of computational and graphical statistics</title>
+		<imprint>
+			<biblScope unit="issue">6</biblScope>
+			<date type="published" when="2000" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Global optimization for shape fitting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">S</forename><surname>Lempitsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Boykov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<monogr>
+		<title level="m" type="main">Detailpreserving and content-aware variational multi-view stereo reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zuo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Meng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhang</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1505.00389</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Ray Markov random fields for image-based 3D modeling: Model and efficient inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">B</forename><surname>Cooper</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Statistical inverse ray tracing for image-based 3D modeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">B</forename><surname>Cooper</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Transactions on Pattern Analysis and Machine Intelligence (TPAMI)</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Smooth minimization of non-smooth functions. Mathematical programming</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Nesterov</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Diagonal preconditioning for first order primal-dual algorithms in convex optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pock</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Chambolle</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">2011 IEEE International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Change detection in a 3-d world</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pollard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">L</forename><surname>Mundy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Discrete optimization of ray potentials for semantic 3D reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Savinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ladicky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Häne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">A comparison and evaluation of multi-view stereo reconstruction algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Diebel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Scharstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Computer Society Conference on Computer Vision and Pattern Recognition (CVPR&apos;2006)</title>
+		<imprint>
+			<publisher>IEEE Computer Society</publisher>
+			<date type="published" when="2006-06" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Texton-Boost: Joint appearance, shape and context modeling for multi-class object recognition and segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Criminisi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Multi-view stereo via graph cuts on the dual of an adaptive tetrahedral mesh</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">N</forename><surname>Sinha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Mordohai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Generalized ordering constraints for multilabel optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Strekalovskiy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Towards probabilistic volumetric reconstruction using ray potentials</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">O</forename><surname>Ulusoy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on 3D Vision (3DV)</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Point-based 3D reconstruction of thin objects</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Ummenhofer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Brox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+		<title level="m" type="main">High accuracy and visibility-consistent dense multiview stereo. Transactions on Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-H</forename><surname>Vu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Labatut</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-P</forename><surname>Pons</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Keriven</surname></persName>
+		</author>
+		<imprint>
+			<biblScope unit="volume">2012</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Multi-view depth map estimation with cross-view consistency</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Resch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lensch</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the British Machine Vision Conference</title>
+		<meeting>the British Machine Vision Conference</meeting>
+		<imprint>
+			<publisher>BMVA Press</publisher>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Fast and high quality fusion of depth maps</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zach</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">3D Data Processing, Visualization and Transmission</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Fast global labeling for real-time stereo using multiple plane sweeps</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Gallup</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-M</forename><surname>Frahm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Niethammer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Workshop on Vision, Modeling and Visualization (VMV)</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">What is optimized in convex relaxations for multilabel problems: Connecting discrete and continuously inspired MAP inference</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Hane</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI)</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">A globally optimal algorithm for robust TV-L1 range image integration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pock</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Accurate and occlusion-robust multi-view stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Stamatopoulos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">S</forename><surname>Fraser</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ISPRS Journal of Photogrammetry and Remote Sensing</title>
+		<imprint>
+			<biblScope unit="volume">109</biblScope>
+			<biblScope unit="issue">7</biblScope>
+			<biblScope unit="page" from="47" to="61" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

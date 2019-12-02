@@ -1,0 +1,2093 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Learning Weight Uncertainty with Stochastic Gradient MCMC for Shape Classification</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Chunyuan</forename><surname>Li</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Duke University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andrew</forename><surname>Stevens</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Duke University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Changyou</forename><surname>Chen</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Duke University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yunchen</forename><surname>Pu</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Duke University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Zhe</forename><surname>Gan</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Duke University</orgName>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Lawrence</forename><surname>Carin</surname></persName>
+							<email>lcarin@duke.edu</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Duke University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Learning Weight Uncertainty with Stochastic Gradient MCMC for Shape Classification</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:43+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Learning the representation of shape cues in 2D &amp; 3D objects for recognition is a fundamental task in computer vision. Deep neural networks (DNNs) have shown promising performance on this task. Due to the large variability of shapes, accurate recognition relies on good estimates of model uncertainty, ignored in traditional training of DNNs, typically learned via stochastic optimization. This paper leverages recent advances in stochastic gradient Markov Chain Monte Carlo (SG-MCMC) to learn weight uncertainty in DNNs. It yields principled Bayesian interpretations for the commonly used Dropout/DropConnect techniques and incorporates them into the SG-MCMC framework. Extensive experiments on 2D &amp; 3D shape datasets</head><p>and various DNN models demonstrate the superiority of the proposed approach over stochastic optimization. Our approach yields higher recognition accuracy when used in conjunction with Dropout and Batch-Normalization.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Shape is an important representation in visual object recognition. Shape characterizes the boundary/surface of objects, as opposed to other properties such as color, illumination or texture. In computer vision, shapes exist primarily as 2D binary image silhouettes and 3D models of external surfaces. <ref type="figure" target="#fig_0">Fig. 1</ref> shows examples of shape data. The availability of large public-domain databases of 2D image and 3D models (e.g. ImageNet <ref type="bibr" target="#b60">[61]</ref> and ShapeNet <ref type="bibr" target="#b10">[11]</ref>) has generated demand for leveraging shape information to find semantic categories of objects. The success of recognition hinges on the geometric and topological representation of shape properties. Traditional recognition methods use hand-crafted features to maintain representation invariance under certain classes of transformations. This has lead to excellent performance in specific domains, e.g., spectral geometry and topological persistence methods for non-rigid shapes <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b44">45]</ref>. Shapes in the real-world, however, manifest rich withinclass variability. This variability is due to, for example, object articulation, change of viewpoint in 2D, and modeling error in 3D (see examples in <ref type="figure" target="#fig_0">Fig. 1</ref>). Shape variability inhibits "shallow" engineered representations from generalizing to a broad range of domains and tasks. Recently, deep neural networks (DNNs) have gained popularity in computer vision and pattern recognition <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b62">63]</ref>. They can learn "deep" representations from either raw data or traditional features to achieve higher discriminative power.</p><p>DNNs are usually trained using stochastic optimization methods such as stochastic gradient descent (SGD) <ref type="bibr" target="#b59">[60]</ref>. A regularizer imposed on the model parameters can be viewed as the log of a prior on the distribution of the parameters, with such a prior connected to a Bayesian perspective. From this standpoint optimizing the cost function may be viewed as a maximum a posteriori (MAP) estimate of model parameters. The MAP solution is a single point estimate, ignoring model uncertainty <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b25">26]</ref>. Such a point estimation often makes over-confident predictions on test data <ref type="bibr" target="#b33">[34,</ref><ref type="bibr" target="#b77">78]</ref>, especially when the data has significant variability.</p><p>A principled way to incorporate uncertainty during learning is to use Bayesian inference <ref type="bibr" target="#b50">[51,</ref><ref type="bibr" target="#b54">55]</ref>. Unfortunately, exact Bayesian learning of DNNs is generally intractable. One approximate learning procedure is Markov Chain Monte Carlo (MCMC), which can produce samplebased approximations to the posterior <ref type="bibr" target="#b54">[55]</ref>. An advantage of MCMC is its asymptotic consistency with the true pos- terior distribution. In fact, MCMC gained extensive attention a decade ago in computer vision <ref type="bibr" target="#b81">[82]</ref>, with broad applications ranging from image segmentation <ref type="bibr" target="#b70">[71]</ref> and human pose estimation <ref type="bibr" target="#b39">[40]</ref> to feature correspondence <ref type="bibr" target="#b18">[19]</ref>. Despite appealing theoretical properties and excellent empirical results, there is a gap between the limited scalability of conventional MCMC, and an increasingly massive amount of visual/geometric data. This paper seeks fill this gap, based on recent MCMC developments, which have interesting connections to optimization-based approaches. Specifically, in this paper, we leverage recent advances in stochastic gradient Markov Chain Monte Carlo (SG-MCMC) algorithms <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b40">41,</ref><ref type="bibr" target="#b41">42,</ref><ref type="bibr" target="#b77">78]</ref> to train DNNs. One merit of this family of algorithms is that they are highly scalable. As with an iteration of SGD, SG-MCMC only requires the evaluation of the gradient on a small mini-batch of data. It has been shown that SG-MCMC methods converge to the true posterior by using a slowly-decreasing sequence of step sizes <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b68">69]</ref>. This means that instead of training a single network, SG-MCMC trains an ensemble of networks, where each network has its weights drawn from a shared posterior distribution. A schematic comparison of optimization and Bayesian learning of DNNs is shown in <ref type="figure" target="#fig_1">Fig. 2</ref>.</p><p>The contributions of this paper are summarized as follows: i) A unified Bayesian treatment is provided for DNNs, whose weight uncertainty is learned via SG-MCMC. ii) We provide insights on the interpretation of Dropout <ref type="bibr" target="#b63">[64]</ref> and DropConnect <ref type="bibr" target="#b73">[74]</ref> from the perspective of SG-MCMC, which also allows the use of Batch-Normalization <ref type="bibr" target="#b28">[29]</ref>. iii) Applications to a wide range of shape classification problems demonstrate the advantages of SG-MCMC over optimization.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>A number of recent works <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b25">26]</ref> demonstrate the utility of Bayesian learning of DNNs, and advocate the incorporation of uncertainty estimates during model training to improve robustness and performance. In the deep learning literature, two regularization schemes have been developed, Dropout <ref type="bibr" target="#b63">[64]</ref> and DropConnect <ref type="bibr" target="#b73">[74]</ref>. These schemes help prevent overfitting of the DNN by adding noise to local hidden units and global weights, respectively. In fact, it is possible to view Dropout as an approximate Bayesian learning technique that incorporates uncertainty during learning <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b32">33]</ref>. Complementary to that, we show later that DropConnect can be viewed as a variant of SG-MCMC.</p><p>Deep learning has recently been employed in shape recognition, from the perspective of two broad categories. The first is the use of deep models with stochastic hidden layers, including deep belief networks <ref type="bibr" target="#b8">[9]</ref> or the autoencoder <ref type="bibr" target="#b79">[80]</ref>; these methods discover latent representations of shapes from their hand-crafted features, such as spectral descriptors <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b66">67]</ref>. The second category is the adoption of deterministic layers, i.e., feedforward neural networks. A discriminative non-linear mapping is learned in <ref type="bibr" target="#b20">[21]</ref> to embed traditional shape features. Moreover, the feedforward CNN has been extended to learn representations from raw shape data. Interestingly, due to the intrinsic complexity of shape geometry, the convolution operator has been applied in a variety of spaces, including multi-view projections <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b65">66,</ref><ref type="bibr" target="#b74">75]</ref>, 3D volumes <ref type="bibr" target="#b78">[79]</ref>, curvature space <ref type="bibr" target="#b30">[31]</ref> and meshed graphs <ref type="bibr" target="#b6">[7]</ref>. However, none of these methods consider uncertainty during training. We extend these models with Bayesian learning, and show improved performance across a broad range of applications.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Deep Neural Nets: A Bayesian Perspective</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Predictive Models</head><p>Assume we are given data D = {d 1 , · · · , d N }, where d n (x n , y n ), with input object/feature x n ∈ R D and output label y i ∈ Y, with Y being the output discrete label space. A model characterizes the relationship from x to y with parameters θ. The parameters θ are assigned a prior distribution p(θ). The corresponding data likelihood is p(D|θ) = N i=1 p(d i |θ). Following Bayes rule, the posterior is p(θ|D) ∝ p(θ)p(D|θ).</p><p>For testing, given a test inputx (with missing labelỹ), the uncertainty learned in training is transferred to prediction, yielding the posterior predictive distribution in <ref type="bibr" target="#b0">(1)</ref>.</p><formula xml:id="formula_0">p(ỹ|x, D) = E p(θ|D) [p(ỹ|x, θ)] = θ p(ỹ|x, θ)p(θ|D) . (1)</formula><p>The predicted distribution ofỹ may be viewed in terms of model averaging across parameters, based on the learned p(θ|D); this should be contrasted with learning a single point estimate of θ based on D.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">From Logistic Regression to DNNs</head><p>One simple Bayesian predictive model is logistic regression (LR). For binary classification, the likelihood is:</p><formula xml:id="formula_1">p(y|x, θ) g θ (x) = 1 1 + exp (−(W ⊤ x + c)) ,<label>(2)</label></formula><p>where a Gaussian prior N (0, σ 2 ) is usually placed for each element of the model parameters θ {W, c}; the variance σ 2 imposes the amount of prior uncertainty in model parameters.</p><p>In complex real-world modeling such as shape classification, such a simple parametric model is often not expressive enough for robust generalization. DNNs extend LR by parameterizing the form of relationship from x to y, as a composition of a set of nonlinear functions (e.g. the sigmoid function used in LR). Specifically, an L-layer DNN for multi-class classification puts a softmax function on the output of a set of function compositions <ref type="bibr" target="#b50">[51,</ref><ref type="bibr" target="#b54">55]</ref>:</p><formula xml:id="formula_2">p(y|x, θ) = softmax g θ L • · · · • g θ0 (x) ,<label>(3)</label></formula><p>where • denotes function composition, softmax(x) e x /( i e xi ). Similarly, Gaussian priors are adopted on model parameters θ = {θ 0 , . . . , θ L }. As a result, one may consider the LR as a "zero-layer" neural network.</p><p>Various DNN models are defined by specifying g θ ℓ for each layer. In the following, we describe two canonical DNNs: Feedforward Neural Networks (FNNs) and Convolutional Neural Networks (CNNs). These serve as major building blocks to construct more advanced DNN models (e.g. VGG networks <ref type="bibr" target="#b62">[63]</ref>). By choosing prior distributions for the network weights, all DNN models can be viewed as in the family of Bayesian predictive models <ref type="bibr" target="#b71">[72]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Feedforward Neural Networks</head><p>The FNN can learn sophisticated functional representations from input/output examples <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b25">26]</ref>. This can be further employed to discover discriminative feature representations <ref type="bibr" target="#b20">[21]</ref>. Specifically, it sends the input data forward from the bottom layer to the top layer with pointwise nonlinear functions between each layer. In the ℓ-th layer, g θ ℓ in (3) can be the sigmoid function, the hyperbolic tangent, and more recently, the Rectified Linear Unit (ReLU) <ref type="bibr" target="#b22">[23]</ref>. ReLU takes the form:</p><formula xml:id="formula_3">g θ ℓ (x) = max(0, W ⊤ ℓ x + c ℓ ) , with θ ℓ = (W ℓ , c ℓ ) .</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Convolutional Neural Networks</head><p>The CNN is a special class of FNNs, typically applied to data with spatial or temporal covariates. The CNN employs the convolution operation at each layer of the feedforward network. CNNs are commonly used for learning deep feature representations from raw data <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b34">35,</ref><ref type="bibr" target="#b58">59,</ref><ref type="bibr" target="#b62">63,</ref><ref type="bibr" target="#b78">79]</ref>. The nonlinear function g θ ℓ in CNN is typically composed of convolution and pooling operators <ref type="bibr" target="#b37">[38]</ref>. The CNN can take advantage of the properties of natural signals <ref type="bibr" target="#b36">[37]</ref> such as images and shapes, which exhibit high local correlations <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b11">12]</ref> and rich shared components <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b80">81]</ref>. Given inputs in the form of multiple arrays (x k ℓ−1 )</p><formula xml:id="formula_4">K ℓ−1 k ℓ−1 =1</formula><p>from the (ℓ − 1)-th layer, for the k ℓ -th filter bank W ℓ in the ℓ-th layer, the output is</p><formula xml:id="formula_5">g W k ℓ (x k ℓ−1 ) = Pool k ℓ−1 W ⊤ k ℓ * x k ℓ−1 ,</formula><p>where * is the convolution operator, Pool is the pooling operator (e.g., max-pooling <ref type="bibr" target="#b37">[38]</ref>). The parameters for the ℓ-th layer are θ ℓ {W k ℓ }.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Scalable Learning with SG-MCMC</head><p>We describe a general framework for SG-MCMC algorithms in this section, but recommend <ref type="bibr" target="#b77">[78,</ref><ref type="bibr" target="#b40">41]</ref> for more intuitive explanations for the employed algorithms. SG-MCMC are derived from a corresponding stochastic differential equation (SDE), represented in the general form of an Itô diffusion:</p><formula xml:id="formula_6">dΨ t = F (Ψ t )dt + δ(Ψ t )dW t ,<label>(4)</label></formula><p>where Ψ t ∈ R K is the model state, W t is Brownian motion, and t is the (continuous) time index. The model state could represent model parameters θ <ref type="bibr" target="#b77">[78]</ref>, or an augmented state space (e.g., with momentum <ref type="bibr" target="#b14">[15]</ref>), in which case we discard the auxiliary variables to perform the desired marginalization given samples from the diffusion <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b19">20]</ref>. The function F : R K → R K is the deterministic drift, and δ : R K → R K×K is the diffusion matrix. It has been shown that with appropriate functions F and δ, the stationary marginal distribution ρ(θ), of an Itô diffusion (4) has a marginal distribution equal to the posterior distribution <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b49">50]</ref>.</p><p>In the Bayesian setup in Section 3.1, this means ρ(θ) ∝ exp(−U (θ)), where U is the unnormalized negative logposterior:</p><formula xml:id="formula_7">U − N i=1 log p(di|θ) + log p(θ) .<label>(5)</label></formula><p>To deal with large-scale datasets, an unbiased stochastic gradient is computed for each mini-batch of data during the learning procedure, e.g.</p><formula xml:id="formula_8">Ut − N |St| i∈S t log p(di|θ) + log p(θ)<label>(6)</label></formula><p>for the t-th minibatch. Here S t ⊂ {1, 2, · · · , N } chooses the mini-batch data points, and | · | is the cardinality of a set.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">SG-MCMC Algorithms</head><p>DNNs often exhibit pathological curvature and saddle points in their parameter spaces <ref type="bibr" target="#b17">[18]</ref>. Efficient learning requires a sampler to adapt random walks according to the local geometry of the parameter space (highly related concepts have been considered in optimization-based methods, e.g. RMSprop <ref type="bibr" target="#b69">[70]</ref> and Adam <ref type="bibr" target="#b31">[32]</ref>, as discussed further below). A variant of SG-MCMC that incorporates geometry information is the stochastic gradient Riemannian Langevin dynamics (SGRLD). It specifies an Itô diffusion as:</p><formula xml:id="formula_9">F = −G −1 ∇ θŨ (θ) − Γ(θ), and δ = √ 2G − 1 2 . (7)</formula><p>There are many choices for G, one of which is G G(θ) = I θ , the Fisher information metric <ref type="bibr" target="#b56">[57]</ref>, and Γi(θ) = j ∂G −1 ij (θ)) ∂θ j describes how the curvature of the manifold defined by G(θ) changes for small changes in θ. For the many models of interest, direct computation of the Fisher information metric is impractical.</p><p>In SG-MCMC, one draws samples from <ref type="formula" target="#formula_6">(4)</ref>, which usually does not have an analytic form. As a result, an ǫdiscretization of the continuous SDE can be used to approximate (4), where ǫ represents the step size. The approximate samples θ t are then collected via a Markov Chain with the following updates, with I being the identity matrix:</p><formula xml:id="formula_10">θ t ←θ t−1 − ǫF (θ t−1 ) + √ ǫδ(θ t−1 )ξ, ξ ∼ N (0, I) . (8)</formula><p>In the testing stage, these samples are used to construct a sample-based uncertainty estimation to the posterior predictive distribution defined in <ref type="formula">(1)</ref>:</p><formula xml:id="formula_11">p(ỹ|x, D) ≈ 1 T T t=1 p(y|x, θ t ) .<label>(9)</label></formula><p>SGLD SGRLD reduces to the stochastic gradient Langevin dynamics (SGLD) <ref type="bibr" target="#b77">[78]</ref> when G = I (thus Γ(θ) vanishes). This "vanilla" SGLD is the first attempt in line of work of SG-MCMC. We can see that Robbins-Monro type algorithms (e.g. SGD) <ref type="bibr" target="#b59">[60]</ref> which stochastically optimize a likelihood, can be combined with Langevin dynamics <ref type="bibr" target="#b55">[56]</ref> where Gaussian noise is injected during parameter updates.</p><p>In the SGLD algorithm, we define the stochastic gradient evaluated at position θ t with mini-batch S t as:</p><formula xml:id="formula_12">g t g(θ t ; S t ) = 1 |S t | i∈St ∇ θ log p(d i |θ t ) .<label>(10)</label></formula><p>Consequently, one SGLD update on model parameters consists of 2 parts: (i) an SGD-like update, and (ii) Gaussian noise injection, making the algorithm explore the parameter space, rather than converging to a MAP solution. The procedure is summarized in Algorithm 1. We note that SGLD updates all parameters with the same step size, resulting in slow mixing when the components of θ have different curvature, which is particularly true in the case of DNNs.</p><p>Preconditioned SGLD As alluded to above, directly incorporating I θ is intractable in DNNs due to the infeasibility of representing the Fisher information matrix. Preconditioned SGLD (pSGLD) <ref type="bibr" target="#b40">[41]</ref> instead uses adaptive preconditioners borrowed from stochastic optimization <ref type="bibr" target="#b69">[70,</ref><ref type="bibr" target="#b31">32]</ref> to construct a feasible and effective G. It equalizes the gradient with the following construction of G, so that the step size is adaptive among different dimensions: </p><formula xml:id="formula_13">g t ← 1 |St| i∈St ∇ θ log p(d i |θ t ); %Parameter update ξ t ∼ N (0, ǫI); θt+1 ← θt + ǫ 2 ∇ θ log p(θt) + Ng t ) + ξ t ;</formula><p>end Algorithm 2: Practical pSGLD algorithm Input: Default settings for the tested models:</p><formula xml:id="formula_14">ǫ = 1×10 −3 , λ = 10 −8 , β1 = 0.99. Initialize: v 0 ← 0, random θ 1 ; for t = 1, 2, . . . , T do %Estimate gradient from minibatch St g t ← 1 |St| i∈St ∇ θ log p(d i |θ t ); %Preconditioning v t ← β 1 v t−1 + (1 − β 1 )g t ⊙g t ; G −1 t ← diag 1 ⊘ λ1 + v 1 2 t ; %Parameter update ξ t ∼ N (0, ǫG −1 t ); θt+1 ← θt + ǫ 2 G −1 t ∇ θ log p(θt) + Ng t ) + ξ t ; end v t ← β 1 v t−1 + (1 − β 1 )g t ⊙g t ,<label>(11)</label></formula><formula xml:id="formula_15">G −1 t ← diag 1 ⊘ λ1 + v 1/2 t ,<label>(12)</label></formula><p>where {v t } are intermediate variables, β 1 , λ are hyper parameters, ⊙ is an element-wise product, and ⊘ elementwise division. By transforming the landscape of the parameter space to be more uniformly curved, it is possible for the sampler to move much faster. The effect of Γ(θ) is not needed in our case since θ t contributes little in the construction of v t (thus the derivative w.r.t. θ t is small), we thus exclude it from the practical procedure, shown in Algorithm 2 <ref type="bibr" target="#b40">[41]</ref>. pSGLD maintains faster mixing with trivial overhead per iteration than SGLD.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">From Stochastic Optimization to SG-MCMC</head><p>SG-MCMC methods are closely related to conventional stochastic optimization. The main difference is the injection of Gaussian noise during parameter updates. With the correct amount of noise, the algorithm becomes a posterior sampling method, instead of a MAP optimization method. For example, SGLD has been shown to be SGD with N (0, ǫI) <ref type="bibr" target="#b77">[78]</ref>; similarly pSGLD can be viewed as RM-Sprop with N (0, ǫG −1 ) <ref type="bibr" target="#b40">[41]</ref>, and SGHMC is momentum SGD with injecting Gaussian noise <ref type="bibr" target="#b14">[15]</ref>. In fact, if we an-neal the system temperature of the Itô diffusion to zero, in the limit SG-MCMC becomes stochastic optimization <ref type="bibr" target="#b12">[13]</ref>.</p><p>Prediction using stochastic optimization methods often involves finding an optimum point estimation of the parameters on the training dataset, e.g., by maximum likelihood or MAP, then using this estimate for testing. This has the disadvantage that it does not account for any uncertainty in the parameters-which will underestimate the variance of the predictive distribution. Whereas in Bayesian learning, (9) captures a better representation of the uncertainties in the learning process, and helps prevent model overfitting <ref type="bibr" target="#b33">[34]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">SG-MCMC Interpretation of DropConnect</head><p>In deep learning, Dropout/DropConnect <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b73">74]</ref> have been proposed to improve model generalization by explicitly adding noise during DNN learning. Our SG-MCMC model learning provides a principled Bayesian interpretation for DropConnect. Regular (binary) DropConnect adds noise to global network weights, by setting a randomly selected subset of weights to zero within each layer:</p><formula xml:id="formula_16">z = g((ξ 0 ⊙ θ)h), ξ 0 ∼ Bernoulli(1 − p) ,<label>(13)</label></formula><p>where h and z are the input and output layers, and p is the probability that the weight is dropped. Binary Dropout instead randomly selects local hidden units:</p><formula xml:id="formula_17">z = ξ 0 ⊙ g(θh), ξ 0 ∼ Bernoulli(1 − p) ,<label>(14)</label></formula><p>It was shown in <ref type="bibr" target="#b63">[64]</ref> that binary Dropout has a Gaussian approximation ξ 0 ∼ N (1, p 1−p ), called Gaussian Dropout <ref type="bibr" target="#b75">[76]</ref> with identical regularization performance and faster convergence. We note that the SGD update with Gaussian DropConnect shares the same form as SGLD:</p><formula xml:id="formula_18">θ t+1 = ξ 0 ⊙ θ t + ǫ 2 ∇ θ f = θ t + ǫ 2 ∇ θ f + ξ ′ 0 ,<label>(15)</label></formula><p>where ξ ′ 0 ∼ N (0, ǫV), V = p ǫ(1−p) diag(θ 2 t ) and ∇ θ f = ∇ θ log p(θ t ) + Ng; (15) shares a similar update rule as the modified SGLD <ref type="bibr" target="#b72">[73]</ref> with a different V.</p><p>As a result, the noise added on the weights in the Gaussian DropConnect can be interpreted as injected noise from the Brownian motion of Langevin dynamics. Similarly, binary DropConnect can be viewed as using the Spike-and-Slab prior <ref type="bibr" target="#b29">[30]</ref> on the weights without updating the prior parameters during inference. We can see that SG-MCMC algorithms are more adaptive than DropConnect, because the noise variance relates to the step size and the local geometry of parameter space, instead of using manually fixed values in DropConnect. Furthermore, since Dropout can be interpreted as a structured DropConnect where the weights are dropped block-wise <ref type="bibr" target="#b73">[74]</ref>, Dropout is subsumed in the SG-MCMC interpretation of DropConnect. The integration of binary Dropout with SG-MCMC can be viewed as learning weight uncertainty of mixtures of neural networks.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Accelerating with Batch-Normalization</head><p>Another method to regularize local hidden units is Batch-Normalization <ref type="bibr" target="#b28">[29]</ref>. When performing gradient-based learning of a DNN, a large step size may result in exploding or vanishing gradients. In the context of the proposed Bayesian learning, the sampler could get trapped in poor local minima or on saddle points. Batch-Normalization can be readily applied in our SG-MCMC training to help address these issues. (i) It normalizes activations throughout the network, preventing small parameter changes from being amplified into larger, suboptimal activation changes in other layers. This further helps prevent the sampler in our SG-MCMC algorithms from getting stuck in the saturated regimes of nonlinearities. (ii) It allows us to use much higher step size, and thus increases the effective sample size while preventing overfitting, in which case the need for Dropout is eased.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experiments</head><p>We implemented pSGLD and SGLD in Torch7 <ref type="bibr" target="#b15">[16]</ref> using the GPU library cudnn <ref type="bibr" target="#b0">[1]</ref>, and present results in two main parts: (i) The uncertainty captured on weights can help the FNN to learn more discriminative representations when traditional hand-crafted features are provided. (ii) We also train CNN models and advanced variants on raw data with our approach. We show that SG-MCMC can work in conjunction with both Dropout and Batch-Normalization to improve performance on a broad range of networks and datasets. In practice, we find that it often helps convergence to anneal the variance of the noise term, and which corresponds to model averaging with the annealed distribution.</p><p>The default setting in all experiments is σ 2 = 1. Following <ref type="bibr" target="#b33">[34]</ref>, a block decay strategy for step size is used; it decreases by half after every L epochs. The hyperparameter setting and model specifications on each dataset are clarified in Supplementary Material. No data augmentation techniques <ref type="bibr" target="#b34">[35]</ref> are applied to the datasets tested.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Feedforward Neural Networks</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.1">2D Digits and Animals</head><p>We first demonstrate application of the FNN on two 2D shape datasets, MNIST <ref type="bibr" target="#b37">[38]</ref> and Animal <ref type="bibr" target="#b3">[4]</ref>.</p><p>• MNIST contains 60000 shapes of 2D digits, and 10000 test samples. The task is to classify the images into number ranging from 0 to 9 according to shape information.</p><p>• The Animal dataset <ref type="bibr" target="#b3">[4]</ref> contains 2000 shapes describing 20 kinds of animals, including butterfly, deer, etc. One example for each class is displayed in <ref type="figure" target="#fig_2">Fig. 3</ref>. The dataset has much more intra-class variability since the same kind of animals may have various poses.  A two-layer network (X-X) with ReLU is employed, where X is the number of hidden units for each layer. For MNIST, the test classification errors for network size 400-400, 800-800 and 1200-1200 are shown in <ref type="table" target="#tab_1">Table 1</ref>. The inputs to the FNN are vectorized images of dimension D=784. 100 epochs are used, with L = 20. The thinning interval is 100, and MCMC burn-in is 1 epoch.</p><p>We compare the SG-MCMC algorithms with representative stochastic optimization methods: SGD, RMSprop and RMSspectral <ref type="bibr" target="#b9">[10]</ref>. After tuning, the optimal step size for pSGLD and RMSprop is set as ǫ = 10 −3 , while for SGLD and SGD as ǫ = 5 × 10 −1 . The testing error for the SG-MCMC methods are consistently lower than their corresponding stochastic optimization counterparts. This indicates that the weight uncertainty learned via SG-MCMC can improve performance.</p><p>To demonstrate that the improvements are not due just to model averaging, we collected "partially trained" models along the learning trajectory of RMSprop using the same collection scheme as pSGLD, and average over their testing evaluations. The averaged prediction gives 1.30%, improving RMSprop by 0.09%, but is still inferior to pSGLD by 0.06% on the 1200-1200 network. This is unsurprising, because pure optimization methods are often stuck in local modes, while the Brownian motion in SG-MCMC encourages the learning trajectory to explore the full space.</p><p>We also compare with a recent variational Bayesian approach to learn weight uncertainty, BPB with Gaussian and scale mixtures <ref type="bibr" target="#b5">[6]</ref>. pSGLD provides better results on larger networks, this probably because SG-MCMC learns correlated uncertainty jointly on all parameters. Nevertheless, both approaches provide lower errors than optimization methods. It indicates learning weight uncertainty is helpful for DNNs.</p><p>The combination of Dropout with stochastic optimization and SG-MCMC is compared on the 400-400 FNN using MNIST. The default Dropout probability p = 0.5 is used. Both of Dropout and SG-MCMC show their ability to regularize learning. By integrating SG-MCMC with Dropout, we obtain lower error. To study the role of p for both approaches, we vary p from 0 to 0.7 with a step size of 0.05, with 5 repetitions. Overall, pSGLD with Dropout provides lower errors than RMSprop with Dropout. Note that when p = 0, we recover pure SG-MCMC or stochastic optimization algorithms. A much lower error is provided by SG-MCMC, indicating the importance of uncertainty in recognition.</p><p>For the Animal dataset, we use Bag-of-Contour-Fragments (BCF) <ref type="bibr" target="#b76">[77]</ref> as input features, which have shown excellent discriminative power for 2D shape classification. We follow <ref type="bibr" target="#b76">[77]</ref> and use a random selection of half of the shapes per class for training and the rest of shapes for testing. We run 5 repetitions and the average classification accuracy of our method is compared to other state-of-theart methods in <ref type="table" target="#tab_2">Table 2</ref>. A 2-layer FNN of size 800-800 with ReLU was used. It yields higher average testing accuracies than BCF with SVM <ref type="bibr" target="#b76">[77]</ref>, integration of contour and skeleton (ICS) <ref type="bibr" target="#b3">[4]</ref>, and inner distance shape contexts (IDSC) <ref type="bibr" target="#b48">[49]</ref>. This shows that the FNN can learn a more discriminative representation based on traditional features for classification.</p><p>We also see that RMSprop for FNN gives a lower accuracy than pSGLD. Training LR directly for shallow representation (i.e., BCF feature) with pSGLD yields 78.3%, which is significantly higher than 72.1% of RMSprop. This indicates that incorporating uncertainty in either learning representation or classification improves accuracy.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.2">3D Non-rigid and Textured Shapes</head><p>Two standard 3D benchmarks from recent Eurographics SHREC contests are used, including Textured Shape <ref type="bibr" target="#b4">[5]</ref> and non-rigid Human Body Shape datasets <ref type="bibr" target="#b57">[58]</ref>. Exemplar shapes are displayed in <ref type="figure">Fig. 5</ref>.</p><p>• Textured Shape dataset is made of 572 watertight mesh models that have a geometric and texture deformation. Two tasks are considered: assignment to 16 Geometry classes or 13 Texture classes. Since the categories are reasonably differentiable, a one layer FNN with 400 ReLU units is used.  <ref type="bibr" target="#b76">[77]</ref> 83.40±1.30 ICS <ref type="bibr" target="#b3">[4]</ref> 78.4 Distinctive Parts <ref type="bibr" target="#b45">[46]</ref> 80.7 Bag of SIFT <ref type="bibr" target="#b46">[47]</ref> 80.4 IDSC <ref type="bibr" target="#b48">[49]</ref> 73.6 Class segment set <ref type="bibr" target="#b67">[68]</ref> 69.7  <ref type="bibr" target="#b24">[25]</ref> 72.67 PFM <ref type="bibr" target="#b24">[25]</ref> 72.11 OSM <ref type="bibr" target="#b64">[65]</ref> 69.1 DocNADE <ref type="bibr" target="#b35">[36]</ref> 68.4 RSM <ref type="bibr" target="#b27">[28]</ref> 67.7 LDA <ref type="bibr" target="#b53">[54]</ref> 65.7 <ref type="figure">Figure 5</ref>. Example 3D shapes with ISPM. The top two rows are examples from the Human Body Shape dataset, the bottom two rows are examples from Textured Shape dataset. The shape in the topright corner is rendered with the 2 nd eigenfunction of the Laplace-Beltrami operator. It is used to construct the intrinsic partition, which is isometry-invariant and robust to shape deformation <ref type="bibr" target="#b42">[43]</ref>.</p><p>• The Synthetic sub-dataset of Human Body Shape is used for fine-grained shape classification. There are 15 different human models, each with its unique body shape and 20 different poses, resulting in a dataset of 300 models. 2 poses are for training, the rest for testing. Accuracy is averaged over 5 random train-test partitions. A 2-layer FNN with 800-800 ReLU units is used.</p><p>We follow the standard bag-of-features paradigm <ref type="bibr" target="#b7">[8]</ref>, where we extract local geometric descriptors, specifically spectral graph wavelet signature (SGWS) <ref type="bibr" target="#b43">[44]</ref>, and aggregate them with the intrinsic spatial pyramid representation (ISPM) <ref type="bibr" target="#b42">[43]</ref>. A color histogram is embedded into ISPM to describe texture on surfaces. This pipeline has shown excellent performance in two contests <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b57">58]</ref>.</p><p>These features are used in FNN, support vector machine (SVM), LR and K-nearest-neighbor (KNN) for classification. The results are reported in <ref type="table" target="#tab_3">Table 3</ref>. We emphasize that the purpose of this experiment is to compare different learning algorithms on the same input features, not to achieve state-of-the-art results. Consistent with the 2D shape results, learning deep representations with FNN shows improved performance over shallow features. The uncertainty captured by pSGLD also boosts the results.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.3">General Bag-of-words setup</head><p>Besides the above visual/geometric words scenarios tested on 2D/3D shapes <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b42">43,</ref><ref type="bibr" target="#b76">77]</ref>, we further show our SG-MCMC method can learn uncertainty-based discriminative representation for a general bag-of-words setup. This is demonstrated with a standard document classification corpus, 20 Newsgroups. This dataset has 11315 training and 7531 test documents with a vocabulary size of 2000.</p><p>An 800-800 FNN is used. Inputs of the FNN are term frequency-inverse document frequency features (tfidf). Classification of tf-idf using the SVM yields 69.60%. We compare our model against state-of-the-art methods in <ref type="table">Table 4</ref>, including a very recent Bayesian deep model, deep Poisson factor modeling (DPFM) <ref type="bibr" target="#b24">[25]</ref>. We adapt the FNN as a Bayesian model to capture uncertainty in recognition using Gaussian prior with σ 2 = 10 on network weights, which is the same goal as DFPM. However, our Bayesian FNN is more desirable, because it yields higher accuracy in only 1 minute, while DFPM needs more than 1 hour. It also significantly outperforms four other methods, including supervised Latent Dirichlet allocation (LDA) <ref type="bibr" target="#b53">[54]</ref>, Doc-NADE <ref type="bibr" target="#b35">[36]</ref>, Replicated Softmax Model (RSM) <ref type="bibr" target="#b27">[28]</ref> and Overreplicated Softmax Model (OSM) <ref type="bibr" target="#b64">[65]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Convolutional Neural Networks</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.1">2D Digits and Caltech 101 Silhouettes</head><p>We also studied incorporating weight uncertainty in learning CNN-based representations. For 2D raw shapes, besides MNIST, we also consider the Caltech 101 Silhouettes dataset <ref type="bibr" target="#b51">[52]</ref>, containing 6364 training and 2307 test images.</p><p>On MNIST, we built 2 networks: one is "LeNet" <ref type="bibr" target="#b37">[38]</ref>, composed of a 2-layer CNN followed by a 2-layer FNN; the other is "4-CNN", it is similar to LeNet except that a 4-layer CNN is used with max-pooling after the 1 st , 2 nd , and 4 th convolutional layers. The results are shown in <ref type="table" target="#tab_4">Table 5</ref>. pS-GLD significantly outperforms RMSprop on both networks, indicating that learning weight uncertainty in CNN models can boost results. Combined with Dropout, the performance of both SG-MCMC and optimization approaches are improved. pSGLD with Dropout reaches a testing error of 0.37%, which is lower than several state-of-the-art methods, including deeply supervised nets (0.39%) <ref type="bibr" target="#b38">[39]</ref>, stochastic pooling (0.47%) <ref type="bibr" target="#b80">[81]</ref>, Network in Network (0.47%) <ref type="bibr" target="#b47">[48]</ref> and Maxout Network (0.45%) <ref type="bibr" target="#b23">[24]</ref>. For Caltech, we employed 5-CNN a smaller version of the VGG networks. It is tested with and without Batch Normalization (BN). The results are shown in <ref type="table" target="#tab_4">Table 5</ref>. Due to the large variability of shapes in this dataset, a large variance σ 2 = 100 in the prior is used. Dropout consistently provides considerable improvement for pSGLD, but not RMSprop. Using BN also improves performance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.2">3D ModelNet</head><p>We next evaluate the CNN on a large-scale 3D model dataset, Princeton ModelNet <ref type="bibr" target="#b78">[79]</ref>. We use the 40-class setup, containing 12311 training and 2468 testing samples. We follow typical settings to constitute our experiments <ref type="bibr" target="#b65">[66,</ref><ref type="bibr" target="#b78">79]</ref>. Two CNN-based approaches are designed for 3D model classification. (i) The first is based on volume representation of 3D shapes; it performs 3D volumetric convolutions <ref type="bibr" target="#b78">[79]</ref>. We use a 30 × 30 × 30 bounding box to represent each shape, and construct "Vol-CNN" network: 3-layer volumetric CNN followed by 1-layer FNN with ReLU. This is the same network as <ref type="bibr" target="#b78">[79]</ref> except for the nonlinearities. (ii) The second approach is to project the 3D model into multiple 2D depth-view-images, and perform 2D convolutions on each view <ref type="bibr" target="#b65">[66]</ref>. We employed 12 depth-views of size 224 × 224 to represent a 3D shape, and adopted the "View-CNN" based on the CNN-M network from <ref type="bibr" target="#b11">[12]</ref>: a 5-layer CNN followed by a 2-layer FNN with ReLU. BN is applied for both networks, and the results are shown in <ref type="table" target="#tab_4">Table 5</ref>. In both setups, we see improved performance using pSGLD over RMSprop. When applying Dropout (p = 0.5) to View-CNN, RMSprop is better than pSGLD. Since Dropout determines the portion of parameters updated in our sequential update interpretation, further study on choosing p could alleviate the problem.</p><p>We also outperform several state-of-the-art results on this dataset, including the ShapeNets method (23.00%) <ref type="bibr" target="#b78">[79]</ref>, VoxNet (17.00%) <ref type="bibr" target="#b52">[53]</ref> and deep panoramic views (22.37%) <ref type="bibr" target="#b61">[62]</ref>. The only method with lower error than ours is Multi-View CNN (9.9%) <ref type="bibr" target="#b65">[66]</ref>; note that their model is pre-trained with ImageNet [61], we did not perform any pretraining.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.3">Very Deep Neural Networks</head><p>To show that the proposed method is applicable to "very deep" models and natural images, we conducted experiments on the Cifar10 <ref type="bibr" target="#b34">[35]</ref> dataset. It contains 10 classes of 50000 RGB images of vehicles and animals, with an additional 10000 for testing. We follow <ref type="bibr" target="#b62">[63]</ref> and use a 13-layer CNN "VGG-B" with a 1-layer FNN. We test 8 algorithms by integrating RMSprop and pSGLD with Dropout and BN. 300 epochs are used to collect the final results in <ref type="table" target="#tab_4">Table 5</ref>.</p><p>Step sizes for pSGLD and RMSprop with both Dropout and BN are 2×10 −3 , all the others are 10 −3 . We plot the learning curves of the first 30 epochs in <ref type="figure" target="#fig_4">Fig 6.</ref> The performance between different learning algorithms on this image dataset are consistent with those on shapes. We see that pSGLD reaches lower errors than RMSprop; this is also true when they are used with Dropout. BN can improve the performance in general, and it allows us to increase the step sizes and speed up learning. Interestingly, the use of either pSGLD or Dropout slows down learning initially. This is likely due to the higher uncertainty imposed during learning, resulting in more exploration of the parameter space. Increased uncertainty, however, prevents overfitting and eventually results in improved performance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusions</head><p>We provide a Bayesian framework for DNNs, where the distributions on weights are learned via SG-MCMC. The SG-MCMC is a natural extension of SGD-based optimization methods widely employed in deep learning; we leverage ideas from the SGD literature to improve our proposed SG-MCMC procedure. One may interpret DropConnect as a stochastic sampling algorithm. It further allows us to integrate Dropout and Batch-Normalization into the SG-MCMC framework, to improve the posterior sampling of DNNs. We have considered a broad range of applications to shape classification and have demonstrated the advantages of the proposed method over its optimization counterpart. The proposed method yields state-of-the-art performance on several tested models and datasets.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Variability in 2D shapes (top row) and 3D shapes (bottom row). 3D shapes are visualized as projected 2D views. Object articulation can be seen in the horse examples. Change of view is shown in the dog examples for 2D data, and the two rightmost human body shapes show modeling error in 3D data.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .</head><label>2</label><figDesc>Illustration of Bayesian DNNs with a 2-layer model. All weights in Bayesian DNNs are represented as distributions using SG-MCMC (right figure); rather than having fixed values (left figure), as provided by classical stochastic optimization methods. The SG-MCMC learns correlated uncertainty jointly on all parameters, where (right) associated marginal distributions are depicted.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 .</head><label>3</label><figDesc>Example 2D shapes from Animal dataset.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 .</head><label>4</label><figDesc>Dropout comparison.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 6 .</head><label>6</label><figDesc>Learning curves on Cifar10. "D" indicates Dropout.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 1 .</head><label>1</label><figDesc>Test accuracy of FNN on MNIST.</figDesc><table>Networks 
+400-400 800-800 1200-1200 
+Methods 
+Test Error (%) 
+pSGLD + Dropout 
+1.36 
+1.26 
+1.15 
+SGLD + Dropout 
+1.45 
+1.25 
+1.18 
+RMSprop + Dropout 
+1.35 
+1.28 
+1.24 
+SGD + Dropout 
+1.51 
+1.33 
+1.36 
+pSGLD 
+1.45 
+1.32 
+1.24 
+SGLD 
+1.64 
+1.41 
+1.40 
+RMSprop 
+1.79 
+1.43 
+1.39 
+SGD 
+1.72 
+1.47 
+1.47 
+RMSspectral [10] 
+1.65 
+1.56 
+1.46 
+BPB, Gaussian [6] 
+1.82 
+1.99 
+2.04 
+BPB, Scale mixture [6] 
+1.32 
+1.34 
+1.32 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 2 .</head><label>2</label><figDesc>Animal dataset.</figDesc><table>Methods 
+Accuracy (%) 
+pSGLD 
+84.80± 0.35 
+RMSprop 
+84.30± 0.55 
+BCF + SVM </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="false"><head>Table 3 .</head><label>3</label><figDesc>Body Shape and Textured Shape.</figDesc><table>Datasets 
+Body 
+Geometry Texture 
+Methods 
+Accuracy (%) 
+pSGLD 
+57.33 ± 3.06 
+38.46 
+51.49 
+RMSprop 56.31± 2.34 
+37.01 
+49.39 
+LR 
+51.23± 1.86 
+36.06 
+46.59 
+SVM 
+56.02± 2.94 
+37.09 
+51.62 
+KNN 
+46.90± 2.06 
+18.01 
+50.35 
+
+Table 4. 20 Newsgroups. 
+
+Methods 
+Accuracy (%) 
+pSGLD 
+73.32 
+RMSprop 
+72.52 
+DPFM </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head>Table 5 .</head><label>5</label><figDesc>Test error of CNN on MNIST, Caltech, ModelNet and Cifar10. CNN 5-CNN 5-CNN-BN Vol-CNN View-CNN VGG-B VGG-B-BN</figDesc><table>Dataset 
+MNIST 
+Caltech 
+ModelNet 
+Cifar10 
+Networks 
+LeNet 4-Methods 
+Test Error (%) 
+RMSprop 
+0.65 
+0.62 
+27.52 
+24.40 
+17.06 
+16.13 
+21.04 
+13.52 
+pSGLD 
+0.45 
+0.49 
+26.96 
+25.53 
+16.21 
+15.12 
+20.28 
+14.80 
+RMSprop + Dropout 
+0.56 
+0.45 
+27.43 
+24.66 
+14.87 
+14.52 
+16.38 
+10.39 
+pSGLD + Dropout 
+0.40 
+0.37 
+24.57 
+23.97 
+14.51 
+14.62 
+16.11 
+9.47 
+
+</table></figure>
+		</body>
+		<back>
+			<div type="annex">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements This research was supported in part by ARO, DARPA, DOE, NGA, ONR and NSF.</p></div>			</div>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">NVIDIA cuDNN -GPU accelerated deep learning</title>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">The wave kernel signature: A quantum mechanical approach to shape analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Aubry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Schlickewei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV Workshops</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Neural shape codes for 3D model retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Bai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Roli</surname></persName>
+		</author>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Integrating contour and skeleton for shape classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Bai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Tu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV Workshops</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">SHREC14 track: Retrieval and classification on textured 3D models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Biasotti</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Cerri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Abdelrahman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Aono</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">B</forename><surname>Hamza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>El-Melegy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Farag</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Garro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Giachetti</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Giorgi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Eurographics Workshop on 3DOR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Weight uncertainty in neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Blundell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Cornebise</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wierstra</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Learning class-specific descriptors for deformable shapes using localized spectral convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Boscaini</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Masci</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Melzi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">M</forename><surname>Bronstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Castellani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Vandergheynst</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CGF</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Shape google: Geometric words and expressions for invariant shape retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">M</forename><surname>Bronstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">M</forename><surname>Bronstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">J</forename><surname>Guibas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ovsjanikov</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+			<publisher>ACM TOG</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Learning high-level feature by deep belief networks for 3D model retrieval and recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Ji</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">TMM</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Preconditioned spectral descent for deep learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Carlson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Collins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">P</forename><surname>Hsieh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Carin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Cevher</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">X</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Funkhouser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Guibas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Hanrahan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Savva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1512.03012</idno>
+		<title level="m">An information-rich 3D model repository</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Return of the devil in the details: Delving deep into convolutional nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chatfield</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vedaldi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Bridging the gap between stochastic gradient mcmc and stochastic optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Carlson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Gan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Carin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AISTATS</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">On the convergence of stochastic gradient MCMC algorithms with high-order integrators</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Ding</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Carin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Stochastic gradient Hamiltonian Monte Carlo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">B</forename><surname>Fox</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Guestrin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Torch7: A matlab-like environment for machine learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Collobert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kavukcuoglu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Farabet</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BigLearn, NIPS Workshop</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Approximation with artificial neural networks. Faculty of Sciences</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">C</forename><surname>Csáji</surname></persName>
+		</author>
+		<imprint>
+			<pubPlace>Hungary</pubPlace>
+		</imprint>
+		<respStmt>
+			<orgName>Etvs Lornd University</orgName>
+		</respStmt>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Identifying and attacking the saddle point problem in high-dimensional non-convex optimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">N</forename><surname>Dauphin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Pascanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Gulcehre</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ganguli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Feature correspondence: A Markov chain Monte Carlo approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Dellaert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Thrun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Thorpe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2000" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Bayesian sampling using stochastic gradient thermostats</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Ding</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Fang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Babbush</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">D</forename><surname>Skeel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Neven</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">3D deep shape descriptor</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Fang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Wong</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Dropout as a Bayesian approximation: Representing model uncertainty in deep learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Gal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Ghahramani</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1506.02142</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Deep sparse rectifier neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Glorot</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bordes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AISTATS</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Maxout networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Goodfellow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Warde-Farley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mirza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Deep Poisson factor modeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Henao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Gan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Carin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Probabilistic backpropagation for scalable learning of Bayesian neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Hernández-Lobato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">P</forename><surname>Adams</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">Improving neural networks by preventing co-adaptation of feature detectors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1207.0580</idno>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Replicated softmax: an undirected topic model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Batch normalization: Accelerating deep network training by reducing internal covariate shift</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ioffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title level="m" type="main">Spike and slab variable selection: frequentist and Bayesian strategies</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Ishwaran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">S</forename><surname>Rao</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+	<note>Annals of Statistics</note>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Is rotation a nuisance in shape recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Ke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<monogr>
+		<title level="m" type="main">Adam: A method for stochastic optimization. ICLR</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Variational dropout and the local reparameterization trick</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P</forename><surname>Kingma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Salimans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">NIPS</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Korattikara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Rathod</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Murphy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+		<title level="m">Bayesian dark knowledge. NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+		<title level="m" type="main">Learning multiple layers of features from tiny images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">A neural autoregressive topic model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Larochelle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lauly</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Deep learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Nature</title>
+		<imprint>
+			<biblScope unit="issue">3</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title level="m" type="main">Gradientbased learning applied to document recognition. Proceedings of the IEEE</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Haffner</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1998" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Deeplysupervised nets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Gallagher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Tu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">AISTATS</title>
+		<imprint>
+			<biblScope unit="issue">7</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<monogr>
+		<title level="m" type="main">Human upper body pose estimation in static images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">W</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Cohen</surname></persName>
+		</author>
+		<idno>ECCV. 2</idno>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Preconditioned stochastic gradient Langevin dynamics for deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Carlson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Carin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI</title>
+		<imprint>
+			<date type="published" when="2016" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">High-order stochastic gradient thermostats for Bayesian learning of deep models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Fan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Carin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<monogr>
+		<title level="m" type="main">Intrinsic spatial pyramid matching for deformable 3D shape retrieval. IJMIR</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">B</forename><surname>Hamza</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<monogr>
+		<title level="m" type="main">A multiresolution descriptor for deformable 3D shape retrieval. The Visual Computer</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">B</forename><surname>Hamza</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Persistence-based structural recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ovsjanikov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Chazal</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Distinctive parts for shape classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>You</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ben Hamza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICWAPR</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Shape classification using local and global features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K.-L</forename><surname>Lim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">K</forename><surname>Galoogahi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">PSIVT</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Network in network. ICLR</title>
+		<imprint>
+			<biblScope unit="issue">7</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<monogr>
+		<title level="m" type="main">Shape classification using the inner-distance. TPAMI</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Ling</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">W</forename><surname>Jacobs</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">A complete recipe for stochastic gradient MCMC</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">A</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">B</forename><surname>Fox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">NIPS</title>
+		<imprint>
+			<biblScope unit="issue">3</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">A practical Bayesian framework for backpropagation networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J C</forename><surname>Mackay</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="1992" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<analytic>
+		<title level="a" type="main">Inductive principles for restricted Boltzmann machine learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">M</forename><surname>Marlin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Swersky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">D</forename><surname>Freitas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AISTATS</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b52">
+	<analytic>
+		<title level="a" type="main">Voxnet: A 3D convolutional neural network for real-time object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Maturana</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Scherer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IROS</title>
+		<imprint>
+			<biblScope unit="issue">8</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b53">
+	<analytic>
+		<title level="a" type="main">Supervised topic models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">D</forename><surname>Mcauliffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">M</forename><surname>Blei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b54">
+	<monogr>
+		<title level="m" type="main">Bayesian learning for neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">M</forename><surname>Neal</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1995" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+		<respStmt>
+			<orgName>University of Toronto</orgName>
+		</respStmt>
+	</monogr>
+	<note type="report_type">PhD thesis</note>
+</biblStruct>
+
+<biblStruct xml:id="b55">
+	<monogr>
+		<title level="m" type="main">MCMC using Hamiltonian dynamics. Handbook of MCMC</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">M</forename><surname>Neal</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b56">
+	<analytic>
+		<title level="a" type="main">Stochastic gradient Riemannian Langevin dynamics on the probability simplex</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Patterson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">W</forename><surname>Teh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b57">
+	<analytic>
+		<title level="a" type="main">SHREC14 track: Shape retrieval of non-rigid 3D human models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Pickup</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">L</forename><surname>Rosin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Martin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Cheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Aono</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">B</forename><surname>Hamza</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bronstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bronstein</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Eurographics Workshop on 3DOR</title>
+		<imprint>
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b58">
+	<analytic>
+		<title level="a" type="main">A deep generative deconvolutional image model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Pu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yuan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Stevens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Carin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AISTATS</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b59">
+	<monogr>
+		<title level="m" type="main">A stochastic approximation method. The annals of mathematical statistics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Robbins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Monro</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1951" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b60">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Russakovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Satheesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bernstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<imprint/>
+	</monogr>
+	<note>ImageNet large scale visual recognition challenge. IJCV, 2015. 1, 8</note>
+</biblStruct>
+
+<biblStruct xml:id="b61">
+	<monogr>
+		<title level="m" type="main">DeepPano: Deep panoramic representation for 3D shape recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Bai</surname></persName>
+		</author>
+		<idno>SPL. 8</idno>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b62">
+	<analytic>
+		<title level="a" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b63">
+	<analytic>
+		<title level="a" type="main">Dropout: A simple way to prevent neural networks from overfitting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JMLR</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">5</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b64">
+	<monogr>
+		<title level="m" type="main">Modeling documents with deep Boltzmann machines. UAI</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b65">
+	<analytic>
+		<title level="a" type="main">Multiview convolutional neural networks for 3D shape recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Maji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Kalogerakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Learned-Miller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b66">
+	<analytic>
+		<title level="a" type="main">A concise and provably informative multi-scale signature based on heat diffusion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ovsjanikov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Guibas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CGF</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b67">
+	<analytic>
+		<title level="a" type="main">Classification of contour shapes using class segment sets</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">B</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">J</forename><surname>Super</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b68">
+	<monogr>
+		<title level="m" type="main">Consistency and fluctuations for stochastic gradient Langevin dynamics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">W</forename><surname>Teh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">H</forename><surname>Thiéry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">J</forename><surname>Vollmer</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b69">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tieleman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<title level="m">Lecture 6.5-rmsprop. Coursera: Neural Networks for Machine Learning</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b70">
+	<monogr>
+		<title level="m" type="main">Image segmentation by data-driven Markov chain Monte Carlo. TPAMI</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Tu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-C</forename><surname>Zhu</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b71">
+	<analytic>
+		<title level="a" type="main">A survey of Bayesian predictive methods for model assessment, selection and comparison</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vehtari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ojanen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Statistics Surveys</title>
+		<imprint>
+			<biblScope unit="issue">3</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b72">
+	<monogr>
+		<title level="m" type="main">Non-)asymptotic properties of stochastic gradient Langevin dynamics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">J</forename><surname>Vollmer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">C</forename><surname>Zygalakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">W</forename><surname>Teh</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1501.00438</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">Technical Report</note>
+</biblStruct>
+
+<biblStruct xml:id="b73">
+	<analytic>
+		<title level="a" type="main">Regularization of neural networks using DropConnect</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Wan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zeiler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b74">
+	<analytic>
+		<title level="a" type="main">Sketch-based 3D shape retrieval using convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Kang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b75">
+	<analytic>
+		<title level="a" type="main">Fast Dropout training</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Manning</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b76">
+	<analytic>
+		<title level="a" type="main">Bag of contour fragments for robust shape classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Feng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Bai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">J</forename><surname>Latecki</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Pattern Recognition</title>
+		<imprint>
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b77">
+	<analytic>
+		<title level="a" type="main">Bayesian learning via stochastic gradient Langevin dynamics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Welling</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><forename type="middle">W</forename><surname>Teh</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b78">
+	<analytic>
+		<title level="a" type="main">3D ShapeNets: A deep representation for volumetric shapes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b79">
+	<analytic>
+		<title level="a" type="main">Deep shape: Deep learned shape descriptor for 3D shape matching and retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Fang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Wong</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b80">
+	<monogr>
+		<title level="m" type="main">Stochastic pooling for regularization of deep convolutional neural networks. ICLR</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zeiler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b81">
+	<monogr>
+		<title level="m" type="main">Markov chain Monte Carlo for computer vision. A tutorial at ICCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Dellaert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Tu</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

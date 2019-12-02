@@ -1,0 +1,1346 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Collaborative Quantization for Cross-Modal Similarity Search</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ting</forename><surname>Zhang</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">University of Science and Technology of China</orgName>
+								<address>
+									<country key="CN">China</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jingdong</forename><surname>Wang</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="institution">Microsoft Research</orgName>
+								<address>
+									<country key="CN">China</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Collaborative Quantization for Cross-Modal Similarity Search</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:38+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Cross-modal similarity search is a problem about designing a search system supporting querying across content modalities, e.g., using an image to search for texts or using a text to search for images. This paper presents a compact coding solution for efficient search, with a focus on the quantization approach which has already shown the superior performance over the hashing solutions in the single-modal similarity search. We propose a cross-modal quantization approach, which is among the early attempts to introduce quantization into cross-modal search. The major contribution lies in jointly learning the quantizers for both modalities through aligning the quantized representations for each pair of image and text belonging to a document. In addition, our approach simultaneously learns the common space for both modalities in which quantization is conducted to enable efficient and effective search using the Euclidean distance computed in the common space with fast distance table lookup. Experimental results compared with several competitive algorithms over three benchmark datasets demonstrate that the proposed approach achieves the state-of-the-art performance.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Similarity search has been a fundamental problem in information retrieval and multimedia search. Classical approaches, however, are designed to address the singlemodal search problem, where, for instance, the text query is used to search in a text database, or the image query is used to search in an image database. In this paper, we deal with the cross-modal similarity search problem, which is an important problem emerged in multimedia information retrieval, for example, using a text query to retrieve images or using an image query to retrieve texts.</p><p>We study the compact coding solutions to cross-modal similarity search, in particular focusing on a common realworld scenario, image and text modalities. Compact cod- * This work was done when Ting Zhang was an intern at MSR.</p><p>ing is an approach of converting the database items into short codes on which similarity search can be efficiently conducted. It has been widely studied in single-modal similarity search with typical solutions including hashing <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b20">21]</ref> and quantization <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b5">6,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b26">27]</ref>, while relatively unexplored in cross-modal search except a few hashing approaches <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b29">30]</ref>. We are interested in the quantization approach that represents each point by a short code formed by the index of the nearest center, as quantization has shown more powerful representation ability than hashing in single-modal search.</p><p>Rather than performing the quantization directly in the original feature space, we learn a common space for both modalities with the goal that the pair of image and text lie in the learnt common space closely. Learning such a common space is important and useful for the subsequent quantization whose similarity is computed based on the Euclidean distance. Similar observation has also been made in some hashing techniques <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b29">30]</ref> that apply the sign function on the learnt common space.</p><p>In this paper, we propose a novel approach for crossmodal similarity search, called collaborative quantization, that conducts the quantization simultaneously for both modalities in the common space, to which the database items of both modalities are mapped through matrix factorization. The quantization and the common space mapping are jointly optimized for both modalities under the objective that the quantized approximations of the descriptors of an image and a text forming a pair in the search database are well aligned. Our approach is one of the early attempts to introduce quantization into cross-modal similarity search offering the superior search performance. Experimental results on several standard datasets show that our approach outperforms existing cross-modal hashing and quantization algorithms.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related work</head><p>There are two categories of compact coding approaches for cross-modal similarity search: cross-modal hashing and cross-modal quantization.</p><p>Cross-modal hashing often maps multi-modal data into a common Hamming space so that the hash codes of different modalities are directly comparable using the Hamming distance. After mapping, each document may have just one unified hash code, in which all the modalities of the document are mapped, or may have two separate hash codes, each corresponding to a modality. The main research problem in cross-modal hashing, besides hash function design that is also studied in single-modal search, is how to exploit and build the relations between the modalities. In general, the relations of multi-modal data, besides the intramodality relation in the single modality (image vs. image and text vs. text) and the inter-modality relation across the modalities (image vs. text), also include intra-document (the correspondence of an image and a text forming a document, which is a special kind of inter-modality) and interdocument (document vs. document). A brief categorization is shown in <ref type="table" target="#tab_0">Table 1</ref>.</p><p>The early approach, data fusion hashing <ref type="bibr" target="#b0">[1]</ref>, is a pairwise cross-modal similarity sensitive approach, which aligns the similarities (defined as inner product) in the Hamming space across the modalities, with the given intermodality similar and dissimilar relations using the maximizing similarity-agreement criterion. An alternative formulation using the minimizing similarity-difference criterion is introduced in <ref type="bibr" target="#b24">[25]</ref>. Co-regularized hashing <ref type="bibr" target="#b27">[28]</ref> uses a smoothly clipped inverted squared deviation function to connect the inter-modality relation with the similarity over the projections that form the hashing codes. Similar regularization techniques are adopted for multi-modal hashing in <ref type="bibr" target="#b11">[12]</ref>. In addition to the inter-modality similarities, several other hashing techniques, such as multimodal similaritypreserving hashing <ref type="bibr" target="#b10">[11]</ref>, sparse hashing approach <ref type="bibr" target="#b23">[24]</ref>, a probabilistic model for hashing <ref type="bibr" target="#b28">[29]</ref>, also explore and uti-lize the intra-modality relation to learn the hash codes for each modality.</p><p>Cross-view hashing <ref type="bibr" target="#b7">[8]</ref> defines the distance between documents in the Hamming space by considering the hash codes of all the modalities, and aligns it with the given interdocument similarity. Multi-view spectral hashing <ref type="bibr" target="#b6">[7]</ref> adopts a similar formulation but with a different optimization algorithm. These methods usually also involve the intradocument relation in an implicit way by considering the multi-modal document as an integrated whole object. There are other hashing methods exploring the inter-document relation about multi-modal representation , but not for crossmodal similarity search, such as composite hashing <ref type="bibr" target="#b25">[26]</ref> and effective multiple feature hashing <ref type="bibr" target="#b16">[17]</ref>.</p><p>The intra-document relation is often used to learn a unified hash code, into which a hash function is learnt for each modality to map the feature. For example, Latent semantic sparse hashing <ref type="bibr" target="#b29">[30]</ref> applies the sign function on the joint space projected from the latent semantic representation learnt for each modality. Collective matrix factorization hashing <ref type="bibr" target="#b3">[4]</ref> finds the common (same) representation for an image-text pair via collective matrix factorization, and obtains the hash codes directly using the sign function on the common representation. Other methods exploring the intra-document relation include semantic topic multimodal hashing <ref type="bibr" target="#b19">[20]</ref>, semantics-preserving multi-view hashing <ref type="bibr" target="#b8">[9]</ref>, inter-media hashing <ref type="bibr" target="#b25">[26]</ref> and its accelerated version <ref type="bibr" target="#b30">[31]</ref>, and so on. Meanwhile, several attempts <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b18">19]</ref> have been made based on the neural network which can also be combined with our approach to learn the common space.</p><p>Recently, a few techniques based on quantization are developed for cross-modal search. Quantized correlation hashing <ref type="bibr" target="#b22">[23]</ref> combines the hash function learning with the quantization by minimizing the inter-modality similarity disagreement as well as the binary quantization simultaneously. Compositional correlation quantization <ref type="bibr" target="#b9">[10]</ref> projects the multi-modal data into a common space, and then obtains a unified quantization representation for each document. Our approach, also exploring the intra-document relation, belongs to this cross-modal quantization category and achieves the state-of-the-art performance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Formulation</head><p>We study the similarity search problem over a database Z of documents with two modalities: image and text. Each document is a pair of image and text, Z = {(x n , y n )} N n=1 , where x n ∈ R D I is a D I -dimensional feature vector describing an image, and y n ∈ R D T is a D T -dimensional feature vector describing a text. Splitting the database Z yields two databases each formed by images and texts separately, i.e., X = {x 1 , x 2 , · · · , x N } and Y = {y 1 , y 2 , · · · , y N }. Given a image (text) query x q (y q ), the goal of crossmodality similarity search is to retrieve the closest match in the text (image) database: arg max y∈Y sim(x q , y) (arg max x∈X sim(y q , x)).</p><p>Rather than directly quantizing the feature vectors x and y tox andȳ, which requires a further non-trivial scheme to learn the similarity for vectorsx andȳ with different dimensions, we are interested in finding the common space for both image and text, and jointly quantizing the image and text descriptors in the common space, so that the Euclidean distance which is widely-used in single-modal similarity search, can also be used for the cross-modal similarity evaluation. Collaborative quantization. Suppose the images and the texts in the D-dimensional common space are represented as</p><formula xml:id="formula_0">X ′ = [x ′ 1 , x ′ 2 , · · · , x ′ N ] and Y ′ = [y ′ 1 , y ′ 2 , · · · , y ′ N ]</formula><p>. For each modality, we propose to adopt composite quantization <ref type="bibr" target="#b26">[27]</ref> to quantize the vectors in the common space. Composite quantization aims to approximate the images X ′ as X ′ ≈X = CP by minimizing</p><formula xml:id="formula_1">X ′ − CP 2 F .<label>(1)</label></formula><formula xml:id="formula_2">Here, C = [C 1 , C 2 , · · · , C M ] corresponds to the M dictionaries, C m = [c m1 , c m2 , · · · , c mK ]</formula><p>corresponds to the mth dictionary of size K and each column is a dictionary element. P = [p 1 , p 2 , · · · , p N ] with p n = [p T n1 , p T n2 , · · · , p T nm ] T , and p nm is a K-dimensional binary (0,1) vector with only 1-valued entry indicating that the corresponding element in the mth dictionary is selected to compose x ′ n . The texts Y ′ in the common space are approximated as Y ′ ≈Ȳ = DQ, and the meaning of the symbols is similar to that in the images.</p><p>Besides the quantization quality, we explore the intradocument correlation between images and texts for the quantization: the image and the text forming a document are close after quantization, which is the bridge to connect images and texts for cross-modal search. We adopt the following simple formulation that minimizes the distance between the image and the corresponding text,</p><formula xml:id="formula_3">CP − DQ 2 F .<label>(2)</label></formula><p>The overall collaborative quantization formulation is given as follows,</p><formula xml:id="formula_4">Q(C, P; D, Q) = (3) X ′ − CP 2 F + Y ′ − DQ 2 F + γ CP − DQ 2 F ,</formula><p>where γ is a trade-off variable to balance the quantization quality and the correlation degree.</p><p>Common space mapping. The common space mapping problem aims to map the data in different modalities into the same space so that the representations in cross-modalities are comparable. In our problem, we want to map the N D I -dimensional image data X and the N D T -dimensional text data Y to the same D-dimensional data: X ′ and Y ′ . We choose the matrix-decomposition solution as in <ref type="bibr" target="#b29">[30]</ref>: the image data X is approximated using sparse coding as a product of two matrices BS, and the sparse code S is shown to be a good representation of the raw feature X; the text data Y is also decomposed into two matrices, U and Y ′ , where Y ′ is the low-dimensional representation; In addition, a transformation matrix R is introduced to align the image sparse code S with the text code Y ′ by minimizing Y ′ − RS 2 F , and the image in the common space is represented as X ′ = RS. The objective function for common space mapping is written as follows,</p><formula xml:id="formula_5">M(B, S; U, Y ′ ; R) = (4) X − BS 2 F + ρ|S| 11 + η Y − UY ′ 2 F + λ Y ′ − RS 2 F . Here |S| 11 = N i=1</formula><p>S ·i 1 is the sparse term, and ρ determines the sparsity degree; η is used to balance the scales of image and text representations; λ is a trade-off parameter to control the approximation degree in each modality and the alignment degree for the pair of image and text. Overall objective function. In summary, the overall formulation of the proposed cross-modal quantization is,</p><formula xml:id="formula_6">min F(θ q , θ m ) = Q(C, P; D, Q) + M(B, S; U, Y ′ ; R) s. t. B ·i 2 2 1, U ·i 2 2 1, R ·i 2 2 1,<label>(5)</label></formula><formula xml:id="formula_7">M i=1 M j=1,j =i p T ni C T i C j p nj = ǫ 1 ,<label>(6)</label></formula><formula xml:id="formula_8">M i=1 M j=1,j =i q T ni D T i D j q nj = ǫ 2 ,<label>(7)</label></formula><p>where θ q and θ m represent the parameters in quantization and mapping, i.e., (C, P; D, Q) and (B, S; U, Y ′ ; R) respectively. The constraints in <ref type="table">Equation 6 and Equation 7</ref> are introduced for fast distance computation as in composite quantization <ref type="bibr" target="#b26">[27]</ref>, and more details about the search process are presented in Section 4.3.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Optimization</head><p>We optimize the Problem 5 by alternatively solving two sub-problems: common space mapping with the quantization parameters fixed:</p><formula xml:id="formula_9">min F(θ m |θ q ) = M(θ m ) + X ′ − CP 2 F + Y ′ − DQ 2 F</formula><p>, and collaborative quantization with the mapping parameters fixed: min F(θ q |θ m ) = min Q(θ q ). Each of the two sub-problems is solved again by a standard iteratively alternative algorithm.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Common space mapping</head><p>The objective function of the common space mapping with the quantization parameters fixed is,</p><formula xml:id="formula_10">min θm M(θ m ) + X ′ − CP 2 F + Y ′ − DQ 2 F (8) s. t. B ·i 2 2 1, U ·i 2 2 1, R ·i 2 2 1.<label>(9)</label></formula><p>The iteration details are given below.</p><p>Update Y ′ . The objective function with respect to Y ′ is an unconstrained quadratic optimization problem, and is solved by the following closed-form solution,</p><formula xml:id="formula_11">Y ′ * = (ηU T U + (λ + 1)I) −1 (DQ + ηU T Y + λRS),</formula><p>where I is the identity matrix. Update S. The objective function with respect to S can be transformed to,</p><formula xml:id="formula_12">min S 1 λ+1 X 1 λ+1 (CP + λA) − 1 λ+1 B R S 2 F + ρ λ + 1 |S| 11 ,<label>(10)</label></formula><p>which is solved using the sparse learning with efficient projections package <ref type="bibr" target="#b0">1</ref> .</p><p>Update U, B, R. The algorithms for updating U, B, R are the same, as we can see from the following formulas,</p><formula xml:id="formula_13">min U Y − UY ′ 2 F , s. t. U ·i 2 2 1,<label>(11)</label></formula><formula xml:id="formula_14">min B X − BS 2 F , s. t. B ·i 2 2 1,<label>(12)</label></formula><formula xml:id="formula_15">min R 1 λ + 1 (CP + λY ′ ) − RS 2 F , s. t. R ·i 2 2 1.</formula><p>All of the above three learning problems are minimizing the quadratically constrained least square problem, which has been well studied in numerical optimization field and can be readily solved using the primal-dual conjugate gradient method. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Collaborative quantization</head><p>The second sub-problem is transformed to an unconstrained formulation by adding the equality constraints as a penalty regularization with a penalty parameter µ,</p><formula xml:id="formula_16">Ψ = Q(θ q ) + µ N n=1 ( M i =j p T ni C T i C j p nj − ǫ 1 ) 2 + µ N n=1 ( M i =j q T ni D T i D j q nj − ǫ 2 ) 2 ,<label>(13)</label></formula><p>which is solved by alternatively updating each variable with others fixed. Update C (D). The optimization procedures for C and D are essentially the same, so we only show how to optimize C. We adopt the L-BFGS 2 algorithm, one of the most frequently-used quasi-Newton methods, to solve the unconstrained non-linear problem with respect to C. The derivative of the objective function is</p><formula xml:id="formula_17">[ ∂Ψ C1 , · · · , ∂Ψ C M ], ∂Ψ ∂C m = 2((γ + 1)CP − RS − γDQ)P T m (14) + N n=1 [4µ( M i =j p T ni C T i C j p nj − ǫ 1 )( M l=1,l =m C l p nl )p T nm ], where P m = [p 1m , · · · , p N m ]. Update ǫ 1 , ǫ 2 .</formula><p>With other variables fixed, it is easy to get the optimal solution,</p><formula xml:id="formula_18">ǫ * 1 = 1 N N n=1 M i =j p T ni C T i C j p nj ,<label>(15)</label></formula><formula xml:id="formula_19">ǫ * 2 = 1 N N n=1 M i =j q T ni D T i D j q nj .<label>(16)</label></formula><p>Update P (Q). The binary vectors {p n } N n=1 given other variables fixed are independent with each other, and hence the optimization problem can be decomposed into N subproblems,</p><formula xml:id="formula_20">Ψ n = x ′ n − Cp n 2 2 + γ Cp n − Dq n 2 2<label>(17)</label></formula><formula xml:id="formula_21">+ µ( M i =j p T ni C T i C j p nj − ǫ 1 ) 2 .<label>(18)</label></formula><p>This problem is a mixed-binary-integer problem generally considered as NP-hard. As a result, we approximately solve this problem by greedily updating the M indicating vectors {p nm } M m=1 in cycle: fixing {p nm ′ } M m ′ =1,m ′ =m , p nm is updated by exhaustively checking all the elements in C m , finding the element such that the objective function is minimized, and setting the corresponding entry of p nm to be 1 and all the others to be 0. Similar optimization procedure is adopted to update Q.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Search process</head><p>In cross-modal search, the given query can be either an image or a text, which require different querying processes. Image query. If the query is an image, x q , we first obtain the representation in the common space, x ′ q = Rs * ,</p><formula xml:id="formula_22">s * = arg min s x q − Bs 2 2 + ρ|s| 1 .<label>(19)</label></formula><p>The approximated distance between the image query x q and the database text y n (represented as Dq n = M m=1 D m q nm ) is,</p><formula xml:id="formula_23">x ′ q − Dq n 2 2 = M m=1 x ′ q − D m q nm 2 2 (20) −(M − 1) x ′ q 2 2 + M i =j q T ni D T i D j q nj .<label>(21)</label></formula><p>The last term </p><formula xml:id="formula_24">M i =j q T ni D T i D j q</formula><formula xml:id="formula_25">{ x ′ q − d mk 2 2 | m = 1, · · · , M ; k = 1, · · · , K}.</formula><p>Text query. When the query comes as a text, y q , the representation y ′ q is obtained by solving,</p><formula xml:id="formula_26">y ′ q = arg min y y q − Uy 2 2 .<label>(22)</label></formula><p>Using y ′ q to search in the image database is similar to that in the image query search process.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Discussions</head><p>Relation to compositional correlation quantization. The proposed approach is close to compositional correlation quantization <ref type="bibr" target="#b9">[10]</ref>, which is also a quantization-based method for cross-modal search. In fact, our approach differs from it in two ways: (1) we find a different mapping function to project the common space; (2) we learn separate quantized centers for a pair using two dictionaries instead of the unified quantized centers in compositional correlation quantization <ref type="bibr" target="#b9">[10]</ref> imposed with a harder alignment using one dictionary. Hence, during the quantization stage, our approach can obtain potentially smaller quantization error, as the quantized center is more flexible, and thus produce better search performance. The empirical comparison illustrating the effect of dictionary is shown in <ref type="figure">Figure 2</ref>. Relation to latent semantic sparse hashing. In our formulation, the common space is learnt in a similar manner with latent semantic sparse hashing <ref type="bibr" target="#b29">[30]</ref>. After the common space mapping, latent semantic sparse hashing applies a simple sign function directly on the common space, which can result in large information loss and hence weaken the search performance. Our approach, however, adopts the quantization technique that has more accurate distance approximation than hashing, and produces better cross-modal search quality than latent semantic sparse hashing, which is verified in our experiments shown in <ref type="table">Table 2</ref>   Datasets. We evaluate our method on three benchmark datasets. The first dataset, Wiki 3 consists of 2,866 images and 2,866 texts describing the images in short paragraph (at least 70 words), with images represented as 128-dimensional SIFT features and texts expressed as 10dimensional topics vectors. This dataset is divided into 2,173 image-text pairs and 693 quries, and each pair is labeled with one of the 10 semantic classes. The second dataset, FLICKR25K 4 , is composed of 25,000 images along with the user assigned tags. The average number of tags for an image is 5.15 <ref type="bibr" target="#b18">[19]</ref>. Each image-text pair is assigned with multiple labels from a total of 38 classes. As in <ref type="bibr" target="#b18">[19]</ref>, the images are represented by 3857-dimensional features and the texts are 2000-dimensional vectors indicating the occurrence of the tags. We randomly sampled 10% of the pairs as the test set and use the remaining as the training set. The third dataset is NUS-WIDE 5 [2] containing 269,648 images with associated tags (6 in average), each pair is annotated with multiple labels among 81 concepts. As done in previous work <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b29">30]</ref>, we select 10 most popular concepts resulting in 186,577 data pairs. The images are represented by 500-dimensional bag-of-words features based on SIFT descriptors, and the texts are 1000dimensional vectors of the most frequent tags. Following <ref type="bibr" target="#b29">[30]</ref>, We use 4000 (≈ 2%) randomly sampled pairs as the query set and the rest as the training set. Evaluation. In our experiments, we report the results of two search tasks for the cross-modal search, i.e., the image (as the query) to text (as the database) task and the text to image task. The search quality is evaluated with two measures: MAP@T and precision@T . MAP@T is defined as the mean of the average precisions of all the queries, and the average precision of a query is computed as,</p><formula xml:id="formula_27">AP (q) = T t=1 Pq(t)δ(t) T t=1 δ(t)</formula><p>, where T is the number of retrieved items, P q (t) is the precision at position t for query q, and δ(t) = 1 if the retrieved tth item has the same label with query q or shares at least one label, otherwise δ(t) = 0. Following <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b9">10]</ref>, we report MAP@T with T = 50 and T = 100. We also plot the precision@T curve which is obtained by computing the precisions at different recall levels <ref type="table">Table 2</ref>. MAP@50 comparison of different algorithms on all the benchmark datasets under various code lengths. We also report the results of CMFH and CCQ (whose code implementations are not publicly available) in their corresponding papers and we distinguish those results by parenthesis (). "--" is used in the place where the result under that specific setting is not reported in their papers. Different setting refers to different datasets, or (and) different features, or (and) different bits, and so on.    <ref type="bibr" target="#b3">[4]</ref>, and Compositional Correlation Quantization (CCQ) <ref type="bibr" target="#b9">[10]</ref>. The code of LSSH is generously provided by the authors and we implemented the CMFH carefully by ourselves. The performance of CCQ (without public code) is presented partially using the results in its paper. In addition, we report the state-ofthe-art algorithms whose codes are publicly available: (1) Cross-Modal Similarity Sensitive Hashing (CMSSH) <ref type="bibr" target="#b0">[1]</ref>, (2) Cross-View Hashing (CVH) <ref type="bibr" target="#b7">[8]</ref>, (3) Multimodal Latent Binary Embedding (MLBE) <ref type="bibr" target="#b28">[29]</ref>, (4) Quantized Correlation Hashing (QCH) <ref type="bibr" target="#b22">[23]</ref>. The parameters in above methods are set according to the corresponding papers. Implementation details. The data for both modalities are mean-centered and then normalized to have unit Euclidean length. We use principle component analysis to project the image into a lower dimensional (set to 64) space, and the number of bases in sparse coding is set to 512 (B ∈ R 64×512 ). The latent dimension of matrix factorization for text data is set equal to the number of code bits, e.g., 16, 32 etc. The mapping parameters (denoted as θ m ) are initialized by solving a relatively easy problem min M(θ m ) (similar algorithm with that presented in solving min F(θ m |θ q )). Then the quantization parameters (denoted as θ q ) are initialized by conducting composite quantization <ref type="bibr" target="#b26">[27]</ref> in the common space. There are five parameters balancing different trade-offs in our algorithm: the sparsity degree ρ, the scale-balance parameter η, the alignment degree in the common space λ, the correlation degree of the quantization γ, and the penalty parameter µ. We simply set µ = 0.1 in our experiments as it has already shown satisfactory results. The other four pa-rameters are selected through validation (by varying one parameter in {0.1, 0.3, 0.5, 0.7} while keeping others fixed) so that the MAP value, when using the validation set (a subset of the training data) as the queries to search in the remaining training data, is the best. The sensitive analysis of these parameters is presented in Section 6.3.</p><formula xml:id="formula_28">-- -- -- -- -- -- -- -- (CCQ [10]) (0.2513) (0.2529) (0.2587) -- -- -- -- -- -- -- -- -- CMCQ 0.</formula><formula xml:id="formula_29">-- -- -- -- -- -- -- -- (CCQ [10]) (0.6351) (0.6394) (0.6405) -- -- -- -- -- -- -- -- -- CMCQ 0.</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.2.">Results</head><p>Results on Wiki. The comparison in terms of MAP@100 and the precision@T curve is reported in <ref type="table">Table 2</ref> and the first row of <ref type="figure" target="#fig_0">Figure 3</ref>. We can find that our approach, CMCQ, achieves better performance than other methods over the text to image task. While over the image to query task, we can see from <ref type="table">Table 2</ref> that the best performance is achieved by MLBE with 16 bits and 32 bits, and CMFH with 64 bits and 128 bits. However, the performance of MLBE decreases as the code length gets longer. Our approach, on the other hand, is able to utilize the additional bits to enhance the search quality. In comparison with CMFH, we can see that our approach gets the similar results. Results on FLICKR25K. The performance on the FLICKR25K dataset is shown in <ref type="table">Table 2</ref> and the second row of <ref type="figure" target="#fig_0">Figure 3</ref>. It can be seen that the gain obtained by our approach is significant over both cross-modal search tasks. Moreover, we can observe from <ref type="table">Table 2</ref> that the results of our approach with the smallest code bits perform much better than other methods with the largest code bits. For example, over the text to image task, the MAP@50 of our approach, CMCQ with 16 bits, is 0.7248, about 2% larger than 0.7010, the best MAP@50 obtained by other baseline methods with 128 bits. This indicates that when dealing with high-dimensional dataset, such as FLICKR25K with 3857dimensional image features and 2000-dimensional text features, our method keeps much more information than other hashing-based cross-modal techniques, and hence produces better search quality. Results on NUS-WIDE. <ref type="table">Table 2</ref> and the third row of <ref type="figure" target="#fig_0">Figure 3</ref> show the performance of all the methods on the largest dataset of the three datasets, NUS-WIDE. One can observe that the proposed approach again gets the best performance. In addition, it can be seen from the figure that in most cases, the performance of our approach barely drops with increasing value of T . For instance, the precision@1 of our approach over the text to image task with 32 bits is 68.17%, and the precision@1K is 64.55%, which suggests that our method consistently keeps a large portion of the relevant items retrieved as the number of retrieved items increases.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.3.">Empirical analysis</head><p>Comparison with semantics-preserving hashing. Another challenging competitor for our approach is the recent semantics-preserving hashing (SePH) <ref type="bibr" target="#b8">[9]</ref>. The comparison is shown in <ref type="table" target="#tab_6">Table 3</ref> (A). The reason of SePH outperforming ours is that SePH exploits the document-label information, which our method doesn't use for two reasons:</p><p>(1) the image-text correspondence information comes naturally and easily, while the label information is expensive to get; (2) exploiting label information may tend to overfit the data and not generalize well to newly-coming classes.</p><p>To show it, we conducted an experiment: split the NUS-WIDE training set into two parts: one with five concepts for training, and the other with other five concepts for the search database whose codes are extracted using the model trained on the first part. Our results as shown in <ref type="table" target="#tab_6">Table 3 (B)</ref> are better than SePH, indicating that our method can well generalize to newly-coming classes.</p><p>The effect of intra-document correlation. The intradocument correlation is imposed in our formulation over two spaces (the quantized space and the common space) by two regularization terms controlled respectively by parameter γ and λ. In fact, it is possible to just add one such term and set the other to be 0. Specifically, if γ = 0, our approach will degenerate to conducting composite quantization <ref type="bibr" target="#b26">[27]</ref> separately on each modality, and if λ = 0, the proposed approach will lack the explicit connection in the common space. In either case, the bridge that links the pair of image and text would be undermined, resulting in reduced cross-modal search quality. The experimental results shown in <ref type="figure">Figure 1</ref>, validate this point: the performance of our approach when considering both of the intra-document correlation terms is much better.</p><p>The effect of dictionary. One possible way for our approach to better catch the intra-document correlation is to use the same dictionary to quantize both modalities, i.e., adding constraint C = D in the Formulation 3, which is similar to <ref type="bibr" target="#b9">[10]</ref>. This might introduce a closer connection between a pair of image and text, and hence improve the search quality. However, our experiments shown in <ref type="figure">Figure 2</ref> suggest that this is not the case. The reason might be that using one dictionary for two modalities in fact reduces the approximation ability of quantization when using two dictionaries.</p><p>Parameter sensitive analysis. We also conduct the parameter sensitive analysis to show that our approach is robust to the change of parameters. The experiments are conducted on FLICKR25K and NUS-WIDE using a validation set, to form which we randomly sample a subset of the training dataset. The size of the validation set is 1000 and 2000 respectively for FLICKR25K and NUW-WIDE. To evaluate the sensitive of the parameter, we vary one parameter from 0.001 to 10 (1 for ρ) while keep others fixed. The empirical results on the two search tasks (task1: image to text and task2: text to image) are presented in <ref type="figure">Figure 4</ref>. It can be seen from the figure that our approach can achieve superior performance under a wide range of the pa-(a) <ref type="bibr" target="#b0">1</ref>    <ref type="figure">Figure 4</ref>. Parameter sensitive analysis of our algorithm with respect to (a) γ, (b) ρ, (c) η, and (d) λ over image to text (task1) and text to image (task2) on two datasets: FLICKR25K (F) and NUS-WIDE (N) with 32 bits. The dashdot line shows the best results obtained by other baseline methods and is denoted as B, e.g., B-Task1F denotes the best baseline results the image to text task on FLICKR25K. rameter values. We notice that when the parameter ρ gets close to 1, the performance drops suddenly. The reason might be that with a larger sparsity degree value ρ, the learnt image representation in the common space would carry little information since the learnt S is a very sparse matrix.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Conclusion</head><p>In this paper, we present a quantization-based compact coding approach, collaborative quantization, for crossmodal similarity search. The superiority of the proposed approach stems from that it learns the quantizers for both modalities jointly by aligning the quantized approximations for each pair of image and text in the common space, which is simultaneously learnt with the quantization. Empirical results on three multi-modal datasets indicate that the proposed approach outperforms existing methods.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>and Figure 3 .</head><label>3</label><figDesc></figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 1 .Figure 2 .</head><label>12</label><figDesc>Illustrating the effect of the intra-document relation. The MAP is compared among CMCQ, CMCQ (γ = 0) (without correlation in the quantized space), and CMCQ (λ = 0) (without correlation in the common space) on the three datasets denoted as W (Wiki), F (FLICKR25K), and N (NUS-WIDE) in the legend. Illustrating the effect of the dictionary. The MAP is compared between CMCQ and CMCQ (C = D) (using one dictionary for both modalities) on the three datasets.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 3 .</head><label>3</label><figDesc>Precision@T (T is the number of retrieved items) curve of different algorithms on the (a) Wiki, (b) FLICKR25K, and (c) NUS-WIDE dataset encoded with 32 bits and 64 bits over two search tasks: image to text and text to image.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head>Table 1 .</head><label>1</label><figDesc>A brief categorization of the compact coding algorithms for cross-modal similarity search. The multi-modal relations are roughly divided into four categories: intra-modality (image vs. image and text vs. text), inter-modality (image vs. text), intra-document (correspondence of an image and a text forming a document, a special kind of inter-modality), and inter-document (document vs. document). Unified codes denote that the codes for an image and a text belonging to a document are the same, and separate codes denote that the codes are different.</figDesc><table>Methods 
+Multi-modal data relations 
+Codes 
+Coding methods 
+Intra-modality Inter-modality Intra-document Inter-document Unified 
+Separate Hash Quantization 
+CMSSH [1] </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>1 http://parnec.nuaa.edu.cn/jliu/largeScaleSparseLearning.htm</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head></head><label></label><figDesc>nj is constant for all the texts due to the introduced equality constraint in Equation 7. which furthermore can be efficiently computed and takes O(M ) by looking up a precomputed distance table storing the distances:</figDesc><table>Hence given x ′ 
+q , it is enough to compute the first term 
+
+M 
+
+m=1 x ′ 
+q − D m q nm 
+
+2 
+
+2 to search for the nearest neigh-
+bors, </table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_6" validated="false"><head>Table 3 .</head><label>3</label><figDesc>Comparison with SePH (in terms of MAP@50). Generalization to "newly-coming classes": ours outperforms SePH km</figDesc><table>(A) Comparison between ours and SePH km (the best version of SePH) 
+Dataset 
+Task 
+Method 
+32 
+64 
+128 
+
+NUS-WIDE 
+
+Img to Txt 
+SePH km 
+0.586 
+0.601 
+0.607 
+CMCQ 
+0.590 
+0.599 
+0.610 
+
+Txt to Img 
+SePH km 
+0.726 
+0.746 
+0.746 
+CMCQ 
+0.709 
+0.719 
+0.725 
+(B) NUS-WIDE 
+
+Img to Txt 
+SePH km 
+0.442 
+0.436 
+0.435 
+CMCQ 
+0.495 
+0.501 
+0.535 
+
+Txt to Img 
+SePH km 
+0.448 
+0.459 
+0.455 
+CMCQ 
+0.551 
+0.568 
+0.580 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_7" validated="false"><head></head><label></label><figDesc>Text to Image, FLICKR25K, 64 bits encoding Image to Text, NUS−WIDE, 32 bits encoding Text to Image, NUS−WIDE, 32 bits encoding Image to Text, NUS−WIDE, 64 bits encoding Text to Image, NUS−WIDE, 64 bits encoding</figDesc><table>2 5 10 20 50 100 200 500 1K 
+
+0.1 
+
+0.15 
+
+0.2 
+
+0.25 
+
+0.3 
+
+0.35 
+
+0.4 
+
+T 
+
+Precision 
+
+Image to Text, Wiki, 32 bits encoding 
+
+CMSSH 
+CVH 
+MLBE 
+QCH 
+LSSH 
+CMFH 
+CMCQ 
+
+1 
+2 
+5 
+10 20 
+50 100 200 
+500 1K 
+0 
+
+0.1 
+
+0.2 
+
+0.3 
+
+0.4 
+
+0.5 
+
+0.6 
+
+0.7 
+
+T 
+
+Precision 
+
+Text to Image, Wiki, 32 bits encoding 
+
+CMSSH 
+CVH 
+MLBE 
+QCH 
+LSSH 
+CMFH 
+CMCQ 
+
+1 
+2 
+5 
+10 20 
+50 100 200 
+500 1K 
+0.1 
+
+0.12 
+
+0.14 
+
+0.16 
+
+0.18 
+
+0.2 
+
+0.22 
+
+0.24 
+
+T 
+
+Precision 
+
+Image to Text, Wiki, 64 bits encoding 
+
+CMSSH 
+CVH 
+MLBE 
+QCH 
+LSSH 
+CMFH 
+CMCQ 
+
+1 
+2 
+5 
+10 20 
+50 100 200 
+500 1K 
+0.1 
+
+0.2 
+
+0.3 
+
+0.4 
+
+0.5 
+
+0.6 
+
+T 
+
+Precision 
+
+Text to Image, Wiki, 64 bits encoding 
+
+CMSSH 
+CVH 
+MLBE 
+QCH 
+LSSH 
+CMFH 
+CMCQ 
+
+(b) 1 2 5 10 20 50 100 200 500 1K 
+
+0.52 
+
+0.54 
+
+0.56 
+
+0.58 
+
+0.6 
+
+0.62 
+
+0.64 
+
+0.66 
+
+0.68 
+
+T 
+
+Precision 
+
+Image to Text, FLICKR25K, 32 bits encoding 
+
+CMSSH 
+CVH 
+MLBE 
+QCH 
+LSSH 
+CMFH 
+CMCQ 
+
+1 
+2 
+5 
+10 20 
+50 100 200 
+500 1K 
+0.52 
+
+0.54 
+
+0.56 
+
+0.58 
+
+0.6 
+
+0.62 
+
+0.64 
+
+0.66 
+
+0.68 
+
+0.7 
+
+0.72 
+
+Text to Image, FLICKR25K, 32 bits encoding 
+
+T 
+
+Precision 
+
+CMSSH 
+CVH 
+MLBE 
+QCH 
+LSSH 
+CMFH 
+CMCQ 
+
+1 
+2 
+5 
+10 20 
+50 100 200 
+500 1K 
+0.52 
+
+0.54 
+
+0.56 
+
+0.58 
+
+0.6 
+
+0.62 
+
+0.64 
+
+0.66 
+
+0.68 
+
+0.7 
+
+T 
+
+Precision 
+
+Image to Text, FLICKR25K, 64 bits encoding 
+
+CMSSH 
+CVH 
+MLBE 
+QCH 
+LSSH 
+CMFH 
+CMCQ 
+
+1 
+2 
+5 
+10 20 
+50 100 200 
+500 1K 
+0.52 
+
+0.56 
+
+0.6 
+
+0.64 
+
+0.68 
+
+0.72 
+
+T 
+
+Precision 
+
+CMSSH 
+CVH 
+MLBE 
+QCH 
+LSSH 
+CMFH 
+CMCQ 
+
+(c) 1 2 5 10 20 50 100 200 500 1K 
+
+0.36 
+
+0.4 
+
+0.44 
+
+0.48 
+
+0.52 
+
+0.56 
+
+0.6 
+
+T 
+
+Precision 
+
+CMSSH 
+CVH 
+MLBE 
+QCH 
+LSSH 
+CMFH 
+CMCQ 
+
+1 
+2 
+5 
+10 20 
+50 100 200 
+500 1K 
+0.35 
+
+0.4 
+
+0.45 
+
+0.5 
+
+0.55 
+
+0.6 
+
+0.65 
+
+0.7 
+
+T 
+
+Precision 
+
+CMSSH 
+CVH 
+MLBE 
+QCH 
+LSSH 
+CMFH 
+CMCQ 
+
+1 
+2 
+5 
+10 20 
+50 100 200 
+500 1K 
+0.4 
+
+0.42 
+
+0.44 
+
+0.46 
+
+0.48 
+
+0.5 
+
+0.52 
+
+0.54 
+
+0.56 
+
+0.58 
+
+T 
+
+Precision 
+
+CMSSH 
+CVH 
+MLBE 
+QCH 
+LSSH 
+CMFH 
+CMCQ 
+
+1 
+2 
+5 
+10 20 
+50 100 200 
+500 1K 
+0.35 
+
+0.4 
+
+0.45 
+
+0.5 
+
+0.55 
+
+0.6 
+
+0.65 
+
+0.7 
+
+T 
+
+Precision 
+
+CMSSH 
+CVH 
+MLBE 
+QCH 
+LSSH 
+CMFH 
+CMCQ 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">http://www.ece.northwestern.edu/nocedal/lbfgs.html</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">http://www.svcl.ucsd.edu/projects/crossmodal/ 4 http://www.cs.toronto.edu/ nitish/multimodal/index.html 5 http://lms.comp.nus.edu.sg/research/NUS-WIDE.htm</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Data fusion through cross-modality metric learning using similarity-sensitive hashing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">M</forename><surname>Bronstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">M</forename><surname>Bronstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Michel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Paragios</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<publisher>IEEE Computer Society</publisher>
+			<date type="published" when="2002" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Nus-wide: A real-world web image database from national university of singapore</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T.-S</forename><surname>Chua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Hong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-T</forename><surname>Zheng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of ACM Conf. on Image and Video Retrieval (CIVR&apos;09)</title>
+		<meeting>of ACM Conf. on Image and Video Retrieval (CIVR&apos;09)<address><addrLine>Santorini, Greece.</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Locality-sensitive hashing scheme based on p-stable distributions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Datar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Immorlica</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Indyk</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">S</forename><surname>Mirrokni</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 20th ACM Symposium on Computational Geometry</title>
+		<meeting>the 20th ACM Symposium on Computational Geometry<address><addrLine>Brooklyn, New York, USA</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="page" from="253" to="262" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Collective matrix factorization hashing for multimodal data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Ding</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Guo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">2014 IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting><address><addrLine>Columbus, OH, USA</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2014-06-23" />
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Iterative quantization: A procrustean approach to learning binary codes for large-scale image retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Gong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gordo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Perronnin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">12</biblScope>
+			<biblScope unit="page" from="2916" to="2929" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Product quantization for nearest neighbor search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Douze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="117" to="128" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Sequential spectral learning to hash with multiple representations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Kang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Choi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision -ECCV 2012 -12th European Conference on Computer Vision</title>
+		<meeting><address><addrLine>Florence, Italy</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="538" to="551" />
+		</imprint>
+	</monogr>
+	<note>Proceedings, Part V</note>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Learning hash functions for crossview similarity search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Udupa</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCAI/AAAI</title>
+		<editor>T. Walsh</editor>
+		<imprint>
+			<biblScope unit="page">6</biblScope>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Semantics-preserving hashing for cross-view retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Ding</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting><address><addrLine>Boston, MA, USA</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2015-06-07" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">Compositional correlation quantization for large-scale multimodal search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">S</forename><surname>Yu</surname></persName>
+		</author>
+		<idno>abs/1504.04818</idno>
+		<imprint>
+			<date type="published" when="2005" />
+			<publisher>CoRR</publisher>
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Multimodal similarity-preserving hashing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Masci</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">M</forename><surname>Bronstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">M</forename><surname>Bronstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="824" to="830" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Regularised cross-modal hashing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Moran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lavrenko</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 38th International ACM SIGIR Conference on Research and Development in Information Retrieval</title>
+		<meeting>the 38th International ACM SIGIR Conference on Research and Development in Information Retrieval<address><addrLine>Santiago, Chile</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="907" to="910" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Minimal loss hashing for compact binary codes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Norouzi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Fleet</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 28th International Conference on Machine Learning</title>
+		<meeting>the 28th International Conference on Machine Learning<address><addrLine>Bellevue, Washington, USA</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2011-06-28" />
+			<biblScope unit="page" from="353" to="360" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Cartesian k-means</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Norouzi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Fleet</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">2013 IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting><address><addrLine>Portland, OR, USA</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="3017" to="3024" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Bridging the gap: Query by semantic example</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Rasiwasia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">J</forename><surname>Moreno</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Vasconcelos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Multimedia</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="923" to="938" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">A new approach to cross-modal multimedia retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Rasiwasia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">C</forename><surname>Pereira</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Coviello</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Doyle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">R G</forename><surname>Lanckriet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Levy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Vasconcelos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 18th International Conference on Multimedia</title>
+		<meeting>the 18th International Conference on Multimedia<address><addrLine>Firenze, Italy</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2010-10-25" />
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Effective multiple feature hashing for large-scale near-duplicate video retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">T</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Luo</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Multimedia</title>
+		<imprint>
+			<biblScope unit="volume">15</biblScope>
+			<biblScope unit="issue">8</biblScope>
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Intermedia hashing for large-scale retrieval from heterogeneous data sources</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Song</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">T</forename><surname>Shen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the ACM SIGMOD International Conference on Management of Data, SIGMOD 2013</title>
+		<meeting>the ACM SIGMOD International Conference on Management of Data, SIGMOD 2013<address><addrLine>New York, NY, USA</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="785" to="796" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Multimodal learning with deep boltzmann machines</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">15</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page">5</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Semantic topic multimodal hashing for cross-media retrieval</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Gao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>He</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Twenty-Fourth International Joint Conference on Artificial Intelligence</title>
+		<meeting>the Twenty-Fourth International Joint Conference on Artificial Intelligence<address><addrLine>Buenos Aires, Argentina</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2015-07-25" />
+			<biblScope unit="page" from="3890" to="3896" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Semi-supervised hashing for large-scale search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">12</biblScope>
+			<biblScope unit="page" from="2393" to="2406" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">Effective multi-modal retrieval based on stacked autoencoders</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">C</forename><surname>Ooi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhuang</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>PVLDB</publisher>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="page" from="649" to="660" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Quantized correlation hashing for fast cross-modal search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Twenty-Fourth International Joint Conference on Artificial Intelligence, IJCAI 2015</title>
+		<meeting>the Twenty-Fourth International Joint Conference on Artificial Intelligence, IJCAI 2015<address><addrLine>Buenos Aires, Argentina</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Sparse multi-modal hashing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhuang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Multimedia</title>
+		<imprint>
+			<biblScope unit="volume">16</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="427" to="439" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Large-scale supervised multimodal hashing with semantic correlation maximization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the Twenty-Eighth AAAI Conference on Artificial Intelligence</title>
+		<meeting>the Twenty-Eighth AAAI Conference on Artificial Intelligence<address><addrLine>Québec City, Québec, Canada</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="2177" to="2183" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Composite hashing with multiple information sources</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Si</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceeding of the 34th International ACM SIGIR Conference on Research and Development in Information Retrieval, SIGIR 2011</title>
+		<meeting>eeding of the 34th International ACM SIGIR Conference on Research and Development in Information Retrieval, SIGIR 2011<address><addrLine>Beijing, China</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="225" to="234" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Composite quantization for approximate nearest neighbor search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Du</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML (2)</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Co-regularized hashing for multimodal data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Yeung</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems 25: 26th Annual Conference on Neural Information Processing Systems</title>
+		<meeting><address><addrLine>Lake Tahoe, Nevada, United States</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+	<note>Proceedings of a meeting held December 3-6</note>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+		<title level="m" type="main">A probabilistic model for multimodal hash function learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D.-Y</forename><surname>Yeung</surname></persName>
+		</author>
+		<editor>Q. Y. 0001, D. Agarwal, and J. Pei</editor>
+		<imprint>
+			<date type="published" when="2012" />
+			<publisher>ACM</publisher>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Latent semantic sparse hashing for cross-modal similarity search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Ding</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Guo</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">The 37th International ACM SIGIR Conference on Research and Development in Information Retrieval, SIGIR &apos;14</title>
+		<meeting><address><addrLine>Gold Coast , QLD, Australia</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2003" />
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Linear crossmodal hashing for efficient multimedia search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">T</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACM Multimedia Conference, MM &apos;13</title>
+		<meeting><address><addrLine>Barcelona, Spain</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="143" to="152" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

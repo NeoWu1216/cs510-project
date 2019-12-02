@@ -1,0 +1,894 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">FANNG: Fast Approximate Nearest Neighbour Graphs</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ben</forename><surname>Harwood</surname></persName>
+							<email>ben.harwood@monash.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Electrical and Computer Systems Engineering</orgName>
+								<orgName type="institution">Monash University</orgName>
+								<address>
+									<settlement>Victoria</settlement>
+									<country key="AU">Australia</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tom</forename><surname>Drummond</surname></persName>
+							<email>tom.drummond@monash.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Electrical and Computer Systems Engineering</orgName>
+								<orgName type="institution">Monash University</orgName>
+								<address>
+									<settlement>Victoria</settlement>
+									<country key="AU">Australia</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">FANNG: Fast Approximate Nearest Neighbour Graphs</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:40+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We present a new method for approximate nearest neighbour search on large datasets of high dimensional feature vectors, such as SIFT or GIST descriptors. Our approach constructs a directed graph that can be efficiently explored for nearest neighbour queries. Each vertex in this graph represents a feature vector from the dataset being searched. The directed edges are computed by exploiting the fact that, for these datasets, the intrinsic dimensionality of the local manifold-like structure formed by the elements of the dataset is significantly lower than the embedding space. We also provide an efficient search algorithm that uses this graph to rapidly find the nearest neighbour to a query with high probability.</p><p>We show how the method can be adapted to give a strong guarantee of 100% recall where the query is within a threshold distance of its nearest neighbour. We demonstrate that our method is significantly more efficient than existing state of the art methods. In particular, our GPU implementation can deliver 90% recall for queries on a data set of 1 million SIFT descriptors at a rate of over 1.2 million queries per second on a Titan X. Finally we also demonstrate how our method scales to datasets of 5M and 20M entries.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Large datasets of feature vectors are a common component of many computer vision tasks such as object and scene recognition <ref type="bibr" target="#b25">[25]</ref>, pose estimation <ref type="bibr" target="#b27">[27,</ref><ref type="bibr" target="#b21">21]</ref>, relocalisation and loop-closing <ref type="bibr" target="#b20">[20]</ref>, 3D reconstruction <ref type="bibr" target="#b3">[4]</ref> and machine learning <ref type="bibr" target="#b26">[26]</ref>. Image features such as those described in SIFT <ref type="bibr" target="#b14">[14]</ref>, SURF <ref type="bibr" target="#b1">[2]</ref> and GIST <ref type="bibr" target="#b22">[22]</ref> compress local image regions to single points in a high dimensional space that use between 64 and 512 extrinsic dimensions. Calculating correspondences between feature vectors can be achieved by applying a distance function (usually Euclidean) with the assumption that the correct correspondences are more closely located in feature space than incorrect ones. The challenge of finding correspondences in large datasets is computationally demanding and becomes problematic when there is a requirement for real-time responses or when a large number of these queries are required. A naive solution to the feature correspondence problem is to linearly search all features in the dataset and evaluate each one as a possible correspondence for a query feature. Unfortunately this solution is only suitable for trivially small datasets and due to the high dimensionality of feature vectors there is no known algorithm for consistently returning correspondences in a sub-linear time. However for many applications an approximate search <ref type="bibr" target="#b16">[16]</ref> can offer a less than perfect recall rate while having a considerably smaller query cost than that of an exhaustive linear search. It is also possible for the degree of this trade-off to be adjusted so it provides an acceptable recall rate for a particular application. For the applications being considered in this paper we will be using the Euclidean distance function to calculate the similarity between feature vectors.</p><p>Our approach for finding the approximate nearest neighbours of a dataset involves building a graph where each vertex represents a feature vector from the dataset being searched. In this paper we describe our new graph based method and demonstrate the following key contributions:</p><p>• We present algorithms for building graphs and for efficiently searching them during queries (Sections 3.1, 3.4).</p><p>• We exploit the limited dimensionality of the local manifold-like structure of a dataset without the need to directly compute that manifold (Section 3.2).</p><p>• We present a method that is guaranteed to find the absolute nearest neighbour for all queries within a tunable distance threshold of all values in the initial dataset (Section 3.3).</p><p>• We demonstrate that our method achieves much faster average query times for a given recall rate compared to current state-of-the-art algorithms (Section 4.2).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related research</head><p>There is a significant literature on algorithms for approximate nearest neighbour search <ref type="bibr" target="#b19">[19]</ref>, which we divide into two main categories:</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.1.">Hashing and quantisation techniques</head><p>Hashing techniques <ref type="bibr" target="#b0">[1]</ref> and in particular localitysensitive hashing algorithms <ref type="bibr" target="#b15">[15,</ref><ref type="bibr" target="#b30">30]</ref> are characterised by the construction of multiple hash tables that each map a query vector to a lower dimensional hash code that can then be efficiently compared against the hashes that were generated by the vectors in the dataset. The more hash tables used the more likely it is that one of the hashes of the query vector will end up close to its nearest neighbour in the hash code space. Ultimately memory constraints limit the number of tables that can be used. In general, hashing algorithms are most computationally efficient when there is a relatively small distance between a query and its absolute nearest neighbour. If this distance grows too large, as is common for real valued features, then the computational efficiency of the hash functions will rapidly decrease as the hash codes become separated. This is due to the need for a large linear search in the original vector space to enable matching between the discontinuous hash codes.</p><p>Quantisation techniques <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b5">6,</ref><ref type="bibr" target="#b10">10]</ref> seek to perform a similar dimension reduction to hashing algorithms, but in a way that better retains information about the relative distances between points in the original vector space. The major advantage of this approach is that both the access of the original dataset and any linear searching of candidate points can be performed in the reduced dimensional space. As such, quantisation techniques have been applied successfully to datasets of up to 1B image descriptors, the size of which would result in current hardware limitations reducing the efficiency of other techniques.</p><p>Because these methods avoid distance calculations on the original data vectors, they typically return a set of R candidates that contains the nearest neighbour with some probability (the recall@R criterion). Because of this method of operation, it can be difficult to compare these methods for computational efficiency against tree and graph-based methods in ways other than measuring runtime (which won't account for specific implementations, optimisations and hardware). At least one quantisation method <ref type="bibr" target="#b7">[8]</ref> shows gains of roughly a factor of two over FLANN <ref type="bibr" target="#b18">[18]</ref> when they include the time cost for comparisons against the shortlist of candidates returned by their method. It can also be seen that the efficiency of these methods rapidly deteriorates when at higher recall. As recall approaches 1.0, the required length of the candidate list approaches the size of the dataset. It is in these areas of operation that methods capable of continuously partition the original data space can be found to be more efficient.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.2.">Tree and graph techniques</head><p>Tree structures <ref type="bibr" target="#b13">[13,</ref><ref type="bibr" target="#b12">12]</ref> offer a natural way to continuously partition a dataset into discrete regions at multiple scales. As such, many tree-based structures have been successfully applied to the nearest neighbour search problem. One commonly used method the kd-tree <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b28">28]</ref> is known perform poorly on high dimensional data, however in the same way that building and applying multiple hash tables improves locality-sensitive hashing, building multiple kdtrees can greatly improve the recall rate of these methods for high dimensional data. Equally comparable to kd-trees in terms of recall rate and search efficiency is the k-means tree <ref type="bibr" target="#b21">[21,</ref><ref type="bibr" target="#b17">17]</ref>. Rather than clustering the data based on its extrinsic dimensions, as is done with kd-trees, the k-means algorithm attempts to group the data based on its intrinsic structure. The major drawback of using the intrinsic properties of the data comes as an additional cost when propagating queries through the k-means trees.</p><p>In general the propagation of a query from the top to the bottom of an approximate nearest neighbour tree is computationally efficient. However the average recall rates that are achieve with a single propagation are very low. For this reason, backtracking algorithms are used to increase the recall to a useful range. The need for large amounts of backtracking is an inherent property that is tied to the branching structure of the trees. During the propagation of a query vector, each time a branch is taken the decision is based on a threshold which represents only a small subset of the information needed to explore the search space. Whenever a query is close to a threshold value there is a significant probability that the desired nearest neighbour lies down a different branch than the one being taken. When low dimensional boundaries are used for high dimensional data, choosing an incorrect branch is almost guaranteed. Every time an erroneous path is taken there is no way to correct for the error in the lower layers of the tree, the only solution is to re-traverse the tree many times taking a slightly different route each time.</p><p>Nearest neighbour graphs are capable of partitioning the search space in a similar way to tree structures. Algorithms such as a Delaunay triangulation <ref type="bibr" target="#b11">[11]</ref> form a graph with a vertex at each data point and edges that connect local neighbours. Delaunay graphs can be explored in a deterministic way that is usually very efficient and can guarantee that the absolute nearest neighbour to a query point will be found. Unfortunately, as the dimensionality of a dataset increases, Delaunay triangulated graphs rapidly reduce in computational efficiency as they very quickly become almost fully connected. K-nearest neighbour graphs <ref type="bibr" target="#b23">[23,</ref><ref type="bibr" target="#b4">5]</ref> provide an approximation of the local neighbourhoods formed in Delaunay graphs. These graphs are able to maintain efficient exploration costs by limiting the degree (number of outgoing edges) of each vertex in the graph. This restriction re-moves any guarantee of finding the absolute nearest neighbour (returning to the idea of an approximate nearest neighbour search) as well as some of the efficiency of the graph exploration. By placing an artificial limit on the degree of each vertex some of the intrinsic structure, such as variation in density, is inevitably lost.</p><p>For large datasets the computational cost of computing the k-nearest neighbours for each vertex is large. Approximate k-nearest neighbour graphs <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b24">24,</ref><ref type="bibr" target="#b29">29]</ref> provide an alternative approach to approximating the edges in a Delaunay graph. These and other structures such as small world graphs <ref type="bibr" target="#b16">[16]</ref> offer a significant speed-up for the offline building of a graph, but in addition to placing limits on the degree of each vertex, the decentralised construction of the graphs acts to further compromise the desirable structures of Delaunay graphs. This is demonstrated by the need to perform backtracking and multiple simultaneous graph explorations, as done with trees, in order to achieve higher average recall. But, since the graphs avoid using a global hierarchical structure, the costs of backtracking are uniform regardless of if an erroneous path is taken at the beginning or at the end of the exploration.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Fast approximate nearest neighbour graphs</head><p>The simplest way to use directed graphs for finding the nearest neighbour to an arbitrary query point is to start at some vertex in the graph, test each outgoing edge from that vertex and follow the first edge that gets closer to the query point. This is repeated until all outgoing edges point to vertices that are further away from the query. This is given more formally in Algorithm 1.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Ideal graph structure</head><p>The key innovation of this paper is the design of a graph structure that gives rise to efficient searching. Here, the ideal graph is defined as a minimal graph for which Algorithm 1 always finds the correct solution when the query point matches a vertex of the graph. This guarantee still exists regardless of which vertex of the graph is given as the starting location. The insight that allows a simple graph to be constructed with these properties is that it's only necessary that at each vertex of the graph there is always an edge that leads to a vertex which is closer to the query. If this criteria holds then the graph can be traversed until the query vertex is reached. In other words, it is only necessary that Algorithm 1 be able to make progress and not 'get stuck' at any vertex other than the vertex that matches the query. Because the distance to query always decreases at each step, and there are a finite number of vertices, it must converge on the minimum distance of zero. This means that if the graph has an edge from p 1 to p 2 , then it is not necessary for it to have an edge from p 1 to any vertex p 3 that is closer to p 2 than p 1 . In this case, the edge from p 1 to p 2 occludes Algorithm 1: Naive downhill search Input: graph vertices P , directed graph edges E,</p><formula xml:id="formula_0">query point Q, search start index v Output: nearest neighbour index v 1 for each edge E i with start vertex P v do 2 u ← index of end vertex of E i 3 if distance(Q, P u ) &lt; distance(Q, P v ) then 4 v ← u 5 return v</formula><p>the edge from p 1 to p 3 . To make building efficient, we only allow shorter edges to occlude longer ones. This process is illustrated in <ref type="figure">Figure 1</ref>. More formally, given data points p i ∈ R n and a distance function d : R n × R n → R, occlusion can be defined as:</p><formula xml:id="formula_1">edge(p 1 , p 2 ) occludes edge(p 1 , p 3 ) if d(p 1 , p 2 ) &lt; d(p 1 , p 3 ) and d(p 2 , p 3 ) &lt; d(p 1 , p 3 ) (1)</formula><p>When building these graphs it is sufficient to select edges for each vertex independently. All but the target vertex are then sorted by their distance from it and an edge list is built by considering all vertices in order from nearest to farthest and adding an edge to each vertex that is not occluded by any edges already added. This is given more formally in Algorithm 2.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Intrinsic dimensionality and vertex degree</head><p>Algorithm 2 has the favourable property of creating graphs of relatively low degree (number of outgoing edges per vertex). For SIFT data, the average vertex degree is typically around 25, despite the data living in a 128 dimensional space. By contrast <ref type="bibr" target="#b6">[7]</ref> uses strict k-nearest neighbour graphs with degree up to 1000. This limited degree arises because the intrinsic dimensionality of SIFT data is much less than the space in which it is embedded and the occlusion rule in Equation 1 prunes the set of outgoing edges from a vertex so that they efficiently span the local neighbourhood of that vertex. One consequence of the occlusion rule is that the angle between edges must be at least 60 o , and thus the edges have to be well spread out. <ref type="bibr">Figure</ref> 1. An edge from p1 to p2 occludes an edge from p1 to p3 because p3 is closer to p2 than p1. The edge to p4 is not occluded.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Algorithm 2: Naive ideal graph construction</head><p>Input: graph vertices P Output: directed graph edges E 1 for each vertex P i do 2 e ← empty sorted list of edges <ref type="bibr" target="#b2">3</ref> for each vertex P j = P i do <ref type="bibr" target="#b3">4</ref> add edge e(P i , P j ) sorted by distance(P i , P j ) The intrinsic dimensionality of a dataset can be estimated using a variant of Hausdorff dimension by computing all pairwise distances between points and counting the number of these that lie below a threshold radius r. If this threshold r is changed, then the number of distances that lie below it should vary as r D where D is the intrinsic dimensionality of the data at the scale of r. By measuring at two different values of r, the dimensionality D can be estimated as:</p><formula xml:id="formula_2">D(r 1 , r 2 ) = log n(r1) n(r2) log r1 r2<label>(2)</label></formula><p>where n(r) is the number of pairwise distances in the dataset that are less than r. <ref type="figure" target="#fig_1">Figure 2</ref> shows this dimensionality calculation for a SIFT dataset containing 1M points.</p><p>In order to validate the impact of intrinsic dimensionality on the average degree of graphs constructed with Algorithm 2, several graphs were constructed on randomly sampled data that was selected uniformly from within an ndimensional hypercube. The average degree of these graphs is plotted against measured intrinsic dimensionality of the hypercube data in <ref type="figure" target="#fig_2">Figure 3</ref>. As can be seen, the hypercube data suggests that average degree 25 is achieved with a dimensionality of around 11, confirming the observations of the SIFT data.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Making nearest neighbour guarantees</head><p>While Algorithm 1 can be used on graphs built using Algorithm 2 for a arbitrary query point, it is only guaranteed to find the absolute nearest neighbour for queries that are  identical to a vertex of the graph. This is of limited use and in practice, it is desirable to have high recall for query points anywhere in the space. We present two methods for achieving this. The first, described in this section modifies the graph building method, while the second (found in Section 3.4) instead modifies the search algorithm.</p><p>In some situations, the user is only interested in the nearest neighbour to a query if it is within some distance τ of that query. This can arise when matching descriptors, where there is reason to believe that a true correspondence will have a distance less than some limit τ . In this case, the occlusion function used in graph building can be modified. Where Euclidean distance is used, the modified occlusion function is given by:</p><formula xml:id="formula_3">edge(p 1 , p 2 ) occludes edge(p 1 , p 3 ) if d(p 1 , p 2 ) &lt; d(p 1 , p 3 ) and d(p 2 , p 3 ) 2 &lt; d(p 1 , p 3 ) 2 − 2τ d(p 1 , p 2 )<label>(3)</label></formula><p>This modified occlusion function moves the boundary between p 1 and p 2 from the halfway point, a distance τ towards p 2 . To demonstrate this, consider <ref type="figure">Figure 4</ref> and the case of equality in the second condition for occlusion. The Pythagorean theorem gives</p><formula xml:id="formula_4">d(p 1 , p 3 ) 2 = ( 1 2 d(p 1 , p 2 ) + τ ) 2 + l 2<label>(4)</label></formula><p>and</p><formula xml:id="formula_5">d(p 2 , p 3 ) 2 = ( 1 2 d(p 1 , p 2 ) − τ ) 2 + l 2 (5) hence d(p 1 , p 3 ) 2 − d(p 2 , p 3 ) 2 = 2τ d(p 1 , p 2 )<label>(6)</label></formula><p>This ensures that if an edge from p 1 to p 2 occludes an edge from p 1 to any vertex p 3 where d(q, p 3 ) &lt; τ then since d(q, p 2 ) &lt; d(q, p 1 ), Algorithm 1 will keep moving until it finds p 3 (or an even nearer neighbour). In situations where it is acceptable to achieve a guaranteed recall of less than 1.0 the graph can be built using a threshold less than the maximum tolerated distance to a query point τ max . <ref type="table">Table 1</ref> shows results for graphs of 100K SIFT descriptors built according to various thresholds as a fraction of τ max , which has been set as the largest distance between a query point and its true nearest neighbour. As can be seen in practice, it is possible to achieve perfect recall on the test set using a lower value for τ than is strictly necessary and as such this recall is obtained at a lower average cost.</p><p>It is important to note that building graphs according to this modified occlusion criterion significantly increases the average vertex degree. This has two negative consequences; it increases the space complexity of storing the graph and it increases the search time because there are more edges to be considered at each vertex.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Fast approximate search using backtracking</head><p>A (much) more efficient alternative to the guarantee offered by the build method above is to modify the downhill <ref type="figure">Figure 4</ref>. The occlusion boundary has been moved a distance τ towards p2. p3 lies on the new occlusion boundary and a circle of radius τ is shown around it. Any query point within this circle (within τ of p3) must be nearer to p2 than p1 and so an edge from p1 to p3 is unnecessary. Although p4 is nearer to p2 than p1, it is not occluded because it is possible for a query point within τ of p4 to be nearer p1 than p2. Length l is the orthogonal distance to p3 from the line joining p1 and p2. search algorithm. Rather than terminating when no progress can be made, the algorithm uses a version of depth-firstsearch to backtrack to the second closest vertex and considers any edges from that vertex that have not been explored yet. If that vertex's edges are exhausted, the third closest vertex is considered and so on. This is implemented by maintaining a priority queue of vertices whose edges have not yet been fully explored. Exploring an edge requires first computing the distance from the query point to vertex at the end of the directed edge and then placing the vertex in the priority queue according its distance (shortest first). The tradeoff between recall and computational cost is managed by placing a hard limit on the number of distances that will be computed. Once all of this computation is exhausted, the closest observed vertex is returned. This search strategy is detailed in Algorithm 3. Alternative strategies involving combinations of random restarts, edge weighting schemes and potential early termination conditions were explored and found to provide no significant gains to the computational efficiency.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.5.">Returning k nearest neighbours</head><p>It is often valuable for a nearest neighbour algorithm to return more than just the single nearest neighbour. Algorithm 3 can be easily modified to return an approximation of the k nearest neighbours to a query point by returning a list of the k vertices observed during graph exploration that where nearest to the query point. This can be implemented by maintaining a (possibly truncated) sorted list or heap of vertices visited instead of just the nearest neighbour seen. Efficient implementations (such as our GPU code) can merge this data structure with the priority queue and the visited test on line 8 of Algorithm 3.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.6.">Efficient graph construction</head><p>The ideal graph construction given in Algorithm 2 has complexity O(n 2 log(n)) because it requires sorting a list of n distances for each of n vertices. This complexity makes the construction method prohibitively expensive for building large graphs and so more efficient methods are needed. This section presents two algorithms for constructing approximations to this ideal with significantly lower cost.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Algorithm 3: Backtrack search</head><p>Input: graph vertices P , directed graph edges E, query point Q, search start index v, maximum distance calculations M Output: nearest neighbour index n 1 X ← empty priority queue // closest to Q first 2 add edge e 0 with start vertex P v to X 3 m ← 1 // count distance computed to Q add edge e i+1 with start vertex P v to X 16 return n</p><p>The first method takes in two randomly chosen vertex ids, v 1 and v 2 . It then uses naive downhill search (Algorithm 1) to try to get from v 1 to v 2 and if it fails to arrive at v 2 , an edge is added from the last vertex visited to v 2 . If applied to an empty graph; this method will simply add an edge between v 1 and v 2 . Otherwise, there may be some book-keeping where the newly inserted edge occludes a longer edge already in graph, in which case, the longer edge must be removed so that the occlusion rule is maintained. Some gains in efficiency can be achieved by testing that the destinations of the removed edges can still be reached as well as by checking the reverse direction for each pair of test vertices. This method is detailed in Algorithm 4. Our build phase calls this function repeatedly with randomly selected nodes. Typically we repeat until it is achieving a 90% success rate averaged over a sufficiently large number of calls to the naive downhill search function (we used 50N calls, where N is the size of the dataset).</p><p>When Algorithm 4 is called repeatedly, its progress in improving the graph will eventually slow down. It is at this stage that we switch to a second efficient graph construction method to further improve the graph. The second method uses the current graph to obtain a list of some thousands of approximate nearest neighbours to a vertex using the algorithm described in Section 3.5. Algorithm 3 is given the vertex in question as both the starting point for searching and the query point. This provides a list of neighbours that closely approximate a large set of nearest neighbours of the Algorithm 4: Traverse-add Input: graph vertices P , directed graph edges E,</p><formula xml:id="formula_6">search start index v 1 , search end index v 2 Output: directed graph edges E 1 u ← NaiveDownhillSearch(P , E, P v2 , v 1 ) 2 if u = v 2 then 3 add edge e(P u , P v2 ) to E // keep E sorted 4 for each edge E i with start vertex P u do 5 if e(P u , P v2 ) occludes E i then 6 remove edge E i from E 7 v ← index of end vertex of E i 8 E ← TraverseAdd(P , E, u, v) 9 E ← TraverseAdd(P , E, v 2 , u) // test reverse 10 return E</formula><p>vertex. The set of outgoing edges for the vertex can then be rebuilt by running through this list applying the occlusion rule in the same manner as in the ideal construction Algorithm 2, lines 5-14. This method can be applied in parallel to each vertex in the graph to quickly build a graph of higher quality.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.7.">Truncating for increased efficiency</head><p>A final significant contribution to efficiency is obtained by truncating the edge list of each vertex in the graph to limit the degree to T edges. Although the mean degree for SIFT data is around 25, the maximum vertex degree is often around 300. By truncating to a maximum degree of between 25 and 32 a significant further speedup can be obtained. In practise, the optimal truncation depends on the recall rate demanded from nearest neighbour queries. High recall rates (e.g. 99% or 99.9%) are typically more efficient with slightly higher node degrees, while lower recall rates (e.g. 50% or 90%) are more efficient with lower degrees. Fortunately a graph of higher degree can be dynamically truncated at query time by passing T as an additional parameter to Algorithm 3 and adding a comparison i &lt; T to the test on line 14. This only has a small effect on efficiency (a few percent) and a single truncation value (e.g. 30 for SIFT) works well across a large range of recall values. Using dynamic truncation adds a second tuning parameter to the algorithm (the other being the maximum number of distance calculations M ), while making the algorithm generic across all types of graphs.</p><p>The very last minor improvement in efficiency comes from a judicious choice of starting vertex. We select the vertex nearest to the mass centre of the data which typically gives a few percent speedup over making a random choice. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Results</head><p>We first present results to justify the design decisions presented in this paper and then compare FANNG to other methods. It is conventional to plot the performance of a method as speedup relative to brute force linear search (measured as the number of distance calculations made) against recall (the fraction of nearest neighbours returned that are correct) on a log-linear scale. These graphs can be hard to read at high recall because when for all methods considered, the speedup drops rapidly as recall approaches 1.0. Here we plot speedup against error rate (1-recall), using a log-log scale. This approach improves the clarity of the relative performance of different algorithms at high recall. We use the BIGANN dataset <ref type="bibr" target="#b7">[8]</ref> of 1B SIFT descriptors at various levels of truncation and the set of 1M GIST descriptors for all the comparative results. We measure performance using the provided test set and ground truth files. <ref type="figure" target="#fig_4">Figure 5</ref> compares performance of our ideal graph and its truncation to 25 edges against two plain k-nearest neighbour graphs with all four of them using backtracking as the search algorithm. As the figure shows, k-nearest neighbour graphs are inefficient both in time and space complexity. Keeping the 25 nearest neighbours penalises computational efficiency substantially and even keeping the 250 nearest neighbours is computationally inefficient by comparison to our methods, while also being ten times less memory efficient. Truncating to a maximum of 25 edges per vertex gives us further small gains in time efficiency over the ideal graph as well as improving the memory efficiency.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Occlusion pruning vs K-nearest neighbours</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Comparison to other methods</head><p>Here we compare to two state-of-the-art methods that perform well at high recall, Small World graphs <ref type="bibr" target="#b19">[19]</ref> and FLANN <ref type="bibr" target="#b18">[18]</ref>. As noted in section 2.1, it is much more difficult to compare to quantisation techniques. We note,  however that <ref type="bibr" target="#b7">[8]</ref> reports search times on the order of seconds when comparing to FLANN. As described below, our system can obtain query times of 812 ns per query at 90% recall (although they did not utilise a GPU). Because <ref type="bibr" target="#b18">[18]</ref> and <ref type="bibr" target="#b19">[19]</ref> use different performance measures we present results using both.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.1">Comparison at 1-NN</head><p>[18] uses the recall (termed 'precision' in their paper) when a system is asked to return a single nearest neighbour. <ref type="figure" target="#fig_5">Figure 6</ref> compares our work to FLANN on the 5M subset of BIGANN.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.2">Comparison at 10-NN</head><p>[19] uses the mean overlap between the true 10 nearest neighbours and a system's estimate of the 10 neighbours. <ref type="figure" target="#fig_6">Figure 7</ref> compares our work to both FLANN and Small World Graphs on the 5M subset of BIGANN.  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Complexity</head><p>Here we show how the computational cost (average number of distance calculations per query) of our system changes with the dataset. <ref type="figure" target="#fig_7">Figure 8</ref> shows performance on two different types of image descriptors. The higher dimensional data found in the GIST descriptors results in a higher average vertex degree than that of the SIFT graph. Despite the differing graph structures the computational cost of the search remains consistent across a wide range of recall. This suggests that our approach is free from any bias that would favour a particular type of data. <ref type="figure" target="#fig_8">Figure 9</ref> shows how the number of calculations needed for various rates of recall changes as the size of the dataset increases. There are only four datapoints for each graph, however, the evidence here suggests that our method scales as roughly the fifth root of graph size, i.e. cost complexity and thus time complexity vary as O(N 0.2 ).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">GPU Implementation</head><p>We have created specialised GPU implementations for SIFT data for both our method and for linear search to ob- tain real-world speedup timings that can take into account the book-keeping overhead of running our search algorithm. For both methods, we batch all 10K queries in the standard set into a single kernel call and then divide by 10K to obtain time per query. As can be seen from the raw GFLOPS results in Table 2, the book-keeping overhead is roughly a factor of 3, i.e. our efficient search method accesses elements and compares distances at <ref type="bibr" target="#b0">1</ref> 3 of the rate of linear search. Despite this, our method is approximately 500 times faster than linear search at 90% recall on a dataset of size 1M and approximately 1400 times faster on a dataset of size 5M.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusions</head><p>This paper offers a new approach for finding the approximate nearest neighbours of high dimensional datasets. Our method focuses on building graphs as a structure for efficiently exploring the dataset during a nearest neighbour query. More specifically our method utilises a directed graph structure that is able to minimise the backtracking costs associated with tree structures. Additionally, much of the efficiency of our method comes from our ability to exploit the local intrinsic structures of a dataset without needing to directly compute a manifold that approximates the feature vectors being searched. Our method is able to directly trade-off computation time against recall by choosing a limit on the number of distance comparisons per query. A strengths of our approach to building explorable graphs is the guarantee it offers for finding the absolute nearest neighbour for all queries within a tunable distance threshold of all values in the initial dataset. Lastly when we compared our approach to a number of current state-of-the-art algorithms we found our method capable of achieving faster average query times than any of the other methods.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Acknowledgements</head><p>This work was supported by the Australian Research Council Centre of Excellence for Robotic Vision (project number CE1401000016).</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head></head><label></label><figDesc>edge E k with start vertex P i do 10 v ← index of end vertex of E k 11if distance(P u , P v ) &lt; L then<ref type="bibr" target="#b12">12</ref> occluded ← true<ref type="bibr" target="#b13">13</ref> if not occluded then<ref type="bibr" target="#b14">14</ref> add edge e j to E 15 return E</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .</head><label>2</label><figDesc>Hausdorff dimensionality of SIFT data measured at varying distance scales. The maximum dimensionality is shown to be approximately 11.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 .</head><label>3</label><figDesc>Average out-degree of graph vertices versus dimensionality of uniform hypercube data.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head></head><label></label><figDesc>distance(Q, P u ) &lt; distance(Q, P n ) then 12 n ← u 13 v ← = index of start vertex of e i 14if i &lt; number of edges with start vertex P v then<ref type="bibr" target="#b15">15</ref> </figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 5 .</head><label>5</label><figDesc>Comparison of k-nearest neighbour graphs with our ideal graph and a truncated ideal graph.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 6 .</head><label>6</label><figDesc>Comparison of FANNG to FLANN on a dataset of 5M SIFT descriptors.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 7 .</head><label>7</label><figDesc>Comparison of FANNG to FLANN and Small World on a dataset of 5M SIFT descriptors using 10-NN overlap.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 8 .</head><label>8</label><figDesc>FANNG performance on 1M SIFT and 1M GIST. Searching the SIFT graph is consistently around 3x more efficient than searching the GIST graph.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_8"><head>Figure 9 .</head><label>9</label><figDesc>Growth in number of distance calculations against dataset size for fixed recall values.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>τ /τ max Recall Avg. cost per query Avg. degree</figDesc><table>0.00 0.7098 
+110.52 
+24.329 
+0.38 0.9984 
+360.05 
+127.51 
+0.50 0.9999 
+547.80 
+232.04 
+0.75 1.0000 
+1315.5 
+753.53 
+1.00 1.0000 
+3123.2 
+2182.9 
+
+Table 1. Results for graphs built with varying τ as a fraction of the 
+worst case query distance τmax. Cost per query is calculated as 
+the number of distance calculations needed to search the graph on 
+a given query. 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 2 .</head><label>2</label><figDesc>Timing results for our GPU implementations of linear search and backtracking on FANNG.</figDesc><table>Data 
+Method Recall 
+Time per GFLOPS 
+points 
+query (µs) 
+linear search 
+1.0 
+473.7 
+861 
+1M 
+FANNG 
+0.95 
+1.264 
+273 
+FANNG 
+0.9 
+0.812 
+265 
+
+5M linear search 
+1.0 
+2433 
+789 
+FANNG 
+0.9 
+1.743 
+187 
+
+</table></figure>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Near-optimal hashing algorithms for approximate nearest neighbor in high dimensions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Andoni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Indyk</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Foundations of Computer Science, 2006. FOCS&apos;06. 47th Annual IEEE Symposium on</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="page" from="459" to="468" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title level="m" type="main">Computer vision and image understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tuytelaars</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="volume">110</biblScope>
+			<biblScope unit="page" from="346" to="359" />
+		</imprint>
+	</monogr>
+	<note>Speeded-up robust features (surf)</note>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Shape indexing using approximate nearest-neighbour search in high-dimensional spaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">S</forename><surname>Beis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Lowe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition, 1997. Proceedings</title>
+		<imprint>
+			<date type="published" when="1997" />
+			<biblScope unit="page" from="1000" to="1006" />
+		</imprint>
+	</monogr>
+	<note>IEEE Computer Society Conference on</note>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Fast and accurate image matching with cascade hashing for 3d reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Cheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Leng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Cui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 2014 IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the 2014 IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<publisher>IEEE Computer Society</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="1" to="8" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Efficient k-nearest neighbor graph construction for generic similarity measures</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Dong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Moses</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 20th international conference on World wide web</title>
+		<meeting>the 20th international conference on World wide web</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="577" to="586" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Optimized product quantization for approximate nearest neighbor search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Ge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Ke</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="2946" to="2953" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Fast approximate nearest-neighbor search with k-nearest neighbor graph</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Hajebi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Abbasi-Yadkori</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Shahbazi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IJCAI Proceedings-International Joint Conference on Artificial Intelligence</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="page">1312</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Product quantization for nearest neighbor search. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Douze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">33</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="117" to="128" />
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Searching in one billion vectors: re-rank with source coding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jégou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Tavenard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Douze</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Amsaleg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Acoustics, Speech and Signal Processing</title>
+		<imprint>
+			<publisher>ICASSP</publisher>
+			<biblScope unit="page">2011</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+			</analytic>
+	<monogr>
+		<title level="m">IEEE International Conference on</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="861" to="864" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Locally optimized product quantization for approximate nearest neighbor search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Kalantidis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Avrithis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition</title>
+		<meeting>the IEEE Conference on Computer Vision and Pattern Recognition</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="2321" to="2328" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Two algorithms for constructing a delaunay triangulation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D.-T</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">J</forename><surname>Schachter</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer &amp; Information Sciences</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="219" to="242" />
+			<date type="published" when="1980" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Nv-tree: nearest neighbors at the billion scale</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lejsek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">Þ</forename><surname>Jónsson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Amsaleg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 1st ACM International Conference on Multimedia Retrieval</title>
+		<meeting>the 1st ACM International Conference on Multimedia Retrieval</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2011" />
+			<biblScope unit="page">54</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">An investigation of practical approximate nearest neighbor algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">W</forename><surname>Moore</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Gray</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in neural information processing systems</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="page" from="825" to="832" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Distinctive image features from scaleinvariant keypoints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Lowe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International journal of computer vision</title>
+		<imprint>
+			<biblScope unit="volume">60</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="91" to="110" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Multi-probe lsh: efficient indexing for high-dimensional similarity search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Lv</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Josephson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Charikar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the 33rd international conference on Very large data bases</title>
+		<meeting>the 33rd international conference on Very large data bases</meeting>
+		<imprint>
+			<publisher>VLDB Endowment</publisher>
+			<date type="published" when="2007" />
+			<biblScope unit="page" from="950" to="961" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Approximate nearest neighbor algorithm based on navigable small world graphs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Malkov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ponomarenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Logvinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Krylov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Information Systems</title>
+		<imprint>
+			<biblScope unit="volume">45</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Fast approximate nearest neighbors with automatic algorithm configuration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Muja</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Lowe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">VISAPP International Conference on Computer Vision Theory and Applications</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page" from="331" to="340" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Scalable nearest neighbor algorithms for high dimensional data. Pattern Analysis and Machine Intelligence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Muja</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Lowe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Permutation search methods are efficient, yet faster search is possible</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Naidan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Boytsov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Nyberg</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the VLDB Endowment</title>
+		<meeting>the VLDB Endowment</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">8</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Slam-loop closing with visually salient features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Newman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Ho</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Robotics and Automation, 2005. ICRA 2005. Proceedings of the 2005 IEEE International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="635" to="642" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Scalable recognition with a vocabulary tree. In Computer vision and pattern recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Nister</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Stewenius</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE computer society conference on</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="2161" to="2168" />
+			<date type="published" when="2006" />
+			<publisher>IEEE</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Modeling the shape of the scene: A holistic representation of the spatial envelope</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Oliva</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International journal of computer vision</title>
+		<imprint>
+			<biblScope unit="volume">42</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="145" to="175" />
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Practical construction of k-nearest neighbor graphs in metric spaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Paredes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Chávez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Figueroa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Navarro</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Experimental Algorithms</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2006" />
+			<biblScope unit="page" from="85" to="97" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Comparative analysis of data structures for approximate nearest neighbor search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ponomarenko</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Avrelin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Naidan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Boytsov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Mathematical Sciences</title>
+		<imprint>
+			<biblScope unit="volume">181</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="782" to="791" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Freeman. Object recognition by scene alignment</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="page" from="1241" to="1248" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Freeman. Object recognition by scene alignment</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="page" from="1241" to="1248" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Fast pose estimation with parameter-sensitive hashing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Shakhnarovich</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Viola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision, 2003. Proceedings. Ninth IEEE International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2003" />
+			<biblScope unit="page" from="750" to="757" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Optimised kd-trees for fast image descriptor matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Silpa-Anan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Hartley</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="1" to="8" />
+		</imprint>
+	</monogr>
+	<note>CVPR 2008. IEEE Conference on</note>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Scalable k-nn graph construction for visual descriptors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Zeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Tu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Gan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2012 IEEE Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1106" to="1113" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Efficient indexing for large scale visual search</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W.-Y</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-Y</forename><surname>Shum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE 12th International Conference on</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="1103" to="1110" />
+		</imprint>
+	</monogr>
+	<note>Computer Vision</note>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

@@ -1,0 +1,818 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Automatic Fence Segmentation in Videos of Dynamic Scenes</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Renjiao</forename><surname>Yi</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Simon Fraser University</orgName>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="institution">National University of Defence Technology</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jue</forename><surname>Wang</surname></persName>
+							<affiliation key="aff2">
+								<orgName type="department">Adobe Research</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ping</forename><surname>Tan</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="institution">Simon Fraser University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Automatic Fence Segmentation in Videos of Dynamic Scenes</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:37+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We present a fully automatic approach to detect and segment fence-like occluders from a video clip. Unlike previous approaches that usually assume either static scenes or cameras, our method is capable of handling both dynamic scenes and moving cameras. Under a bottom-up framework, it first clusters pixels into coherent groups using color and motion features. These pixel groups are then analyzed in a fully connected graph, and labeled as either fence or non-fence using graph-cut optimization. Finally, we solve a dense Conditional Random Filed (CRF) constructed from multiple frames to enhance both spatial accuracy and temporal coherence of the segmentation. Once segmented, one can use existing hole-filling methods to generate a fencefree output. Extensive evaluation suggests that our method outperforms previous automatic and interactive approaches on complex examples captured by mobile devices.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>It is a common case that one has to shoot an interesting scene through fences or wires. For instance, capturing a video of a walking tiger behind an enclosing fence in a zoo, or a building through wires or tree branches. Such videos are usually unpleasant to watch due to the strong distraction caused by the occluders. A common photography trick to alleviate this problem is to adjust the focus length and aperture of the camera to make the fence out-of-focus, thus less distracting when watching the video. However its effectiveness is limited and is only applicable to relatively advanced cameras, excluding most mobile phone cameras. Removing fence from videos at the postprocessing stage is thus highly desirable.</p><p>Despite a few recent attempts <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b6">7]</ref>, removing fence from videos with unconstrained scene dynamics and camera movement is largely an open problem. In particular, it is hard to automatically detect and segment fence in videos.</p><p>Fences contain very thin structures, which are difficult to segment even for interactive tools such as GrabCut <ref type="bibr" target="#b18">[19]</ref> or Rotobrush <ref type="bibr" target="#b0">[1]</ref>. Furthermore, there is usually no distinctive colors or strong textures on a fence, making it hard to track, Their repetitive structure patterns often lead to tracking and motion estimation errors. A recent work <ref type="bibr" target="#b20">[21]</ref> successfully removes fence from videos, but only for static scenes. For videos capturing dynamic scenes, the commonly used two-layer motion model breaks out due to the existence of large dynamic objects, rendering methods that rely on static scene reconstruction insufficient, as we will show in the experimental section.</p><p>In this paper, we present a new method for automatic fence segmentation from casual videos capturing dynamic scenes or objects. By allowing dynamic scenes, our approach has a much wider application range than previous work that are constrained to static ones. Our approach can also deal with videos shot with a moving camera, which is quite common for novice users capturing with hand-held mobile devices. We show that, while introducing object and camera motion brings new challenges to the task, they in turn provide additional information that can facilitate fence detection and segmentation. Specifically, the camera motion gives the fence a rigid motion in the video that is usually quite distinctive from the object motion behind it, allowing better segmentation using local motion contrast.</p><p>Our method takes a bottom-up approach. It begins by computing optical flow between neighboring frames, and grouping pixels in each frame according to color and motion. In the first round, we treat each group as a super-pixel and consider labeling each one as either fence or non-fence. Each group's probability of being fence is evaluated according to its structural and appearance features. The compatibility between two neighboring groups are computed from their color, motion, and structural similarities. We then solve a graph-cut optimization to produce initial labeling. The initial labeling, done on a per-frame basis, suffers from imprecise fence localization and poor temporal coherence. It is further refined by a spatio-temporal dense Conditional Random Field (CRF) optimization <ref type="bibr" target="#b8">[9]</ref>, which improves fence segmentation in both spatial accuracy and temporal coherence.</p><p>We evaluate the proposed approach on various videos, including mobile phone videos captured by ourselves, and Youtube video clips with completely unknown camera setting. Our segmentation results are quantitatively evaluated on a new dataset with manually labeled ground truth. The results show that our method achieves much better precision and recall than previous approaches. Finally, we demonstrate simple hole-filling with existing inpainting techniques <ref type="bibr" target="#b4">[5]</ref> to remove detected fences.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related work</head><p>Hays et al. <ref type="bibr" target="#b5">[6,</ref><ref type="bibr" target="#b12">13]</ref> detect fence structures from a single image by extracting near regular repetitive texture patterns. Park et al. <ref type="bibr" target="#b16">[17]</ref> enhance the repetitive structure detection to deal with deformations due to perspective camera projection and non-planar underlying shapes. Online learning and classification are adopted to further enhance the detection <ref type="bibr" target="#b15">[16]</ref>. Generally speaking, these methods rely on the success of the challenging task of repetitive structure detection, which is difficult to handle certain types of fence structures such as window blinds. Although our method uses image gradients to measure local fence structure compatibility, it does not explicitly assume any particular fence pattern.</p><p>Fence detection and removal can be easier when multiple input images or a video clip is available. Yamashita et al. <ref type="bibr" target="#b21">[22]</ref> use flash and non-flash images together with multifocus images to detect and remove fence. Khasare et al. <ref type="bibr" target="#b6">[7]</ref> manually label fence pixels with existing interactive segmentation tools. Mu et al. <ref type="bibr" target="#b13">[14]</ref> detect and remove fence using parallax cues from video clips under the assumption of a static scene. Xue et al. <ref type="bibr" target="#b20">[21]</ref> separate fence from the background using motion cues through an optimization process. This approach achieves high quality results, but is limited to static scenes.</p><p>Image inpainting <ref type="bibr" target="#b2">[3]</ref> [5] <ref type="bibr" target="#b1">[2]</ref> techniques can fill-in small image regions given their masks. Video inpainting <ref type="bibr" target="#b14">[15]</ref> <ref type="bibr" target="#b19">[20]</ref> can recover missing structures on the current frame by transferring pixels from neighboring frames. The success of these methods rely on accurate segmentation masks as input, which are hard to achieve for fences even with advanced interactive segmentation tools <ref type="bibr" target="#b9">[10,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b0">1]</ref>. Our segmentation approach provides such masks automatically.</p><p>The video compass work <ref type="bibr" target="#b7">[8]</ref> used histograms to describe orientations of lines, which is similar to our gradient-based term in initial fence segmentation described in later sections.</p><p>In the spirit of creating an enhanced image from a video clip, our work is relevant to TrackCam <ref type="bibr" target="#b11">[12]</ref> and superresolution <ref type="bibr" target="#b17">[18]</ref>, while we target on a completely different </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Fence segmentation</head><p>Our fence segmentation includes three major steps. Firstly, pixels in each frame are clustered into a fixed number of groups based on color and motion information. Secondly, each of these groups is labeled as fence or non-fence by a graph-cut optimization applied to each video frame individually. Finally, a dense condition random field (CRF) is optimized over all frames simultaneously to label each pixel as fence or non-fence to improve the temporal coherence and spatial accuracy of fence segmentation. As an example, the fence segmentation results after per-frame graphcut and multi-frame CRF is shown in <ref type="figure" target="#fig_0">Figure 1</ref> (b) and (c) respectively, where the input frame is in <ref type="figure" target="#fig_0">Figure 1</ref> (a).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Pixel Grouping</head><p>Fences have distinctive structural features, e.g. they typically (but not necessarily) have two sets of thin wires pointing at two nearly perpendicular directions. This inspires us to form pixel groups to exploit spatial structural features for fence detection. We apply K-means clustering to pixels at each frame according to color and motion information. This clustering is based on the observation that fences pixels often have similar colors, and distinctive motion from the background due to their short distances to the camera. Even in dynamic scenes, the moving objects in background tend to have quite different motion from the fence.</p><p>We apply the optical flow algorithm in <ref type="bibr" target="#b10">[11]</ref> to compute local motion between neighboring frames. One example of computed flow field is showed in <ref type="figure">Figure 2</ref> (b). The flow vectors in each frame are normalized by subtracting the minimum value and then divided by their value range (i.e. the difference between the maximum and minimum values). For each pixel, we concatenate its RGB color (in [0, 1]) and the normalized flow vector to form a 5D feature. K-means is applied to generate 50 groups for each frame: examples are shown in <ref type="figure">Figure 2</ref> (c) -(f). Typically, fence pixels and background pixels are separated into different groups due to their difference in either color or motion. In the following, we seek to identify fence pixel groups according to fence structural features. </p><formula xml:id="formula_0">(a) (b) (c) (d) (e) (f)</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Initial Fence Segmentation</head><p>On each frame, we form a fully-connected graph where each pixel group is a vertex. We optimize a fence or nonfence label at each vertex by graph-cut, which minimizes the following objective function:</p><formula xml:id="formula_1">E = i D(c i , l i ) + (i,j) S(c i , l i ; c j , l j ).<label>(1)</label></formula><p>Here, c i , c j indicates the i-th and j-th pixel group, l i , l j are the binary fence labels on c i , c j respectively. The data term D(·) measures the probability of a pixel group being fence, define as:</p><formula xml:id="formula_2">D(c i , l i ) = l i · (1 − P (c i )) + (1 − l i ) · P (c i ),<label>(2)</label></formula><p>where P (c i ) is the probability that c i being fence. It includes a gradient-based term and a geometry-based term:</p><formula xml:id="formula_3">P (c i ) = (1 − D 1 (c i )) · (1 − D 2 (c i )).<label>(3)</label></formula><p>The gradient-based term D 1 (·) exploits the fact that fences typically contain two sets of nearly perpendicular wires. We build a gradient orientation histogram for all pixels in a group. The histogram of a fence group should have two dominant peaks in two nearly perpendicular orientations. In contrast, a non-fence group tends to have a flat histogram. Some example are showed in <ref type="figure">Figure 3</ref> and fence groups, respectively. Their corresponding pixel groups are shown in <ref type="figure">Figure 2</ref> (c), (d) and (e), (f), respectively. To exploit this observation, for each histogram, we firstly search the global highest peak c, and then search another local peak in an interval centered at c+π/2 with width π/5. We then take the histogram value at the middle point of these two peaks. For fence groups, this middle point is often associated with a low histogram value, e.g. in the valley between two histogram peaks in <ref type="figure">Figure 3</ref> (c)-(d). D 1 is computed as the ratio of the histogram value at the middle point over that at the two peaks. Sometimes, the occluder contains multiple wires of similar orientations, which leads to a single dominant peak in the gradient orientation histogram. Our definition of D 1 (·) can deal with such cases. The geometry-based term D 2 exploits the fact that fences are usually thin structures. A morphological erosion should remove most of pixels in a fence group. In contrast, a nonfence group usually has many more remaining pixels after this operation. To be robust to noisy grouping results, we first apply a 'close operator' to connect nearby isolated pixels. <ref type="figure" target="#fig_2">Figure 4 (a), (b)</ref>, and (c) show results for a fence and non-fence group by initial K-means grouping, 'close operator', and erosion respectively, where morphological masks are 10 × 10. D 2 is computed as the percentage of pixels remained after the erosion. Both D 1 and D 2 are then linearly normalized to [0, 1].</p><p>The smoothness term S(·; ·) in Equation (1) measures similarities between pixel groups based on their color, gradients orientation histogram, and dominant gradient orientations (the two histogram peaks selected when evaluating D 1 ). It is defined as:</p><formula xml:id="formula_4">S(c i , l i ; c j , l j ) = µ(l i , l j ) · (1 − S 1 (c i , c j )) · (1 − S 2 (c i , c j )) · (1 − S 3 (c i , c j )). (4)</formula><p>Here, µ(l i , l j ) is the Pott model: 1 when l i = l j , and 0 otherwise. S 1 is the L 1 color histogram distance of two groups, computed in ab channels only in Lab space in order to be roust to illumination variations. S 2 is the L 1 distance between two gradient orientation histograms. S 3 is the difference of dominant gradient orientations. Suppose  g 1 (·), g 2 (·) are the two dominant gradient orientations of a pixel group, we measure S 3 as: min(dis g1 , π − dis g1 ) + min(dis g2 , π − dis g2 ).</p><p>Here, min(dis g1 , π−dis g1 ) and min(dis g2 , π−dis g2 ) compute the closest peak in c j to the first and second peaks in c i respectively. Specifically, we compute them as the following:</p><formula xml:id="formula_5">dis g1 = min {|g 1 (c i ) − g 1 (c j )|, |g 1 (c i ) − g 2 (c j )|} , (5) dis g2 = min {|g 2 (c i ) − g 1 (c j )|, |g 2 (c i ) − g 2 (c j )|} . (6)</formula><p>S 1 , S 2 , and S 3 are all linearly normalized to be in [0, 1]. We use graph-cut <ref type="bibr" target="#b3">[4]</ref> to solve for a fence or non-fence label at each group. Some results are showed in <ref type="figure" target="#fig_3">Figure 5</ref>. Note that fence segmentation at this stage is roughly correct but inaccurate, i.e. fence boundaries do not align well with image edges. There are also occasional frames with poor segmentation results. This is because K-means clustering fails to produce correct low-level clustering results for frames with very little motion. Next, we build a dense CRF over all video frames to further improve the segmentation result.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Spatio-temporal Segmentation Refinement</head><p>In our dense CRF, each pixel on each frame is a vertex, and it connects to all other vertices. This spatio-temporal graph construction gives us a chance to enhance both temporal coherence and spatial accuracy of the segmentation. The total energy is defined in the same way as Equation <ref type="formula" target="#formula_1">(1)</ref> with data and smoothness terms defined differently. The data term is defined as:</p><formula xml:id="formula_6">D(x, l x ) = l x · (1 − P(x)) + (1 − l x ) · P(x).</formula><p>where P(x) is evaluated as:</p><formula xml:id="formula_7">P(x) = P 1 (x) · P 2 (x).<label>(7)</label></formula><p>Here, the term P 1 (x) encourages the result from CRF optimization to be consistent with the initial graph-cut labeling result, defined as:</p><formula xml:id="formula_8">P 1 (x) = 1 − α, L 0 (x) = 0 α, L 0 (x) = 1 (8)</formula><p>where α is a parameter determining the confidence of initial graph-cut segmentation. In our system we simply use a constant probability at 0.8, although one could further make it adaptive according to the features of each pixel group. L 0 (x) is the initial label of pixel x, which is 1 or 0 for fence and non-fence pixels, respectively. The term P 2 (x) is defined as</p><formula xml:id="formula_9">P 2 (x) = P (c i ), x ∈ c i .<label>(9)</label></formula><p>Here, P (c i ) is the probability evaluated in Equation <ref type="formula" target="#formula_3">(3)</ref> in the previous step. x ∈ c i means that pixel x is in the i-th group. The smoothness term S ensures similar pixels to have similar label. It is defined as:</p><p>S(x, l x ; y, l y ) = µ(l x , l y ) · k(x, y).</p><p>Here, µ is again the Pott model. Following <ref type="bibr" target="#b8">[9]</ref>, the similarity function k(x, y) is defined as:</p><formula xml:id="formula_11">k(x, y) = w 1 exp − |Dis(x,y)| 2θ 2 1 − |Ix−Iy| 2θ 2 2 +w 2 exp − |Dis(x,y)| 2θ 2 3 .<label>(11)</label></formula><p>which describes the similarities between x and y in their spatial position and color. Here, I x , I y are the RGB colors at x, y. In all our experiments,we set θ 1 = 6, θ 2 = 2, θ 3 = 1.7, the weights of two kernels are w 1 = 10, w 2 = 3.</p><p>The color difference between two pixels is computed as the L 1 distance between two color vectors. The spatial difference Dis(x, y) for pixels in different frames requires some special handling. For a pixel x in the t x -th frame and  a pixel y in the t y -th frame, we use optical flow to track x to the frame t y . The spatial distance is then evaluated as:</p><formula xml:id="formula_12">Dis(x, y) = x + m tx→ty (x) − y .<label>(12)</label></formula><p>where m tx→ty is the motion of pixel x from frame t x to the frame t y . This motion vector is obtained by concatenating optical flow vectors from adjacent frames. Once the graph is constructed, we used the method proposed in <ref type="bibr" target="#b8">[9]</ref> to minimize the total energy. Solving the multiframe CRF enforces temporal coherence. If a pixel is temporally connected to pixels in other frames that have high fence probabilities, optimizing this CRF will help correct its label even its original fence probability is low. <ref type="figure" target="#fig_4">Figure 6</ref> shows some fence segmentation results after dense CRF optimization. Comparing with the initial segmentation shown in <ref type="figure" target="#fig_3">Figure 5</ref>, the refined segmentation is more accurate on individual frames, and also maintains better temporal coherence.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>The dataset. We evaluate our method on a dataset of 18 video clips. Seven of them (the first seven data shown in <ref type="figure" target="#fig_7">Figure 9</ref>) were downloaded from Youtube. The following three (the eighth to tenth shown in <ref type="figure" target="#fig_7">Figure 9</ref>) are from <ref type="bibr" target="#b20">[21]</ref>. The rest were captured by ourselves with a mobile phone. Nine of these videos contain moving objects of various sizes. The example "Blue Fence" captures a dynamic scene, and "Running Lion" captures a dynamic scene with large perspective distortion. All videos except "Jaguar" are captured with a moving camera. Our dataset also includes two examples that contain non-fence occluders: "Wire" and "Tree branch", to test the robustness and generalization of each method. <ref type="figure" target="#fig_7">Figure 9</ref> shows some representative frames and their final fence segmentation results. For each example, we show two sample frames, where the segmentation results are overlaid on the input frame. The initial and final segmentation results on the full video clips are provided in the supplementary material. The results show that our method generates accurate and temporally coherent segmentation for most examples.</p><p>Evaluation and Comparison. In order to quantitatively evaluate the segmentation result, for each video sequence, we manually label "ground truth" segmentation on evenlydistributed ten keyframes. We compare our method with the Rotobrush <ref type="bibr" target="#b0">[1]</ref> video segmentation tool in Adobe After Effect, and the recent method proposed in <ref type="bibr" target="#b20">[21]</ref> 1 . Rotobrush is an interactive segmentation tool that needs an manually segmented keyframe as additional input. We thus manually segment the first frame, and use Rotobrush to propagate this segmentation to the next 20 frames for comparison. We lim- it the propagation to 20 frames, because after that the results are severely deteriorated. <ref type="figure" target="#fig_5">Figure 7</ref> shows two examples of the manually-segmented keyframes and the automatically segmented results of Rotobrush.</p><p>The precision and recall of three methods are shown in <ref type="table">Table 1</ref>. To demonstrate the effectiveness of the CRF-based refinement, we also compare the initial segmentation computed by graph-cut optimization with the final result produced by the CRF refinement. The results show that our method in general outperforms previous approaches: the average precision and recall for our method are 80.92% and 82.31%, respectively, which are significantly higher than those of the other two methods. Fence segmentation is d-ifficult even for interactive tools such as the Rotobrush. Its average precision and recall are 57.43% and 52.25%, much lower than ours. Looking at individual examples, for videos containing dynamic scenes, the best result is achieved on the "Jaguar" example, due to the fact that its fence color is most distinctive from the background. Our method also achieves reasonable results on the "wire" and "tree branch" example, demonstrating the generalization of our method to non-fence occludes. Furthermore, the dense CRF improves both precision and recall in all examples.</p><p>The method described in <ref type="bibr" target="#b20">[21]</ref> produces an alpha matte of the fence for one frame of the input video: some are shown in <ref type="figure" target="#fig_6">Figure 8</ref>. Given that this method is designed for videos with static background, its results are poor on many examples with dynamic backgrounds (e.g. "Tiger"). It also produces poor results on examples captured with a static camera (e.g. "Jaguar"), which violate the underlying assumption of this method. To evaluate their precision and recall, we search through [0, 1] for an optimal threshold that gives the largest value on (precision×recall). The average precision and recall computed in this way are 46.34 and 69.61, respectively, which is significantly lower than ours. Moreover, our method considers both color and motion to form pixel groups. So it can largely tolerate optical flow errors. For example in <ref type="figure">Figure 2</ref>, though the flow is quite poor as in (a) (b) (c) (d) <ref type="figure" target="#fig_0">Figure 11</ref>. Comparison with <ref type="bibr" target="#b13">[14]</ref> on their data. (a) selected frames from the original video; (b) de-fencing results from <ref type="bibr" target="#b13">[14]</ref>; (c) our fence segmentation results; (d) our fence removal results. <ref type="figure">Figure 2</ref> (b), the pixel-groups in (c)(f) are quite reasonable. Meanwhile, we also tested our methods on data from Video <ref type="bibr" target="#b13">[14]</ref> to provide a direct comparison. Since there are no video fence segmentation results provided, we compared with it by fence removal results as shown in <ref type="figure" target="#fig_0">Figure 11</ref> On the second example, our method produces superior results in the red circles which suggests better fence segmentation. Please note that <ref type="bibr" target="#b13">[14]</ref> can only deal with static scenes.</p><p>Fence Removal: Once the fence is segmented, we can apply existing image and video inpainting techniques, such as <ref type="bibr" target="#b4">[5]</ref>, to remove the fence from video frames. <ref type="figure" target="#fig_0">Figure 10</ref> shows some frames with fence removed using the method in <ref type="bibr" target="#b4">[5]</ref>. We believe better fence removal can be achieved by exploiting multiple frame information such as in <ref type="bibr" target="#b19">[20]</ref>, which is our future work.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>We present a fully-automatic method to detect and segment fence-like occluders from a video clip to generate a fence-free photo. The main advantage of our method over previous work is that it handles both dynamic scenes and moving cameras. Our method first groups pixels according to their motion and color similarity. It then exploits spatial structural features in a graph-cut optimization framework to produce initial segmentation. The initial segmentation is further refined by solving a dense CRF to achieve better spatial accuracy and temporal coherence. Fence removal is demonstrated with existing inpainting techniques, which shows that our method is a promising building block towards a fully automatic, high quality fence removal solution for general videos.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>(a) One frame in input video; (b) initial fence segmentation by graph-cut; (c) final fence segmentation by dense CRF.problem.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .Figure 3 .</head><label>23</label><figDesc>(a) input frame; (b) optical flow filed; (c)-(f) some representative pixel groups. Note that fence and background pixels are largely separated into different groups due to color and/or motion difference. (a)-(b) gradient orientation histograms of two background clusters (seeFigure 2(c) and (d)); (c)-(d) gradient orientation histograms of two fence clusters (seeFigure 2(e) and (f)).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 4 .</head><label>4</label><figDesc>, where Figure 3 (a), (b) and (c), (d) are histograms of non-fence A fence and non-fence pixel group after (a) initial Kmeans grouping, (b) 'close operator', and (c) erosion.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 5 .</head><label>5</label><figDesc>Initial segmentation by graph-cut optimization.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 6 .</head><label>6</label><figDesc>Fence segmentation by the multi-frame dense CRF optimization on same frames inFigure 5.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 7 .</head><label>7</label><figDesc>Rotobrush[1] results on two examples. From left to right: manually-labeled keyframe; results after propagating 5 frames; 10 frames; 15 frames and 20 frames. The segmentation results deteriorate quickly in the temporal propagation process.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 8 .</head><label>8</label><figDesc>Alpha mattes (bottom) extracted by the method proposed in<ref type="bibr" target="#b20">[21]</ref> on some examples (top) in our dataset.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 9 .</head><label>9</label><figDesc>More fence segmentation results. For each example, we show two frames with the fence segmentation overlaid. Please refer to our supplementary video for results on the complete video clips.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_8"><head>Figure 10 .</head><label>10</label><figDesc>Fence removal results on some selected frames.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>Table 1. Precision and recall of initial segmentation and final segmentation.</figDesc><table>Data 
+
+Rotobrush[1] 
+Precision (%) of 
+Initial 
+Final 
+Rotobrush[1] 
+Recall (%) of 
+Initial 
+Final 
+Precision (%) 
+method in [21] 
+Precision (%) 
+Precision (%) 
+Recall (%) 
+method in [21] 
+Recall (%) 
+Recall (%) 
+
+Tiger1 
+51.43 
+15.73 
+76.00 
+78.97 
+58.22 
+95.61 
+59.93 
+77.42 
+Little Panda1 
+51.30 
+19.63 
+78.13 
+80.05 
+82.36 
+64.56 
+75.04 
+78.91 
+Lion 
+78.08 
+53.61 
+67.49 
+80.49 
+49.78 
+69.89 
+61.11 
+80.58 
+Little Panda2 
+37.36 
+20.94 
+77.10 
+80.19 
+24.68 
+66.77 
+77.38 
+78.92 
+Jaguar 
+96.47 
+11.59 
+81.09 
+86.93 
+47.04 
+59.27 
+77.60 
+90.54 
+Tiger2 
+57.22 
+18.78 
+78.05 
+84.09 
+44.20 
+39.00 
+75.65 
+82.70 
+Running Lion 
+32.27 
+70.27 
+71.54 
+79.75 
+64.74 
+81.06 
+70.15 
+86.72 
+Gray Fence1 
+85.84 
+76.88 
+71.44 
+78.48 
+32.86 
+88.25 
+70.13 
+83.88 
+Gray Fence2 
+32.56 
+53.47 
+77.03 
+80.76 
+11.94 
+85.56 
+75.52 
+80.37 
+Zoo 
+31.22 
+59.01 
+73.57 
+82.39 
+2.16 
+69.57 
+72.23 
+84.72 
+Walking Person 
+70.57 
+51.73 
+74.19 
+78.49 
+82.79 
+67.90 
+67.50 
+79.95 
+Blue Fence 
+56.89 
+20.64 
+84.21 
+89.41 
+62.80 
+75.66 
+65.61 
+91.51 
+Building 
+61.77 
+84.89 
+77.29 
+85.02 
+74.82 
+66.96 
+80.36 
+82.82 
+Tree 
+76.14 
+49.24 
+77.82 
+82.19 
+69.97 
+41.95 
+78.73 
+81.76 
+Car 
+41.75 
+59.79 
+75.81 
+81.51 
+81.61 
+74.49 
+61.80 
+83.93 
+Wire and Keyboard 
+67.46 
+56.81 
+62.67 
+90.58 
+76.33 
+87.82 
+67.56 
+89.25 
+Tree Branch 
+67.68 
+\ 
+50.80 
+74.19 
+39.62 
+\ 
+58.80 
+73.44 
+Wires 
+34.74 
+78.99 
+74.27 
+63.01 
+34.56 
+49.13 
+62.41 
+79.22 
+
+Average Value 
+57.43 
+46.34 
+73.81 
+80.92 
+52.25 
+69.61 
+69.86 
+82.31 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">The authors of<ref type="bibr" target="#b20">[21]</ref> have kindly generated the alpha matte on one frame for each of our input video. The evaluation of their method is based on that given frame.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgments</head><p>This work is supported by the NSERC Discovery Grant 31-611664, the NSERC Discovery Accelerator Supplement 31-611663, and an Adobe research gift. Renjiao Yi is supported by scholarship from the China Scholarship Council.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Video snapcut: robust video object cutout using localized classifiers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Bai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Simons</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Sapiro</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of SIGGRAPH)</title>
+		<meeting>of SIGGRAPH)</meeting>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="page">70</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Navier-stokes, fluid dynamics, and image and video inpainting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bertalmio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">L</forename><surname>Bertozzi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Sapiro</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2001" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">355</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Image inpainting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bertalmio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Sapiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Caselles</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Ballester</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ACM SIGGRAPH</title>
+		<meeting>ACM SIGGRAPH</meeting>
+		<imprint>
+			<publisher>ACM Press/Addison-Wesley Publishing Co</publisher>
+			<date type="published" when="2000" />
+			<biblScope unit="page" from="417" to="424" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">An experimental comparison of min-cut/max-flow algorithms for energy minimization in vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Boykov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Kolmogorov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. PAMI</title>
+		<imprint>
+			<biblScope unit="volume">26</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1124" to="1137" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Region filling and object removal by exemplar-based image inpainting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Criminisi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Pérez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Toyama</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Image Processing</title>
+		<imprint>
+			<biblScope unit="volume">13</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1200" to="1212" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Discovering texture regularity as a higher-order correspondence problem</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Leordeanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">A</forename><surname>Efros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ECCV</title>
+		<meeting>ECCV</meeting>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2006" />
+			<biblScope unit="page" from="522" to="535" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Seeing through the fence: Image de-fencing using a video sequence</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">S</forename><surname>Khasare</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">R</forename><surname>Sahay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">S</forename><surname>Kankanhalli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICIP</title>
+		<meeting>ICIP</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="1351" to="1355" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Video compass</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Košecká</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ECCV</title>
+		<meeting>ECCV</meeting>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2002" />
+			<biblScope unit="page" from="476" to="490" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Efficient inference in fully connected crfs with gaussian edge potentials</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Krähenbühl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Neural Information Processing Systems</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Lazy snapping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-K</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-Y</forename><surname>Shum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of SIGGRAPH)</title>
+		<meeting>of SIGGRAPH)</meeting>
+		<imprint>
+			<publisher>ACM</publisher>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">23</biblScope>
+			<biblScope unit="page" from="303" to="308" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Beyond pixels: exploring new representations and applications for motion analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">MIT</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+	<note type="report_type">PhD thesis</note>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Trackcam: 3d-aware tracking shots from consumer video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Cho21</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Tan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of SIGGRAPH Asia)</title>
+		<meeting>of SIGGRAPH Asia)</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">33</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Image defencing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Belkina</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hays</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Lublinerman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. CVPR</title>
+		<meeting>CVPR</meeting>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Mu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yan</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1210.2388</idno>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+	<note type="report_type">Video de-fencing. arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Video inpainting of complex scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Newson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Almansa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Fradet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Gousseau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Pérez</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Image de-fencing revisited</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Brocklehurst</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">T</forename><surname>Collins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ACCV</title>
+		<meeting>ACCV</meeting>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="422" to="434" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Deformed lattice discovery via efficient mean-shift belief propagation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">T</forename><surname>Collins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ECCV</title>
+		<meeting>ECCV</meeting>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="474" to="485" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Super-resolution image reconstruction: a technical overview. Signal Processing Magazine</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">C</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">K</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">G</forename><surname>Kang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE</title>
+		<imprint>
+			<biblScope unit="volume">20</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="21" to="36" />
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Grabcut: Interactive foreground extraction using iterated graph cuts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Kolmogorov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Blake</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of SIGGRAPH)</title>
+		<meeting>of SIGGRAPH)</meeting>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">23</biblScope>
+			<biblScope unit="page" from="309" to="314" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Space-time completion of video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wexler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shechtman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Irani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. PAMI</title>
+		<imprint>
+			<biblScope unit="volume">29</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="463" to="476" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">A computational approach for obstruction-free photography</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rubinstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">T</forename><surname>Freeman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics (TOG)</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page">79</biblScope>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Fence removal from multi-focus images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yamashita</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Matsui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Kaneko</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. ICPR</title>
+		<meeting>ICPR</meeting>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="4532" to="4535" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

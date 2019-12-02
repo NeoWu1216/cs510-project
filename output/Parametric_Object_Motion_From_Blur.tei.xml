@@ -1,0 +1,1009 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Parametric Object Motion from Blur</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jochen</forename><surname>Gast</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Computer Science</orgName>
+								<address>
+									<settlement>Darmstadt</settlement>
+									<country>TU</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Anita</forename><surname>Sellent</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Computer Science</orgName>
+								<address>
+									<settlement>Darmstadt</settlement>
+									<country>TU</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Stefan</forename><surname>Roth</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Computer Science</orgName>
+								<address>
+									<settlement>Darmstadt</settlement>
+									<country>TU</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Parametric Object Motion from Blur</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:44+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Motion blur can adversely affect a number of vision tasks, hence it is generally considered a nuisance. We instead treat motion blur as a useful signal that allows to compute the motion of objects from a single image. Drawing on the success of joint segmentation and parametric motion models in the context of optical flow estimation, we propose a parametric object motion model combined with a segmentation mask to exploit localized, non-uniform motion blur. Our parametric image formation model is differentiable w.r.t. the motion parameters, which enables us to generalize marginal-likelihood techniques from uniform blind deblurring to localized, non-uniform blur. A two-stage pipeline, first in derivative space and then in image space, allows to estimate both parametric object motion as well as a motion segmentation from a single image alone. Our experiments demonstrate its ability to cope with very challenging cases of object motion blur.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>The analysis and removal of image blur has been an active area of research over the last decade [e.g., <ref type="bibr" target="#b5">5,</ref><ref type="bibr" target="#b11">11,</ref><ref type="bibr" target="#b17">17,</ref><ref type="bibr" target="#b34">34]</ref>. Starting with <ref type="bibr" target="#b8">[8]</ref>, camera shake has been in the focus of this line of work. Conceptually, the blur is treated as a nuisance that should be removed from the image. While the blur needs to be estimated in the form of a blur kernel, its only purpose is to be used for deblurring. In contrast, it is also possible to treat image blur as a signal that allows to recover certain scene properties from the image. One such example is blur from defocus, where the relationship between the local blur strength and depth can be exploited to recover information on the scene depth at each pixel <ref type="bibr" target="#b19">[19]</ref>. In this paper, we also treat blur as a useful signal and aim to recover information on the motion in the scene from a single still image. Unlike work dealing with camera shake, which affects the image in a global manner, we consider localized motion blur arising from the independent motion of objects in the scene (e.g., the "London eye" in <ref type="figure" target="#fig_0">Fig. 1(a)</ref>).</p><p>Previous work has approached the problem of estimating motion blur as identifying the object motion from a fixed set of candidate motions <ref type="bibr" target="#b4">[4,</ref><ref type="bibr" target="#b13">13,</ref><ref type="bibr" target="#b28">28]</ref>, or by estimating a non-parametric blur kernel <ref type="bibr" target="#b25">[25]</ref> along with the object mask. The former has the problem that the discrete set of candidate blurs restricts the possible motions that can be handled. Estimating non-parametric blur kernels overcomes this problem, but requires restricting the solution space, e.g. by assuming spatially invariant motion. Moreover, existing methods are challenged by fast motion, as these require a large set of candidate motions or large kernels, and consequently many parameters, to be estimated. We take a different approach here and are inspired by recent work on optical flow and scene flow, despite the fact that we work with a single input image only. Motion estimation methods have increasingly relied on approaches based on explicit segmentation and parametric motion models [e.g. <ref type="bibr" target="#b29">29,</ref><ref type="bibr" target="#b36">36,</ref><ref type="bibr" target="#b37">37]</ref> to cope with large motion and insufficient image evidence.</p><p>Following that, we propose a parametrized motion blur formulation with an analytical relation between the motion parameters of the object and spatially varying blur kernels. Doing so allows us to exploit well-proven and robust marginal-likelihood approaches <ref type="bibr" target="#b17">[17,</ref><ref type="bibr" target="#b18">18]</ref> for inferring the unknown motion. To address the fact that object motion is confined to a certain region, we rely on an explicit segmentation, which is estimated as part of the variational inference scheme, <ref type="figure" target="#fig_0">Fig. 1(b)</ref>. Since blur is typically estimated in derivative space <ref type="bibr" target="#b8">[8]</ref>, yet segmentation models are best formulated in image space, we introduce a two-stage pipeline, <ref type="figure">Fig. 2</ref>. First, we estimate the parametric motion along with an initial segmentation in derivative space, and then refine the segmentation in image space by exploiting </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Input</head><p>Output Initial Segmentation Affine Motion <ref type="figure">Figure 2</ref>. Given a single, locally blurred image as input, our first stage uses variational inference on an image pyramid in derivative space to estimate an initial segmentation and continuous motion parameters, here affine (Sec. 4). Thereby we rely on a parametric, differentiable image formation model (Sec. 3). In a second stage, the segmentation is refined using variational inference on an image pyramid in image space using a color model (Sec. 5). Our final output is the affine motion and a segmentation that indicates where this motion is present. color models [e.g., 3]. We evaluate our approach on a number of challenging images with significant quantities of localized, non-uniform blur from object motion.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>For our task of estimating parametric motion from a single input image, we leverage the technique of variational inference <ref type="bibr" target="#b12">[12]</ref>. Variational inference has been successfully employed in the kernel estimation phase of blind deblurring approaches <ref type="bibr" target="#b8">[8,</ref><ref type="bibr" target="#b21">21]</ref>. As there is an ambiguity between the underlying sharp image and blur kernel estimation, blind deblurring algorithms benefit from a marginalization over the sharp image <ref type="bibr" target="#b17">[17,</ref><ref type="bibr" target="#b18">18]</ref>, which we adopt in our motion estimation approach. While it is possible to construct energy minimization algorithms for blind deblurring that avoid these ambiguities <ref type="bibr" target="#b23">[23]</ref>, this is non-trivial. However, all aforementioned blind deblurring algorithms are restricted to spatially invariant, non-parametric blur kernels.</p><p>Recent work lifts this restriction in two ways: First, the space of admissible motions may be limited in some way. To describe blur due to camera shake, Hirsch et al. <ref type="bibr" target="#b11">[11]</ref> approximate smoothly varying kernels with a basis in kernel space. Whyte et al. <ref type="bibr" target="#b31">[31]</ref> approximate blur kernels by discretization in the space of 3D camera rotations, while Gupta et al. <ref type="bibr" target="#b10">[10]</ref> perform a discretization in the space of image plane translations and rotations. Similarly, Zheng et al. <ref type="bibr" target="#b38">[38]</ref> consider only discretized 3D translations. Using an affine motion model in a variational formulation, our approach does not require discretization of the motion space.</p><p>Second, a more realistic description of local object motion may be achieved by segmenting the image into regions of constant motion <ref type="bibr" target="#b4">[4,</ref><ref type="bibr" target="#b16">16,</ref><ref type="bibr" target="#b25">25]</ref>. To keep the number of parameters manageable, previous approaches either choose the motion of a region from a very restricted set of spatially invariant box filters <ref type="bibr" target="#b4">[4,</ref><ref type="bibr" target="#b16">16]</ref>, assume it to have a spatially in-variant, non-parametric kernel of limited size <ref type="bibr" target="#b25">[25]</ref>, or to be discretized in kernel space <ref type="bibr" target="#b13">[13]</ref>.</p><p>Approaches that rely on learning spatially variant blur are similarly limited to a discretized set of detectable motions <ref type="bibr" target="#b6">[6,</ref><ref type="bibr" target="#b28">28]</ref>. Local Fourier or gradient-domain features have been learned to segment motion-blurred or defocused image regions <ref type="bibr" target="#b20">[20,</ref><ref type="bibr" target="#b26">26]</ref>. However, these approaches are designed to be indifferent to the motion causing the blur. Our affine motion model allows for estimating a large variety of practical motions and a corresponding segmentation. In contrast, Kim et al. <ref type="bibr" target="#b14">[14]</ref> consider continuously varying box filters using TV regularization, but employ no segmentation. However, the problem is highly under-constrained, making it susceptible to noise and model errors.</p><p>When given multiple sharp images, the aggregation of smooth motion per pixel into affine motions per layer has a long history in optical flow [e.g. <ref type="bibr" target="#b22">22,</ref><ref type="bibr" target="#b27">27,</ref><ref type="bibr" target="#b30">30,</ref><ref type="bibr" target="#b36">36,</ref><ref type="bibr" target="#b37">37]</ref>. Leveraging motion blur cues for optical flow estimation in sequences affected by blur, Wulff and Black <ref type="bibr" target="#b33">[33]</ref> as well as Cho et al. <ref type="bibr" target="#b5">[5]</ref> use a layered affine model. In an extension of <ref type="bibr" target="#b14">[14]</ref>, Kim and Lee <ref type="bibr" target="#b15">[15]</ref> use several images to estimate motion and sharp frames of a video. In our case of single image motion estimation, Dai and Wu <ref type="bibr" target="#b7">[7]</ref> use transparency to estimate affine motion and region segmentation. However, this requires computing local α-mattes, a problem that is actually more difficult (as it is more general) than computing parametric object motion. In practice, errors in the α-matte and violations of the sharp edge assumption in natural textures lead to inaccurate results. Here we take a more direct approach and consider a generative model of a motionblurred image, yielding significantly better estimates.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Parametrized Motion Blur Formation</head><p>We begin by considering the image formation in the blurry part of the image, and defer the localization of the blur. Let y = (y i ) i be the observed, partially blurred input image, where i denotes the pixel location. Let x denote the latent sharp image that corresponds to a (hypothetical) infinitesimally short exposure. Since each pixel measures the intensity accumulated over the exposure time t f , we can express the observed intensity at pixel i as the integral</p><formula xml:id="formula_0">y i = t f 0 x p i (t) dt + ǫ,<label>(1)</label></formula><p>where p i (t) describes which location in the sharp image x is visible at y i at a certain time t; ǫ summarizes various noise sources. Note that Eq. (1) assumes that no (dis)occlusion is taking place; violations of this assumption are subsumed in the noise. For short exposures and smooth motion, pixel y i has only a limited support window Ω i in x. Equation <ref type="formula" target="#formula_0">(1)</ref> can thus be expressed as a spatially variant convolution</p><formula xml:id="formula_1">y i = k i ⊗ x Ωi + ǫ,<label>(2)</label></formula><p>where the non-uniform blur kernels k i hold all contributions from p i (t) received during the exposure time. To explicitly construct the blur kernels, we utilize that the motion blur in the blurred part of the image is parametrized by the underlying motion in the scene. Motivated by the fact that rigid motion of planar surfaces can be reasonably approximated by an affine model <ref type="bibr" target="#b0">[1]</ref>, we choose the parametrization to be a single affine model u a i with parameters a ∈ R 6 . Note that other, more expressive parametric models (e.g. perspective) are possible. Concretely, we restrict the paths to p i (t) = t t f − 1 2 u a i , i.e. the integration path depends directly on the pixel location i and affine parameters a, and is constant in time. We now explicitly build continuously valued blur kernels k a i that allow us to plug the affine motion analytically into Eq. (2).</p><p>Analytical blur kernels. Given the parametric model we perform discretization in space and time to obtain the kernel</p><formula xml:id="formula_2">k a i (ξ) = 1 Z a i T t=0 psf ξ | t T − 1 2 u a i ,<label>(3)</label></formula><p>where ξ corresponds to the local coordinates in Ω i and Z a i is a normalization constant that makes the kernel energypreserving. T is the number of discretization steps of the exposure interval, and psf(ξ | µ) is a smooth, differentiable point-spread function centered at µ that interpolates the spatial discretization in x. The particular choice of a pointspread function is not crucial, as long as it is differentiable. However, for computational reasons we want the resulting kernels to be sparse. Therefore we choose the point-spread function to be the weight function of Tukey's biweight <ref type="bibr" target="#b9">[9]</ref> psf(ξ | µ) = where c ∈ [1, 2] controls the width of the constructed blur kernels. For notational convenience, we write the entire image formation process with vectorized images as y = K a x, where K a denotes a blur matrix holding contributions from all spatially varying kernels k a i in its rows. Note that Eq. (3) yields symmetric blur kernels, hence the latent sharp image is assumed to have been taken in the middle of the exposure interval. This is crucial when estimating motion parameters, as it overcomes the directional ambiguity of motion blur. The advantage of an analytical model for the blur kernels is two-fold: First, it allows us to directly map parametrized motion to non-uniform blur kernels, and second, differentiable point-spread functions allow us to compute derivatives w.r.t. the parametrization, i.e. ∂ ∂a k a i (ξ). More precisely, we compute partial derivatives in the form of non-uniform derivative filters acting on the im- <ref type="figure" target="#fig_2">Figure 3</ref> shows the direct mapping from a motion field to non-uniform blur kernels for various locations inside the image, as well as a selection of the corresponding derivative filters.</p><formula xml:id="formula_3">   1 − ξ−µ 2 c 2 2 if ξ − µ ≤ c 0 else,<label>(4)</label></formula><formula xml:id="formula_4">(a) u a i (b) k a i (c) ∂ ∂a 2 k a i (d) ∂ ∂a 5 k a i</formula><formula xml:id="formula_5">age, i.e. ∂ ∂a (k a i ⊗ x Ωi ) = ∂ ∂a k a i ⊗ x Ωi .</formula><p>Localized non-uniform motion blur. Since we are interested in recovering localized object motion rather than global scene motion, the image formation model in Eq. <ref type="formula" target="#formula_1">(2)</ref> is not sufficient. Here we assume that the image consists of two regions: a static region (we do not deal with camera shake/motion), termed background, and a region that is affected by motion blur, termed foreground. These regions are represented by discrete indicator variables h = (h i ) i , h i ∈ {0, 1}, which indicate whether a pixel y i belongs to the blurry foreground. Given the segmentation h, we assume a blurry pixel to be formed as</p><formula xml:id="formula_6">y i = h i (k a i ⊗ x Ωi ) + (1 − h i )x i + ǫ.<label>(5)</label></formula><p>Although this formulation disregards boundary effects at occlusion boundaries, it has shown good results in the case of constant motion <ref type="bibr" target="#b25">[25]</ref>. Note that our generalization to non-uniform parametric blur significantly expands the applicability, but also complicates the optimization w.r.t. the kernel parameters. Despite no closed-form solution, our differentiable kernel parametrization enables efficient inference as we show in the following.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Marginal-Likelihood Motion Estimation</head><p>Estimating any form of motion from a single image is a severely ill-posed problem. Therefore, we rely on a robust probabilistic model and inference scheme. In the related, but simpler problem of uniform blur kernel estimation, marginal-likelihood estimation has proven to be very reliable <ref type="bibr" target="#b18">[18]</ref>. We show how more general non-uniform motion models can be incorporated into marginal-likelihood estimation using variational inference. Specifically, we solve for the unknown parametric motion a while marginalizing over both latent image x and segmentation h:</p><formula xml:id="formula_7">a = arg max a p(y | a) (6) = arg max a p(x, h, y | a) dx dh .<label>(7)</label></formula><p>We thus look for the point estimate of a that maximizes the marginal likelihood of the motion parameters. This is enabled by our differentiable blur model from Sec. 3. We model the likelihood of the motion as</p><formula xml:id="formula_8">p(x, h, y | a) = p(y | x, h, a) p(h) p(x),<label>(8)</label></formula><p>where we assume the prior over the image, p(x), and the prior over the segmentation, p(h), to factor.</p><p>Likelihood of locally blurred images. The image formation model (Eq. 5) and the assumption of i.i.d. Gaussian noise ǫ with variance σ 2 n gives rise to the image likelihood</p><formula xml:id="formula_9">p(y | x, h, a) = i N y i | k a i ⊗ x Ωi , σ 2 n hi · N y i | x i , σ 2 n 1−hi .<label>(9)</label></formula><p>Segmentation prior. We assume the object to be spatially coherent and model the segmentation prior with a pairwise Potts model that favors pixels in an 8-neighborhood N to belong to the same segment. Additionally, we favor pixels to be segmented as background if there is insufficient evidence from the image likelihood. We thus obtain</p><formula xml:id="formula_10">p(h) ∝ i exp(−λ 0 h i ) · (i,j)∈N exp − λ [h i = h j ] ,</formula><p>where [·] is the Iverson bracket and λ, λ 0 &gt; 0 are constants.</p><p>Sharp image prior. In a marginal-likelihood framework with constant motion, Gaussian scale mixture (GSM) models with J components have been employed successfully <ref type="bibr" target="#b8">[8,</ref><ref type="bibr" target="#b18">18,</ref><ref type="bibr" target="#b25">25]</ref>. We adopt them here in our framework as</p><formula xml:id="formula_11">p(x) = i,γ j π j N f i,γ (x) | 0, σ 2 j ,<label>(10)</label></formula><p>where f i,γ (x) is the i th response of the γ th filter from a set of (derivative) filters γ ∈ {1, . . . , Γ} and (π j , σ 2 j ) correspond to GSM parameters learned from natural image statistics. In log space Eq. (10) is a sum of logarithms, which is difficult to work with. As shown by <ref type="bibr" target="#b18">[18]</ref> this issue can be overcome by augmenting the image prior with latent variables, where each variable indicates the scale a particular filter response arises from. Denoting latent indicators for each filter response with l i,γ = (l i,γ,j ) j ∈ {0, 1} J , j l i,γ,j = 1, we can write the joint distribution as</p><formula xml:id="formula_12">p(x, l) = i,γ j π li,γ,j j N f i,γ (x) | 0, σ 2 j li,γ,j ,<label>(11)</label></formula><p>where l is the concatenation of all latent indicator vectors.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Variational inference</head><p>Having defined suitable priors and likelihood, we aim to solve Eq. (7) for the unknown motion parameters. Since this problem is intractable, we need to resort to an approximate solution scheme. We use variational approximate inference <ref type="bibr" target="#b18">[18]</ref> and define a tractable parametric distribution</p><formula xml:id="formula_13">q(x, h, l) = q(x)q(h) i,γ q(l i,γ ),<label>(12)</label></formula><p>where we assume the approximating image distribution to be Gaussian with diagonal covariance</p><formula xml:id="formula_14">q(x) = N x | µ x , diag(σ x ) [18].</formula><p>The approximate segmentation distribution is assumed to be pixel-wise independent Bernoulli q(h) = i r hi i (1 − r i ) 1−hi and the approximate indicator distribution to be multinomial q(l i,γ ) = j v li,γ,j i,γ,j , s.t. j v i,γ,j = 1. Variational free energy. In the marginal-likelihood framework we directly minimize the KL-divergence between the approximate distribution and the augmented motion likelihood KL(q(x, h, l) p(x, h, l, y | a)) w.r.t. the parameters of q(x, h, l) and the unknown affine motion a. Doing so maximizes a lower bound for the term p(y | a) in Eq. (6) <ref type="bibr" target="#b18">[18]</ref>. The resulting free energy decomposes into the expected augmented motion likelihood and an entropy term F (q, a) = − q(x, h, l) log p(x, h, l, y | a) dx dh dl + q(x, h, l) log q(x, h, l) dx dh dl, <ref type="bibr" target="#b13">(13)</ref> which we want to minimize. Relegating a more detailed derivation to the supplemental material, the free energy works out as</p><formula xml:id="formula_15">F (q, a) = q(x)q(h) h•(K a x)+(1−h)•x−y 2 2σ 2 n dx dh + q(x) i,γ,j v i,γ,j fi,γ (x) 2 2σ 2 j dx + i,γ,j v i,γ,j (log σ j − log π j + log v i,γ,j ) + λ 0 i r i + λ (i,j)∈N r i + r j − 2r i r j + i r i log r i + (1 − r i ) log(1 − r i ) − 1 2 i log(σ x ) i + const.<label>(14)</label></formula><p>Minimizing this energy w.r.t. q and a is not trivial, as various variables occur in highly non-linear ways. Note that the non-linearities involving the blur matrix K a do not occur in previous variational frameworks, where blur kernels are directly considered as unknowns themselves <ref type="bibr" target="#b8">[8,</ref><ref type="bibr" target="#b18">18,</ref><ref type="bibr" target="#b21">21]</ref> or are part of a discretized representation linear in the unknowns <ref type="bibr" target="#b31">[31]</ref>, essentially rendering the kernel update into a quadratic programming problem. Despite these issues, we show that one can still minimize the free energy efficiently. More precisely, we employ a standard coordinate descent; i.e. at each update step one set of parameters is optimized, while the others are held fixed. In each update step we make use of a different optimization approach to accommodate the dependencies on this particular parameter best.</p><p>Image and segmentation update. Since we employ the same image prior as previous work <ref type="bibr" target="#b8">[8,</ref><ref type="bibr" target="#b17">17,</ref><ref type="bibr" target="#b25">25]</ref>, the alternating minimization of F (q, a) w.r.t. q(x) and q(l) is similar and can be done in closed form (see supplemental). For updating the segmentation, we have to use a different scheme. Isolating the terms for r we obtain F (q, a) = g(q(x), a, y) T r + λ</p><formula xml:id="formula_16">(i,j)∈N r i + r j − 2r i r j + i r i log r i + (1 − r i ) log(1 − r i ) + const,</formula><p>where g(q(x), a, y) T models the unary contributions from the expected likelihood and the segmentation prior in Eq. <ref type="bibr" target="#b14">(14)</ref>. The energy is non-linear due to the entropy terms as well as the quadratic terms in the Potts model. However, the segmentation update does not need to be optimal and it is sufficient to reduce the free energy iteratively. We thus use variational message passing <ref type="bibr" target="#b32">[32]</ref>, interchanging messages whenever we update the segmentation according to r new = σ − g(q(x), a, y) − λL N 1 + 2λL N r old , <ref type="bibr" target="#b15">(15)</ref> where σ is the sigmoid function, and L N an adjacency matrix for the 8-neighborhood. Motion estimation. The unknown motion occurs as a parameter in the expected likelihood. We could deploy a black-box optimizer, however this is very slow. A far more efficient approach is to leverage the derivatives of the analytic blur model and linearize the blur matrix K a for small deviations from the current motion estimate a 0 as</p><formula xml:id="formula_17">K a ≈ K 0 + 6 p=1 ∂K 0 ∂a p d p =: K d ,<label>(16)</label></formula><p>where d = a − a 0 is an unknown increment vector. We locally approximate K a by K d in Eq. <ref type="bibr" target="#b14">(14)</ref> and minimize Eq. (14) w.r.t. subsequent increments d. This is essentially a non-linear least squares problem with an additional term. In the supplemental material we show how the additional term can be linearized and our approach can thus profit from non-linear least-squares algorithms that are considerably faster than black box optimizers.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Two-Stage Inference and Implementation</head><p>To speed up the variational inference scheme and increase its robustness, we employ several well-known details. First, we perform coarse-to-fine estimation on an image pyramid (scale factor 0.5), which speeds up computation and avoids those local minima that present themselves only at finer resolutions <ref type="bibr" target="#b8">[8]</ref>. Second, we work in the image gradient domain <ref type="bibr" target="#b18">[18]</ref>. Theoretically speaking, the formation model is only valid in the gradient domain for spatially invariant motion, but practically, the step sizes used in our optimization are sufficiently small. The key benefit of the gradient domain is that the variational approximation with independent Gaussians is more appropriate <ref type="bibr" target="#b18">[18]</ref>.</p><p>While motion parameters can be estimated well in this way (c.f . <ref type="figure" target="#fig_3">Figs. 4(b) and 5)</ref>, segmentations for regions without significant structure are quite noisy and may contain holes <ref type="figure" target="#fig_3">(Fig. 4(c)</ref>). This is due to the inherent ambiguity between texture and blur. Smooth regions belong either to a textured, fast-moving object, or an untextured static object. While we cannot always resolve this ambiguity in textureless areas, it thus also does not mislead motion estimation.</p><p>To refine the segmentation, we propose a two-stage approach; see <ref type="figure">Fig. 2</ref> for an overview. In the first stage, we work in the gradient domain and obtain an estimate for the affine motion parameters and an initial, noisy segmentation. In a second stage, we work directly in the image domain. We keep the estimated motion parameters fixed and initialize the inference with the segmentations from the first stage. Moreover, we augment the segmentation prior from Sec. 4 with a color model <ref type="bibr" target="#b3">[3]</ref> based on Gaussian mixtures for both foreground and background:</p><formula xml:id="formula_18">p(h | θ f , θ b ) ∝ p(h) · i GMM(y i | θ f ) hi GMM(y i | θ b ) 1−hi λc .<label>(17)</label></formula><p>Here, θ f , θ b are the color distributions and λ c is a weight controlling the influence of the color statistics. We alternate between updating the segmentation and the color statistics of the foreground/background. Empirically, we find that exploiting color statistics in the image space, which is not possible in the gradient domain, significantly improves the accuracy of the motion segmentation (see <ref type="figure" target="#fig_3">Fig. 4(d)</ref>).</p><p>Initialization. Since our objective is non-convex, results depend on the initialization on the coarsest level of the image pyramid. We initialize the segmentation with q(h i ) = 0.5, i.e. foreground and background are equally likely initially. Interestingly, we cannot initialize the motion with a = 0, as the system matrix in the motion update then becomes singular. This is due to the impossibility of determining the "arrow of time" <ref type="bibr" target="#b24">[24]</ref>, as Eq. <ref type="formula" target="#formula_6">(5)</ref> is symmetric w.r.t. the sign of a. Since the sign is thus arbitrary, we initialize a with a small, positive translatory motion. We analyze the sensitivity of our approach to initialization in the supplemental material, revealing that our algorithm yields consistent results across a wide range of starting values.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Experiments</head><p>Quantitative evaluation. We synthetically generated 32 test images that contain uniform linear object motion or non-uniform affine motion. For these images we evaluate the segmentation accuracy with the intersection-over-union (IoU) error and motion estimation with the average endpoint error (AEP). While we address the more general nonuniform case, we compare to state-of-the-art object motion estimation approaches that in their public implementations consider only linear motion <ref type="bibr" target="#b4">[4,</ref><ref type="bibr" target="#b7">7]</ref>. <ref type="table" target="#tab_0">Table 1</ref> shows the quantitative results; visual examples can be found in the supplemental material. Our approach performs similar to <ref type="bibr" target="#b4">[4]</ref> in the more restricted uniform motion case, but shows a considerably better performance than <ref type="bibr" target="#b4">[4]</ref> for the more general non-uniform motion. We can thus address a more general setting without a large penalty for simpler uniform object motion. The method of <ref type="bibr" target="#b7">[7]</ref> turns out not to be competitive even in the uniform motion case.</p><p>Qualitative evaluation. We conduct qualitative experiments on motion-blurred images that contain a single blurry object under non-uniform motion blur. Such images frequently appear in internet photo collections as well as in the image set provided by <ref type="bibr" target="#b26">[26]</ref>. Figs. 1 and 5 show results of our algorithm. In addition to the single input image, the figures show an overlay of a grayscale version of the image with the color-coded <ref type="bibr" target="#b2">[2]</ref>, non-constant motion field within the segmented region. The global affine motion is additionally visualized with an arrow plot, where green arrows show the motion within the moving object and red arrows continue the global motion field outside the object. All our visual results indicate the motion with unidirectional arrows to allow grasping the relative orientation, but we emphasize that the sign of the motion vector is arbitrary. <ref type="figure" target="#fig_0">Fig. 1</ref>(a) shows a particularly challenging example of motion estimation, as the ferris wheel covers a very small number of pixels. Still, the rotational motion is detected well. <ref type="figure" target="#fig_0">Fig. 1(b)</ref> shows the results after the first stage of the algorithm. Pixels that are not occluded by the tree branches are segmented successfully already using the Potts prior without the additional color information of the second stage. The scenes in <ref type="figure">Fig. 5</ref> show that our motion estimation algorithm can clearly deal with large motions that lead to significant blur in the image. Note that large motions can actually help our algorithm, at least in the presence of sufficient texture in the underlying sharp scene, as the unidirectional change of image statistics induced by the motion allows to identify its direction <ref type="bibr" target="#b4">[4]</ref>. With small motion, this becomes more difficult and the motion may be estimated less accurately by our approach. Moreover, we note that the continuation of the flow field outside the object fits well with what humans understand to be the 3D motion of the considered object. The last image in <ref type="figure">Fig. 5</ref> shows that foreground and moving object do not necessarily have to coincide for our approach. While motion estimation is successful even in challenging images, the segmentation results are not always perfectly aligned with the motion-blurred objects. Moreover, holes may appear. There are two reasons for this: First, our image formation model from Eq. (5) is a simple approximation and does not capture transparency effects at boundaries. Second, even the color statistics of the second stage do not always provide sufficient information to correctly segment the motion-blurred objects. For instance, for the yellow car in the 3 rd column, the color statistics of the transparent and textureless windows closely match the statistics of the street and thus give rise to false evidence toward the background. Thus our framework identifies the window as background rather than blurry foreground. Comparing our results to those of the recent learning approach of Sun et al. <ref type="bibr" target="#b28">[28]</ref> in <ref type="figure">Fig. 8</ref>, we observe that the affine motion is estimated correctly also at the lower right corner, where their discretized motion estimate becomes inaccurate. While our segmentation correctly asserts the shirt of the biker as moving in parallel to the car, the color-based segmentation fails to assign the same motion to the black remainder of the cyclist and the transparent car window.</p><p>These holes indicate that our algorithm cannot resolve the ambiguity between uniform texture and motion blur in all cases.</p><p>We also compare our segmentation results to other blur segmentation and detection algorithms, see <ref type="figure" target="#fig_5">Fig. 7</ref>. To this end, we have applied the methods of Chakrabarti et al. <ref type="bibr" target="#b4">[4]</ref> and Shi et al. <ref type="bibr" target="#b26">[26]</ref>. The results indicate that, despite the discriminative nature of <ref type="bibr" target="#b26">[26]</ref>, blurry regions and sharp regions are not consistently classified. <ref type="figure" target="#fig_5">Fig. 7(c)</ref> shows the effect of <ref type="bibr" target="#b4">[4]</ref> assuming constant horizontal or vertical motion, thus only succeeds in regions where this assumption is approximately satisfied. Our parametric motion estimation is more flexible and thus identifies blurry objects more reliably.</p><p>Although our method is not primarily aimed at deblurring, a latent sharp image is estimated in the course of stage 2. In <ref type="figure">Fig. 6</ref> we compare this latent sharp image to the reconstructions of <ref type="bibr" target="#b31">[31]</ref> and <ref type="bibr" target="#b35">[35]</ref>. Using the publicly available implementations, we have chosen the largest possible kernel sizes to accommodate the large blur sizes in our least blurry test image. We observe that our method recovers, e.g., the truck's headlights better than the other methods. (a) Blurry input (b) Ours (c) Sun et al. <ref type="bibr" target="#b28">[28]</ref> (d) Kim et al. <ref type="bibr" target="#b14">[14]</ref> Figure 8. For the blurry input (a) we compare our approach to two state-of-the art methods (c), (d). Due to its parametric nature our approach recovers the underlying motion of the car more reliably (b). Note that the results of <ref type="bibr" target="#b14">[14,</ref><ref type="bibr" target="#b28">28]</ref> are taken and cropped from <ref type="bibr" target="#b28">[28]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Conclusion</head><p>In this paper we have addressed the challenging problem of estimating localized object motion from a single image. Based on a parametric, differentiable formulation of the image formation process, we have generalized robust variational inference algorithms to allow for the joint estimation of parametric motion and motion segmentation. Our twostage approach combines the benefits of operating in the gradient and in the image domain: The gradient domain affords accurate variational estimation of the affine object mo-tion and an initial blurry region segmentation. The image domain is then used to refine the segmentation into moving and static regions using color statistics. While our parametric formulation makes variational inference more involved, our results on challenging test data with significant object motion blur show that localized motion can be recovered successfully across a range of settings.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>Our algorithm estimates motion parameters and motion segmentation from a single input image.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 .</head><label>3</label><figDesc>Non-uniform blur kernels at select image locations, and their corresponding derivative filters (positive values -red, negative values -blue) for an example rotational motion. We visualize the derivative filters w.r.t. the rotational parameters a2, a5. Note how derivative filters change along the y-axis for the horizontal component, a2, and the vertical component, a5, respectively.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 .</head><label>4</label><figDesc>Improved segmentation after inference in image space.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 5 .Figure 6 .</head><label>56</label><figDesc>The blurry images (top row) show regions with significant motion blur, as well as static parts. Our algorithm estimates nonuniform motion for all blurry regions and segments out regions dominated by this blur (bottom row, color coding see text).(a) Blurry input (b) Whyte et al. [31] (c) Xu et al. Comparison of blind deblurring results. Note the sharpness of the headlights in (d), as well as the over-sharpened road in (b),(c).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 7 .</head><label>7</label><figDesc>For our challenging test scenes (a), blurry-region detection (b) can be mislead by image texture. Generative blur models fare much better (c), as long as the model is sufficiently rich. Our affine motion blur model shows the most accurate motion segmentations (d).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="true"><head>Table 1 .</head><label>1</label><figDesc>Quantitative evaluation.</figDesc><table>segmentation score (IoU) 
+motion error (AEP) 
+
+Method 
+uniform 
+non-uniform 
+uniform non-uniform 
+
+[4] 
+0.53 
+0.33 
+3.84 
+13.37 
+[7] 
+-
+-
+17.21 
+15.06 
+Ours 
+0.50 
+0.43 
+4.81 
+7.43 
+
+</table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0" />
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Determining three-dimensional motion and structure from optical flow generated by several moving objects</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Adiv</surname></persName>
+		</author>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Ieee T</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Pattern Anal. Mach. Intell</title>
+		<imprint>
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page" from="384" to="401" />
+			<date type="published" when="1985-07" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">A database and evaluation methodology for optical flow</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Baker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Scharstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">P</forename><surname>Lewis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Int. J. Comput. Vision</title>
+		<imprint>
+			<biblScope unit="volume">92</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="1" to="31" />
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Interactive image segmentation using an adaptive GMMRF model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Blake</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Brown</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Pérez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Analyzing spatially-varying blur</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Chakrabarti</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Zickler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">T</forename><surname>Freeman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="page" from="2512" to="2519" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Removing non-uniform motion blur from images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Matsushita</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Learning to estimate and remove non-uniform image blur</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Couzinié-Devy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Alahari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ponce</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1075" to="1082" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Motion from blur</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Dai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Removing camera shake from a single photograph. SIGGRAPH</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Singh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Hertzmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">T</forename><surname>Roweis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">T</forename><surname>Freeman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="787" to="794" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<monogr>
+		<title level="m" type="main">The estimators of the Princeton robustness study</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">M</forename><surname>Gross</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">W</forename><surname>Tukey</surname></persName>
+		</author>
+		<idno>38</idno>
+		<imprint>
+			<date type="published" when="1973-06" />
+			<pubPlace>Princeton, NJ, USA</pubPlace>
+		</imprint>
+		<respStmt>
+			<orgName>Dept. of Statistics, Princeton University</orgName>
+		</respStmt>
+	</monogr>
+	<note type="report_type">Technical Report</note>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Single image deblurring using motion density functions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Joshi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cohen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="171" to="184" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Fast removal of non-uniform camera shake</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hirsch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">J</forename><surname>Schuler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Harmeling</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schölkopf</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="463" to="470" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">An introduction to variational methods for graphical models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">I</forename><surname>Jordan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Ghahramani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">S</forename><surname>Jaakkola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">K</forename><surname>Saul</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Machine Learning</title>
+		<imprint>
+			<date type="published" when="1999-11" />
+			<biblScope unit="volume">37</biblScope>
+			<biblScope unit="page" from="183" to="233" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Dynamic scene deblurring</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">H</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Ahn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">M</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="3160" to="3167" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Segmentation-free dynamic scene deblurring</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">H</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">M</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page" from="2766" to="2773" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Generalized video deblurring for dynamic scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">H</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">M</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="5426" to="5434" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Blind motion deblurring using image statistics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Levin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS*2006</title>
+		<imprint>
+			<biblScope unit="page" from="841" to="848" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Understanding and evaluating blind deconvolution algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Levin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Weiss</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Durand</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">T</forename><surname>Freeman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="1964" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Efficient marginal likelihood optimization in blind deconvolution</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Levin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Weiss</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Durand</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">T</forename><surname>Freeman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="2657" to="2664" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Absolute depth estimation from a single defocused image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Ji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Dai</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE T. Image Process</title>
+		<imprint>
+			<biblScope unit="volume">22</biblScope>
+			<biblScope unit="issue">11</biblScope>
+			<biblScope unit="page" from="4545" to="4550" />
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Image partial blur detection and classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Jia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Ensemble learning for blind image separation and deconvolution</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Miskin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J C</forename><surname>Mackay</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advances in Independent Component Analysis, Perspectives in Neural Computing</title>
+		<editor>M. Girolami</editor>
+		<meeting><address><addrLine>London</addrLine></address></meeting>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2000" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Motion recovery from image sequences using only first order optical flow information</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Negahdaripour</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Int. J. Comput. Vision</title>
+		<imprint>
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="163" to="184" />
+			<date type="published" when="1992-12" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Total variation blind deconvolution: The devil is in the details</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Perrone</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Favaro</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="2909" to="2916" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Seeing the arrow of time</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">C</forename><surname>Pickup</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Pan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Shih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schölkopf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">T</forename><surname>Freeman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="2043" to="2050" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Localized image blur removal through non-parametric kernel estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Schelten</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page" from="702" to="707" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Discriminative blur detection features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Jia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">7</biblScope>
+			<biblScope unit="page" from="2965" to="2972" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Layered image motion with explicit occlusions, temporal consistency, and depth ordering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">B</forename><surname>Sudderth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS*2010</title>
+		<imprint>
+			<biblScope unit="page" from="2226" to="2234" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Learning a convolutional neural network for non-uniform motion blur removal</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Cao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ponce</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="769" to="777" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Piecewise rigid scene flow</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Vogel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Schindler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1377" to="1384" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Layered representation for motion analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">Y A</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">H</forename><surname>Adelson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="1993" />
+			<biblScope unit="page" from="361" to="366" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Non-uniform deblurring for shaken images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Whyte</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sivic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ponce</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Variational message passing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">M</forename><surname>Bishop</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">J. Mach. Learn. Res</title>
+		<imprint>
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page" from="661" to="694" />
+			<date type="published" when="2005-04" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Modeling blurred video with layers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wulff</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page" from="236" to="252" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Two-phase kernel estimation for robust motion deblurring</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Jia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Unnatural L0 sparse representation for natural image deblurring</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Jia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1107" to="1114" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Efficient joint segmentation, occlusion labeling, stereo and flow estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yamaguchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In ECCV</title>
+		<imprint>
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="756" to="771" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Dense, accurate optical flow estimation with piecewise parametric model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="1019" to="1027" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Forward motion deblurring</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Jia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="1465" to="1472" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

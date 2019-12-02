@@ -1,0 +1,1194 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Piecewise-planar 3D approximation from wide-baseline stereo</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Verleysen</surname></persName>
+							<email>cedric.verleysen@uclouvain.be</email>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">ICTEAM institute</orgName>
+								<orgName type="institution" key="instit2">Université catholique de Louvain (UCL)</orgName>
+								<address>
+									<settlement>Louvain-la-Neuve</settlement>
+									<country key="BE">Belgium</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>De Vleeschouwer</surname></persName>
+							<email>christophe.devleeschouwer@uclouvain.be</email>
+							<affiliation key="aff0">
+								<orgName type="institution" key="instit1">ICTEAM institute</orgName>
+								<orgName type="institution" key="instit2">Université catholique de Louvain (UCL)</orgName>
+								<address>
+									<settlement>Louvain-la-Neuve</settlement>
+									<country key="BE">Belgium</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Piecewise-planar 3D approximation from wide-baseline stereo</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:44+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>This paper approximates the 3D geometry of a scene by a small number of 3D planes. The method is especially suited to man-made scenes, and only requires two calibrated wide-baseline views as inputs. It relies on the computation of a dense but noisy 3D point cloud, as for example obtained by matching DAISY descriptors <ref type="bibr" target="#b34">[35]</ref> between the views. It then segments one of the two reference images, and adopts a multi-model fitting process to assign a 3D plane to each region, when the region is not detected as occluded. A pool of 3D plane hypotheses is first derived from the 3D point cloud, to include planes that reasonably approximate the part of the 3D point cloud observed from each reference view between randomly selected triplets of 3D points. The hypothesis-to-region assignment problem is then formulated as an energy-minimization problem, which simultaneously optimizes an original data-fidelity term, the assignment smoothness over neighboring regions, and the number of assigned planar proxies. The synthesis of intermediate viewpoints demonstrates the effectiveness of our 3D reconstruction, and thereby the relevance of our proposed data fidelity-metric.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Estimating the 3D model of a scene from images captured by widely separated cameras offers two advantages compared to its estimation from smallbaseline stereo. First, the 3D estimated from triangulation in wide-baseline setups is less impacted by unprecise correspondences or calibration inaccuracies than in small-baseline ones <ref type="bibr" target="#b16">[17]</ref>. Second, 3D reconstruction from widely separated views results in 3D models that are consistent with a wider range of viewpoints, thereby enabling to synthesize a larger range of virtual views of the scene. However, the large occlusions and strong (projective) deformations affecting wide-baseline views make the determination of a dense matching much more challenging than in its small-baseline counterpart. For this reason, most of the state-of-the-art multi-view stereo (MVS) methods still rely on a dense network of small-baseline stereo pairs <ref type="bibr" target="#b0">[1]</ref> [23] <ref type="bibr" target="#b35">[36]</ref> to estimate the 3D, even if the two outermost cameras might form a wide-baseline stereo pair. Due to cost or practical deployment constraints, it is however not always possible to install many cameras around the scene. To address the reconstruction problem in sparse acquisition setups, our paper promotes the use of prior knowledge about the 3D geometry of the scene. Namely, it proposes a solution to reconstruct a scene from only two wide-baseline views, in cases for which the 3D scene exhibits a piecewiseplanar geometry, as often encountered in man-made 1 scenes.</p><p>Our piecewise-planar reconstruction is formulated as a 3D planes assignment problem over the 2D regions that are obtained in one of the two reference images based on a color segmentation <ref type="bibr" target="#b39">[40]</ref>  <ref type="bibr" target="#b1">2</ref> . In contrast to most previous works dealing with wide-baseline setups <ref type="bibr" target="#b3">[4]</ref> [1] <ref type="bibr" target="#b26">[27]</ref>, our method builds upon a dense 3D point cloud <ref type="bibr" target="#b2">3</ref> , instead of a sparse set of correspondences between keypoints. Although dense point clouds offer the advantage to provide 3D cues for challenging surfaces, e.g., textureless or with repetitive patterns such as paved floors, they are generally much more corrupted by noise and 3D outliers than sparse ones. This noise makes it ineffective to directly fit planar models to the cloud. Therefore, our method first derives a set of planar hypotheses from the cloud, and then assigns them to the image regions. The assignment is done by optimizing an energy function that favors (i) assignment smoothness across neighboring regions, (ii) consistency between the assigned models and the dense point cloud, and (iii) sparsity of plane models. The success of our approach funda-mentally depends on the capacity to derive accurate planar models hypotheses, and on the definition of a data fidelity metric that is able to deal with the noise inherent to the dense cloud. Overall, the main contributions of our proposed plane hypotheses assignment method are:</p><p>• A method to define, from a dense but noisy point cloud, a set of 3D plane hypotheses that includes most of the planar surfaces composing the 3D scene, while having a small cardinality (Section 3).</p><p>• A plane-to-region data-fidelity metric that accounts for the inaccuracy and ambiguity of the matching inherent to a dense 3D point cloud construction (Section 4).</p><p>• An energy-driven formulation of the plane-toregion assignment problem, which maximizes the data-fidelity and the smoothness of the plane assignment over the regions, while minimizing the number of assigned planes. This last term guarantees to approximate the 3D with a small number of planes, without having to fix this parameter a priori or having to merge many similar plane models a posteriori, as done in <ref type="bibr" target="#b3">[4]</ref> (Section 5).</p><p>To the best of our knowledge, our work is the first one to approximate the 3D of a scene based on planar proxies that are estimated from a dense 3D point cloud in a way that explicitly balances the approximation error and the number of planar models covering the scene. Our validation demonstrates that it results in an accurate, low complexity 3D representation of the scene, perfectly adapted for light-weighted storage and transmission.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related works</head><p>Many previous works have considered images to reconstruct the 3D of a scene. Their findings and observations have largely inspired and motivated our approach.</p><p>The most mature approaches are the ones estimating the 3D of a from small-baseline stereo. They have been extensively evaluated through the Middlebury challenge. Several of the top-ranked algorithms <ref type="bibr" target="#b24">[25]</ref> [26] rely on image segmentation. Working at the region level has been proven to increase the robustness of the matching data-fidelity <ref type="bibr" target="#b17">[18]</ref>  <ref type="bibr" target="#b20">[21]</ref> while effectively propagating depth information from textured to ambiguous regions <ref type="bibr" target="#b43">[44]</ref>. We have thus adopted a regionbased paradigm in our wide-baseline setup as well.</p><p>In contrast to small-baseline stereo, the reconstruction from wide-baseline images offers the advantage to generate 3D models that are consistent with a large range of view angles. It also benefits from more accurate triangulation, but suffers from severe occlusions , photometric and geometric deformations between the views. Therefore, the related previous art generally require many (≫ 2) images to either derive a few reliable correspondences <ref type="bibr" target="#b37">[38]</ref>, or to fuse multiple depth-maps together <ref type="bibr" target="#b13">[14]</ref>  <ref type="bibr" target="#b42">[43]</ref>. Moreover, most of those methods disambiguates the matching based on a strong regularization, which tends to oversmooth the depth <ref type="bibr" target="#b31">[32]</ref> [31] <ref type="bibr" target="#b1">[2]</ref>, or even to propagate it to wrong pixels when the image gradient is not sufficient at the 3D structure's border <ref type="bibr" target="#b5">[6]</ref>. As an alternative to depth-maps fusion, plane-sweeping methods investigate multiple depth hypotheses by sweeping a plane <ref type="bibr" target="#b6">[7]</ref> through the 3D space, either orthogonally to one of the camera's axis <ref type="bibr" target="#b2">[3]</ref>  <ref type="bibr" target="#b15">[16]</ref> or along a few principal directions <ref type="bibr" target="#b11">[12]</ref>. Although their GPU-based implementations achieve real-time performances <ref type="bibr" target="#b41">[42]</ref> [24] <ref type="bibr" target="#b14">[15]</ref>, plane-sweeping assumes the Manhattan world hypothesis, i.e., that the 3D surfaces are orthogonal to the sweeping directions.</p><p>To avoid multiplying the number of views or raising the Manhattan world assumption, many authors have proposed to constrain the 3D reconstruction based on geometric primitives. Typically, they first estimate a sparse (and hopefully less noisy) 3D points cloud from the matching of salient points in image pairs <ref type="bibr" target="#b0">[1]</ref>  <ref type="bibr" target="#b28">[29]</ref> [30] <ref type="bibr" target="#b27">[28]</ref>, and then fit 3D primitives to those points. The fitting can be direct, e.g. based on a RANSAC-based approach(es) <ref type="bibr" target="#b9">[10]</ref>  <ref type="bibr" target="#b44">[45]</ref>, or indirect, e.g. based on the detection of line segments or vanishing directions <ref type="bibr" target="#b40">[41]</ref>  <ref type="bibr" target="#b36">[37]</ref>. Those methods only achieve good reconstruction when either multiple small-baseline input views are available <ref type="bibr" target="#b40">[41]</ref>, or manual interactions are tolerated to specify high-level scene informations <ref type="bibr" target="#b19">[20]</ref> [23] (e.g. ajacency, alignment, regularity, etc.). To alleviate those drawbacks, the so-called "proposeand-assign" approaches have been considered. Instead of directly fitting primitives to the data, they first derive a number of 3D primitive candidates, which are then assigned to the parts of the sparse 3D point cloud they best approximate. In this formulation, the assignment is handled globally over the whole scene, through an energy-minimization process. Under the piecewise-planarity assumption, the primitives correspond to 3D planes <ref type="bibr" target="#b26">[27]</ref>, and a Markov-Random-Field (MRF) formulation is considered to propagate the assignment to the pixels that are not represented in the sparse point cloud. For increased robustness, Bodis et al. <ref type="bibr" target="#b3">[4]</ref> have recently proposed to lift-up the regularized assignment at the region level. In their approach, a plane candidate is assigned to each region, and the number of proposed models is reduced a posteriori by merging the most similar ones. Their remarkable method strongly accelerates the reconstruction, from many minutes to a few seconds, due to the small amount of treated regions and their abstinence from using any expensive photoconsistency computation <ref type="bibr" target="#b21">[22]</ref>. In practice, assigning planes to regions rather than to pixels however suffers from a main drawback: regions that are not represented in the sparse point cloud, and that do not have a MRF neighbor with similar planar structure, can not be modeled properly. This happens frequently in large and uniform regions presenting repetitive and nondiscriminant patterns, like grass/floor planes. More generally, defining regions is an issue for methods that build on a sparse point cloud: too large regions violate the region planarity assumption <ref type="bibr" target="#b43">[44]</ref>, while too small regions might not have associated 3D points, meaning that their 3D can not be inferred. Our work overcomes this issue by adopting a dense point cloud as input 3D cues. A few previous works have also adopted a piecewise-planar assumption to fit multiple planes to a dense cloud. They however generally need a reliable dense 3D point cloud, which in turns requires many views: the impressive work in <ref type="bibr" target="#b10">[11]</ref> and in <ref type="bibr" target="#b0">[1]</ref> build respectively on 3 million and a few hundred thousands images. Far from those huge number of views, <ref type="bibr" target="#b12">[13]</ref> uses the depths obtained from ten images (spread on approximatively 5 meters) to fit planar hypotheses on segmented regions, but relies on application-dependent priors, embedded in classifiers that are trained from manually labeled data. As illustrated in Section 1 of the supplementary material, estimating the 3D planes independently on each region without those application-dependent priors appears to be too sensitive to the strong noise inherent to a dense point cloud derived from a few wide-baseline pairs.</p><p>Our region-based plane assignment method offers thus a unique asset in that it requires only two widebaseline views to determine an accurate piecewiseplanar approximation of man-made scenes. It relies on dense point cloud estimation to properly deal with surfaces containing few discriminant salient points, but introduces an original data-fidelity metric and considers a multi-model fitting method to deal with the strong noise inherent to the dense nature of the cloud. It does not assume dominant directions, like in a Manhattan world hypothesis and does not require user interactions.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Planar models proposition</head><p>The 3D planes hypotheses to be considered during the plane-to-region assignment process (Section 5) are derived from a dense cloud of 3D points through a 3steps procedure. In the first step, a dense 3D point cloud is generated by determining, for each pixel x belonging to the first view I, the corresponding pixel x ′ in the second view I ′ , and triangulating <ref type="bibr" target="#b16">[17]</ref> these correspondences. A correspondence x ′ is determined for each x ∈ Ω I (where Ω I is the spatial domain of the image I) based on a simple "Winner-Takes-All" (WTA) <ref type="bibr" target="#b25">[26]</ref> method, restricted to the epipolar line l ′ = F · x associated to x:</p><formula xml:id="formula_0">x ′ = argmin y ′ ∈F· x d (x) − d y ′ 2 2 ,<label>(1)</label></formula><p>where F is the fundamental matrix of the calibrated stereo pair, x are the homogeneous coordinates <ref type="bibr" target="#b16">[17]</ref> of x, d (x) is a descriptor associated to this pixel, and · 2 is the ℓ 2 norm. In our validations, the Daisy descriptors <ref type="bibr" target="#b34">[35]</ref> have been chosen for their robustness against wide-baseline geometric distortions, and their appropriateness for dense estimation <ref type="bibr" target="#b33">[34]</ref>.</p><p>In the second step, we derive M planar models from this noisy 3D point cloud. Therefore, we randomly (uniformly) select M triplets of (non-colinear)</p><formula xml:id="formula_1">3D points X t (with t = {1, 2, 3} defining the index of the 3D point in the Triplet) to generate M plane candi- dates π m (with 1 ≤ m ≤ M), each one parametrized as π m = [a m b m c m d m ] ⊤ to represent the plane a m x + b m y + c m z + d m = 0, or equivalently by π m = [a m /d m b m /d m c m /d m 1] ⊤ η ⊤ m 1 ⊤ .</formula><p>In the last step, we derive from the M plane candidates, a small number of K ≪ M planes that are expected to capture most of the representative planar structures in the scene. Therefore, we first assign a quality value q (π m ) to each of the M plane candidates. This is done by considering the triangular patch [π m ] lying on the plane π m and delimited by the triplet {X t } t={1,2,3} .</p><p>The 2D region representing this triangular patch [π m ] in the first (respectively second) reference view is denoted ∆ m (respectively ∆ ′ m ), and is defined by:</p><formula xml:id="formula_2">∆ m = {x ∈ Ω I | x ∈ P · [π m ] } ∆ ′ m = x ′ ∈ Ω I ′ x ′ ∈ P ′ · [π m ]</formula><p>, with P ∈ R 3×4 (respectively P ′ ∈ R 3×4 ) the projection matrix of the first (respectively second) reference view.</p><p>We then extract, from the point cloud, the set of 3D points X projecting in ∆ m or in ∆ ′ m . For the sake of simplicity, we slightly abuse the notation in the rest of the paper and write X ∈ ∆ m when the projection P · X of the 3D point X falls into the 2D triangle ∆ m . We write analogously X ∈ ∆ ′ m . Given those definitions, the proposed quality value q (π m ) quantifies how close is the plane candidate π m from the 3D points X j ∈ {∆ m ∪ ∆ ′ m }, with j ≤ J , J being the number of 3D points projecting onto ∆ m or ∆ ′ m . This is done by counting the fraction of 3D points X j ∈ {∆ m ∪ ∆ ′ m } that are closer from the 3D plane π m than a predefined threshold T d ∈ R + :</p><formula xml:id="formula_3">q (π m ) = 1 J J ∑ j=1 d(π m , X j ) ≤ T d ,</formula><p>in which d π m , X j = |π ⊤ m · X j | η m 2 is the orthogonal distance between a 3D plane π m and the 3D point X j .</p><p>The relevance of the quality value q (π m ) is assessed, in Section 2 of the supplementary material, by showing that the distributions of this metric largely differs for ground-truth and random planes.</p><p>Based on this plane quality value q (π m ), we select, from the M plane candidates π m , the K ≪ M most representative ones by applying a weighted k-means <ref type="bibr" target="#b7">[8]</ref> on the η m ∈ R 3 vectors. The weight associated to the plane candidate π m in the weighted k-means is chosen to be its quality value q (π m ).</p><p>In summary, although we initially generate a tremendeous amount of M plane candidates to guarantee that this random selection includes the 3D ground-truth, our plane-to-region assignment method avoids to compute M · N plane/region association metrics (N being the number of regions), and reduces it to K · N, with K ≪ M.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Cost of assigning a 3D plane to a 2D region</head><p>This section proposes a novel data-fidelity metric to quantify how well a given 3D plane π approximates the 3D surface associated to a region R in image I. Fundamentally, our data fidelity measures the proximity between the investigated (plane) model π and the 3D points that project into the 2D region R or its counterpart R π , obtained in I ′ using the homography H π induced by the 3D plane π = [a b c d] ⊤ <ref type="bibr" target="#b16">[17]</ref>, i.e., R π = H π · x j : x j ∈ R . To modulate our datafidelity metric according to the discriminativeness of the textures observed in the 2D views, we propose to account for the inaccuracy and the ambiguity of the 2D descriptors associations that support the 3D points definition.</p><p>Indeed, a matching between a pair of 2D points x ∈ Ω I and x ′ ∈ Ω I ′ is expected to be reliable when the 2D point descriptors d (x) and d (x ′ ) are (1) very similar, and (2) quite discriminant, which means they are different from most of the alternative matches along the epipolar line, i.e., d (x) different from d (y ′ ) with y ′ ∈ F · x (see Equation <ref type="formula" target="#formula_0">(1)</ref>). For a 3D point X associated to the triangulation of two matched pixels x and x ′ , we introduce:</p><p>• the matching inaccuracy, denoted by m i (X), to measure how dissimilar are the descriptors d (x) and d (x ′ ) of the two corresponding 2D points x ↔ x ′ associated to X. We define it by:</p><formula xml:id="formula_4">m i (X) = 1 D d P · X − d P ′ · X 2 ,</formula><p>where D is the size of the descriptor used during the matching phase.</p><p>• the matching ambiguity, denoted by m a (X), to measure the percentage of pixel candidates y ′ ∈</p><formula xml:id="formula_5">F · x satisfying 1 D d (x) − d (y ′ ) 2 ≤ m D · d (x) − d (x ′ ) 2 + b</formula><p>, among the pixels y ′ lying on the epipolar line associated to x. In this definition, m and b are respectively set to 1.5 and 0.002. Our experiments have revealed that these parameters do not strongly affect the performance of our method.</p><p>To evaluate the relevance of those metrics, <ref type="figure" target="#fig_0">Figure 1</ref> plots their distributions for two classes of 3D points that project in a region for which a planar groundtruth plane π ⋆ model (notated GT model) has been manually defined: (1) the green plot considers the "inliers" to the manual ground-truth plane π ⋆ associated to the region (i.e., the X satisfying d (π ⋆ , X) ≤ 0.1 [m]), while (2) the red plot refers to the outliers (with distance d (π ⋆ , X) &gt; 1 [m]) compared to this groundtruth plane.  Since it is not possible to identify the inliers directly from the 3D points inaccuracy and ambiguity, we have adopted an indirect statistical approach to estimate whether a 3D plane correctly fits the 3D point cloud associated to an image region. In short, we analyze whether the points that are sufficiently (as defined below) accurate and unambiguous lie close to the plane model. Formally, let C τ R,π denote the set of 3D points X satisfying the three following criteria:</p><formula xml:id="formula_6">     X ∈ {R ∪ R π } m i (X) ≤ τ i m a (X) ≤ τ a</formula><p>where τ = {τ i , τ a } and τ i ∈ R + and τ a ∈ R + are thresholds on the matching inaccuracy and ambiguity. As in Section 3, we abuse the notation, and write X ∈ {R ∪ R π } to indicate that the 3D point X projects onto the 2D region R, or its counterpart R π in I ′ . Given a pair τ = {τ i , τ a }, we analyze how the 3D points in C τ R,π scatter away from the investigated plane π, by introducing the scattering function f C τ R,π (l, π) to define the fraction of 3D points in C τ R,π whose distance to π is smaller than l ∈ R + , given a pair τ = {τ i , τ a }.</p><p>Examples of scattering functions are presented in Section 4 of the supplementary material. They indicate that the area under curve (AuC) of the scattering function is a good indicator of plane model relevance. We introduce A (τ, π) ∈ [0; 1] to denote the area under curve of the scattering function f C τ R,π (l, π):</p><formula xml:id="formula_7">A (τ, π) = l lim 0 f C τ R,π (l, π) dl.</formula><p>Roughly speaking, this area reflects the likelihood that the 3D points X ∈ C τ R,π , spread on the interval [0; l lim ] around the investigated plane π, are "close" from this plane.</p><p>The choice of {τ a , τ i } is however important. It should keep the subset C τ R,π sufficiently large, while making sure that the most reliable points have the largest impact. To avoid the tricky/delicate tuning of the parameters {τ a , τ i }, we consider the scattering function for several subsets of 3D points, each subset corresponding to an increasing level of accuracy/unambiguity. The AuC are then merged based on a geometric mean, to decide whether a plane model is valid or not. Formally, the data-fidelity c (R, π) ∈ [0; 1] of assigning a plane π to a region R is thus defined, based on the geometric mean of a sequence of T</p><formula xml:id="formula_8">tests τ (t) = {τ (t) i , τ (t)</formula><p>a } on the accuracy/unambiguity of the 3D points X ∈ {R, R π }. In practice, the sequence of tests is defined as:</p><formula xml:id="formula_9">τ (t) = τ (1) − t − 1 T − 1 · τ (1) − τ (T) ∀t ∈ {1, · · · , T},</formula><p>with τ (1) (respectively τ (T) ) the set of maximum (respectively minimum) investigated thresholds and the data-fidelity is measured as:</p><formula xml:id="formula_10">c (R, π)= 0 if R π ∩ Ω I ′ = ∅ exp 1 T ∑ T t=1 log A τ (t) , π otherwise.</formula><p>Finally, it is worth noting that we do not consider, in the computation of the data-fidelity, the area A τ <ref type="bibr">(t)</ref> , π which are computed on less than a certain number, set to 10 in practice, of 3D points X ∈ C τ (t) R,π . Computing a geometric mean and ignoring too small subsets makes the decision relatively independent from the actual subsets definition, as long as a sufficiently fine sequence of {τ a , τ i } thresholds is considered. Ignoring small subsets avoids that statistically non-representative subsets impact the mean. Using a fine sequence of thresholds ensures that accurate and unambiguous points largely impact the mean, since they are part of much more subsets than unreliable points.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Sparse piecewise-planar approximation</head><p>The assignment of a planar model to each of the N regions is formulated as a multi-model fitting problem, using the state-of-the-art Propose, Expand and Re-Learn (PEARL) algorithm <ref type="bibr" target="#b18">[19]</ref>. As its name indicates, the PEARL inference optimization is composed of three steps: the proposition of a set of models ("propose stage"), the label inference ("expand stage") and the models reestimation ("re-learn stage"). We now explain how the PEARL framework is adapted to fit our problem.</p><p>In the "propose" stage, while the original paper requires to generate several thousands of models candidates, we rely on Section 3 to limit ourselves to a few hundreds (only 200 candidates are used in our validations). This enables us to strongly accelerate the optimization, while keeping the same accuracy (as shown in Section 5 of the supplementary material).</p><p>In the "expand" stage, one planar model is assigned to each image region. The inference problem is expressed as an energy-driven minimization <ref type="bibr" target="#b18">[19]</ref> (solved by α-expansion <ref type="bibr" target="#b4">[5]</ref>). In our case, it minimizes:</p><formula xml:id="formula_11">E(L)= N ∑ n=1</formula><p>(1−c (R n , π(L n )))+λ ∑ (p,q)∈N ω pq δ L p = L q +β|L L | where L = {L 1 , L 2 , · · · , L N } are the labels assigned to the N regions. Each label L n refers either to one of the K models, or to an occlusion label L ∅ , which allows to explicitly model the occluded regions. c(R n , π (L n )) ∈ [0; 1] is the cost of assigning the π(L n ) model to the n th region (see Section 4), δ (.) is the indicator function, |L L | is the number of assigned models <ref type="bibr" target="#b3">4</ref> and ω pq is a weight associated to a pair of neighboring regions that encourages spatial coherence, defined as:</p><formula xml:id="formula_12">ω pq =      1 − E [|∇I (x) |] x∈B if R p and R q have a common border B 0 otherwise</formula><p>where the gradient amplitude |∇I (x) | is rescaled to [0; 1], by applying contrast stretching over the entire gradient image, and E [.] represents the mean operator. Eventually, in the "re-learn" stage, PEARL extracts, for each assigned label L n = L ∅ , the set P L n of region assigned to this label, and reestimates the associated model. This reestimation is done by selecting the set of 3D points that project into one of the regions of P L n and applying RANSAC <ref type="bibr" target="#b9">[10]</ref> (with inlier threshold τ) to robustly fit a new plane model to these 3D points, based on the inlier score proposed in <ref type="bibr" target="#b3">[4]</ref>.</p><p>The PEARL algorithm iterates sequentially between the three stages, until E(L) reaches a minimum. In contrast to <ref type="bibr" target="#b18">[19]</ref>, our implementation also iterates over the regions that are initially assigned to the L ∅ label.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Experiments</head><p>This section considers various man-made scenes, and demonstrates that our method is able to locate their main 3D planes, as well as to detect their occluded regions. The accuracy of the 3D model is then validated by generating free-viewpoints around the piecewise-planar reconstructed scenes. To complement those results, Section 5 of the supplementary material presents additional results showing that our plane proposition phase is effective at generating a small set of 3D plane hypotheses that includes the 3D ground-truth of the scene.</p><p>We consider 10 well-known and calibrated sequences representing street-level captures of (manmade) building scenes (indoor and outdoor). While these datasets provide multiple different views of each scene, we have arbitrarily selected two distant views among the available ones to define a set of wide-baseline stereo pairs.</p><p>To segment the left view, we rely on <ref type="bibr" target="#b39">[40]</ref> [39] to learn the dominant colors in the image 5 . Given this set of C dominant colors, the segmentation problem is defined as the assignment of each pixel to one of the C classes. To impose the smoothness among neighboring pixels, this assignment problem is solved by graph-cut optimization <ref type="bibr" target="#b8">[9]</ref>, in which the data-fidelity term is defined as the ℓ 2 distance between the C dominant colors and the pixel color, and the smoothness term is proportional to the inverse of the amplitude of the gradient of two neighboring pixels. This method results into a set of N regions.</p><p>Our method depends only on two types of parameters. First, the RANSAC inliers/outliers parameter τ and the parameter l lim (representing the investigated orthogonal distance around the proposed 3D plane) are fixed, based on rough prior human knowledge about the depth variability in the scene. In all our experiments, l lim has been chosen between 30cm and 1.5m, while τ has been fixed to τ = l lim /5. Second, for the parameters of the PEARL optimization, we have set the pairwise term to λ = 0.1 and the occlusion data-fidelity to c(R n , π (L ∅ )) = 0.5 in all our experiments. This last parameter is a good trade-off between accepting plane assumptions on regions associated to noisy 3D points and discarding bad planes. The labeling weight β is chosen between [0.1; 0.5] to lead to a visual reasonable trade-off between number of planes and accuracy of representation. <ref type="figure" target="#fig_2">Figure 2</ref> illustrates the results of the different steps of our algorithm, as well as the projection of the first view onto the second one via the piecewise-planar approximated model. Occlusions are highlighted in black. From top to down, the used datasets are: CastleP19/FountainP11 <ref type="bibr" target="#b32">[33]</ref> and Model-house/ Wadham/MertonIII <ref type="bibr" target="#b40">[41]</ref>.</p><p>Similar validations on other well-known wide-baseline datasets, such as HerzJesuP25/Oxford Corridor/Library/MertonI and MertonII, are presented in the supplementary material (Section 6).</p><p>First, we note that most of the 3D planes are correctly estimated (columns (d) and (e) in <ref type="figure" target="#fig_2">Figure 2</ref>) , despite the presence of noise in the dense 3D point cloud. This performance is due to the high robustness of the proposed data-fidelity metric c <ref type="figure">(R, π)</ref>, which simultaneously considers the 3D points of R and R π .</p><p>Second, the failure cases of our approach are not frequent, and can be divided into three classes: wrong 3D plane model assignment, assignment of visible regions to the occlusion label, and wrong 3D plane estimation. The first class of errors appears either when the 3D points projecting in R and R π are strongly contaminated by 3D outliers, and the high value of β pushes towards the propagation of a wrong model from an adjacent region (e.g., in the sky regions in the 4 th row of <ref type="figure" target="#fig_2">Figure 2</ref>), or when the initial image segmentation defines regions that cover two distinct planar models (e.g., on the gutter at the middle of the left wall of Merton II, presented in the 5 th row of <ref type="figure">Figure 7</ref> in the supplementary material). The second class of errors (assignment of a visible region to the occlusion label) appears in the absence of 3D points in the interval [0; l lim ] around the 3D ground-truth. This behavior can be observed on the tower of the Library dataset (4 th row of <ref type="figure" target="#fig_2">Figure 2</ref>, column (d)). The third class of errors (wrong model estimation) can affect either the large and challenging 2D regions, or the smallest ones. In the first case, the inaccuracy of the plane estimation originates from the planar re-estimation of PEARL, using RANSAC on a region that is contaminated by more than 50% of 3D "outliers". This behavior can be observed on the Oxford corridor image (supplementary material, fourth row, third column), or on the terrace of the Model-house sequence (supplementary material, <ref type="figure">Figure 7</ref>, second row, third column). The second case appears in very small regions for which the spatial concentration of their associated 3D points makes the (RANSAC-based) fitted plane more prone to errors than if the 3D points were spatially spread (large region). This problem affects the roof of the windows of the Merton I dataset, as attested by the fact that those regions are projected on the grass in the other view, as illustrated in the fourth row in <ref type="figure">Figure 7</ref> of the supplementary material, column (e).</p><p>To complete our visual experimental results, <ref type="figure" target="#fig_3">Figure  3</ref> (as well as <ref type="figure">Figure 8</ref> and many videos, in the supplementary material) demonstrates the effectiveness of our dense, piecewise-planar 3D approximation method, by projecting the textured 3D piecewiseplanar models on virtual intermediate views.</p><p>Regarding complexity, our method reconstructs each 3D scenes in a few minutes (from 4 to approximatively 20 minutes, according to the resolution of the reference images, Matlab implementation on a 2.4GHz Intel I5 CPU, 8Gb RAM machine), which are divided into three parts: approximatively 60% of the running time is dedicated to the dense point cloud generation (using currently a non-parallel implementation of the WTA method), 25% on the plane proposition phase (in which the location of the pixels in ∆ and ∆ ′ takes the most of the running time), and 15% for the rest.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Conclusion</head><p>We express the 3D reconstruction as a generalized plane assignment problem over 2D image regions, in which the occluded regions are explicitly modeled. We rely on a dense, and thus inherently highly corrupted, 3D point cloud to allow the approximation of challenging (e.g., textureless or repetitively patterned) 2D regions, e.g., grass floors. Therefore, we adopt a multi-model fitting framework. It relies on a limited number (e.g., ≈ 200) of candidate plane models, and formulates the plane assignment problem as an energy-driven formulation, which simultaneously optimizes a data-fidelity term, the smoothness of the plane assignment over the regions and the number of used models. Our main contributions have to do with the computation of a small set of relevant candidate models, and the derivation of a data-fidelity metric that measures the fitting error while considering the inaccuracy and the ambiguity associated to the 2D matches used to defined the 3D points . Also, to the best of our knowledge, by simultaneously optimizing the data-fidelity, the smoothness and the number of assigned models, our light-weight method is the first one to densely approximate a 3D scene while simultaneously targeting a minimal number of models. We have demonstrated the accuracy of the approximated 3D models by interpolating virtual views around a variety of man-made scene, on which traditional MVS methods fail <ref type="bibr" target="#b3">[4]</ref>.  </p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 :</head><label>1</label><figDesc>Distribution of the inaccuracy and ambiguity of the 3D points associated to two ground-truth 3D planar regions. The floor is textureless, while the roof is only composed of repetitive textures.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 1</head><label>1</label><figDesc>reveals that, whilst being different, the inliers and outliers distributions largely overlap each others. This prevents the accurate classification of the 3D points into an inlier and outlier class based on those two metrics.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 2 :</head><label>2</label><figDesc>(Best viewed in color). Based on the segmentation (a) of one of the two wide-baseline views ((a) and (b)) and on their associated dense point cloud (c), our method approximates the 3D surface by the minimum set of of 3D planes. In (d), regions assigned to the same 3D plane are illustrated with a same color. The reprojection of the optimal piecewise-planar reconstruction, textured based on the first view (a) and projected in the second view (b), is represented in (e).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 3 :</head><label>3</label><figDesc>Projection of the textured piecewise-planar approximation of the scene's 3D on virtual views in-between the two cameras of the wide-baseline stereo pair.</figDesc></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">A man-made scene is composed of manufactured 3D objects, which are observed by real cameras.<ref type="bibr" target="#b1">2</ref> In practice, the parameters of the segmentation are tuned to oversegment the image, so that it becomes unlikely that pixels that belong to the same region lie on distinct planar surfaces.<ref type="bibr" target="#b2">3</ref> We define a dense point cloud as a set of 3D points whose projection fully covers (at least one of) the reference images.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="4">This term encourages parsimony, to describe the scene with as few plane models as possible.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="5">The required color dissimilarity threshold for learning the dominant colors consituting the image has been set to 20 in all the experiments. This parameter influences the number of obtained regions. Our experiments have revealed that it does not strongly affect the performance of our piecewise-planar 3D approximation, as long as the image is over-segmented.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgments</head><p>This work has been funded by the Belgian NSF (under F.N.R.S and F.R.I.A grants) and by the Walloon Region projects AOC and PTZ-PILOT.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">Building Rome in a day</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Furukawa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Simon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2011" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Optical flow and depth from motion for omnidirectional images using a tv-l1 variational framework on graphs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bagnato</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Frossard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Vandergheynst</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Image Processing (ICIP)</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="page" from="1469" to="1472" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Unstructured video-based rendering: Interactive exploration of casually captured videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ballan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">J</forename><surname>Brostow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Puwein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Transactions on Graphics (TOG)</title>
+		<imprint>
+			<biblScope unit="volume">29</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page">87</biblScope>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Fast, approximate piecewise-planar modeling based on sparse structure-from-motion and superpixels</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bodis-Szomoru</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Riemenschneider</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Fast approximate energy minimization via graph cuts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Boykov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Veksler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zabih</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Transactions on Pattern Analysis and Machine Intelligence (PAMI)</title>
+		<imprint>
+			<date type="published" when="2001" />
+			<biblScope unit="volume">23</biblScope>
+			<biblScope unit="page" from="1222" to="1239" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">A general dense image matching framework combining direct and feature-based costs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Braux-Zin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Dupont</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bartoli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="185" to="192" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">A space-sweep approach to true multiimage matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">T</forename><surname>Collins</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="1996" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="358" to="363" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Minkowski metric, feature weighting and anomalous cluster initializing in K-means clustering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">C</forename><surname>De Amorim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Mirkin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Pattern Recognition</title>
+		<imprint>
+			<biblScope unit="volume">45</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="1061" to="1075" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Fast approximate energy minimization with label costs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Delong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Osokin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">N</forename><surname>Isack</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Boykov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">96</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="1" to="27" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Random sample consensus: a paradigm for model fitting with applications to image analysis and automated cartography</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">A</forename><surname>Fischler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">C</forename><surname>Bolles</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Communications of the ACM</title>
+		<imprint>
+			<biblScope unit="volume">24</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page">11</biblScope>
+			<date type="published" when="1981" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Building rome on a cloudless day</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-M</forename><surname>Frahm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fite-Georgel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Gallup</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Raguram</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-H</forename><surname>Jen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Dunn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Clipp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2010" />
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Real-time plane-sweeping stereo with multiple sweeping directions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Gallup</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-M</forename><surname>Frahm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Mordohai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="1" to="8" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Piecewise planar and non-planar stereo for urban scene reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Gallup</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-M</forename><surname>Frahm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Multi-view stereo for community photo collections</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Goesele</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hoppe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="1" to="8" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Real-time video-based view interpolation of soccer events using depth-selective plane sweeping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Goorts</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Ancuti</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Dumont</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Rogmans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Bekaert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Joint Conference on Computer Vision, Imaging and Computer Graphics Theory and Applications (VIS-APP)</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">An end-to-end system for free viewpoint video for smooth camera transitions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Goorts</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Dumont</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Rogmans</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Bekaert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on 3D Imaging</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1" to="7" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">Multiple view geometry in computer vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Hartley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2003" />
+			<publisher>Cambridge University Press</publisher>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Evaluation of cost functions for stereo matching</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hirschmüller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Scharstein</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="1" to="8" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Energy-based geometric multimodel fitting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Isack</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Boykov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">97</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Building large urban environments from unstructured point data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Lafarge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Mallet</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="1068" to="1075" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">On building an accurate stereo matching system on graphics hardware</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Mei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision Workshops (in conjunction with ICCV)</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="467" to="474" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Multi-view superpixel stereo in urban environments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Mičušík</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Košecká</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">89</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">A survey of urban reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Musialski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Wonka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Aliaga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Wimmer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Purgathofer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Computer Graphics Forum</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="146" to="177" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Detailed real-time urban 3D reconstruction from video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Nistér</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-M</forename><surname>Frahm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Akbarzadeh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Mordohai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Clipp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Engels</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Gallup</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-J</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Merrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">78</biblScope>
+			<biblScope unit="issue">2-3</biblScope>
+			<biblScope unit="page" from="143" to="167" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Highresolution stereo datasets with subpixel-accurate ground truth</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Scharstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Hirschmüller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Kitajima</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Krathwohl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Nešić</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Westling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Pattern Recognition</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2014" />
+			<biblScope unit="page" from="31" to="42" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">A taxonomy and evaluation of dense two-frame stereo correspondence algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Scharstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">47</biblScope>
+			<biblScope unit="issue">1-3</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Piecewise planar stereo for image-based rendering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">N</forename><surname>Sinha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Steedly</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="1881" to="1888" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Finding paths through the world&apos;s photos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Garg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Transactions on Graphics (TOG)</title>
+		<imprint>
+			<biblScope unit="volume">27</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page">15</biblScope>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Photo tourism: exploring photo collections in 3D</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Transactions on graphics (TOG)</title>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">25</biblScope>
+			<biblScope unit="page" from="835" to="846" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Modeling the world from internet photo collections</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Snavely</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">80</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="189" to="210" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Wide-baseline stereo from multiple views: a probabilistic account</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Strecha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fransens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="552" to="560" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Dense matching of multiple wide-baseline views</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Strecha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tuytelaars</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2003" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="1194" to="1201" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">On benchmarking camera calibration and multi-view stereo for high resolution imagery</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Strecha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">Von</forename><surname>Hansen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Thoennessen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2008" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">16</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">DAISY: A Fast Descriptor for Dense Wide Baseline Stereo and Multiview Reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Tola</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">EPFL</title>
+		<imprint>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+	<note type="report_type">PhD thesis</note>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">DAISY: An efficient dense descriptor applied to wide-baseline stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Tola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Lepetit</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Transactions on Pattern Analysis and Machine Intelligence (PAMI)</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+		<title level="m" type="main">Efficient large-scale multi-view stereo for ultra high-resolution image sets. Machine Vision and Applications</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Tola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Strecha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Fua</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">23</biblScope>
+			<biblScope unit="page" from="903" to="920" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Robust multiple structures estimation with j-linkage</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Toldo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fusiello</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2008" />
+			<biblScope unit="page" from="537" to="547" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title level="m" type="main">Web-based 3D reconstruction service. Machine Vision and Applications</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Vergauwen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">17</biblScope>
+			<biblScope unit="page" from="411" to="426" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Recognition of sport players&apos; numbers using fast-color segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Verleysen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C. De</forename><surname>Vleeschouwer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ternational Society for Optics and Photonics</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="80350" to="80360" />
+		</imprint>
+	</monogr>
+	<note>IS&amp;T/SPIE Electronic Imaging</note>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Learning and propagation of dominant colors for fast video segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Verleysen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C. De</forename><surname>Vleeschouwer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Advanced Concepts for Intelligent Vision Systems</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2013" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">New techniques for automated architectural reconstruction from photographs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Werner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">European Conference on Computer Vision (ECCV)</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2002" />
+			<biblScope unit="page">16</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Multi-resolution real-time stereo on commodity graphics hardware</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<imprint>
+			<date type="published" when="2003" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">211</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">A globally optimal algorithm for robust tv-l 1 range image integration</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pock</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Computer Vision (ICCV)</title>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="page" from="1" to="8" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Stereo for image-based rendering using image over-segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">B</forename><surname>Kang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">75</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">The multiransac algorithm and its application to detect planar homographies</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zuliani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">S</forename><surname>Kenney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Manjunath</surname></persName>
+		</author>
+		<idno>III-153. IEEE</idno>
+	</analytic>
+	<monogr>
+		<title level="m">International Conference on Image Processing (ICIP)</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

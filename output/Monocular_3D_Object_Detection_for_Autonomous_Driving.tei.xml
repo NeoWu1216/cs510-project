@@ -1,0 +1,1544 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Monocular 3D Object Detection for Autonomous Driving</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaozhi</forename><surname>Chen</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Electronic Engineering</orgName>
+								<orgName type="institution">Tsinghua University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Kaustav</forename><surname>Kundu</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="department">Department of Computer Science</orgName>
+								<orgName type="institution">University of Toronto</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ziyu</forename><surname>Zhang</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="department">Department of Computer Science</orgName>
+								<orgName type="institution">University of Toronto</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Huimin</forename><surname>Ma</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Department of Electronic Engineering</orgName>
+								<orgName type="institution">Tsinghua University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Sanja</forename><surname>Fidler</surname></persName>
+							<affiliation key="aff1">
+								<orgName type="department">Department of Computer Science</orgName>
+								<orgName type="institution">University of Toronto</orgName>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Raquel</forename><surname>Urtasun</surname></persName>
+							<email>urtasun@cs.toronto.edu</email>
+							<affiliation key="aff1">
+								<orgName type="department">Department of Computer Science</orgName>
+								<orgName type="institution">University of Toronto</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Monocular 3D Object Detection for Autonomous Driving</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:43+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>The goal of this paper is to perform 3D object detection from a single monocular image in the domain of autonomous driving. Our method first aims to generate a set of candidate class-specific object proposals, which are then run through a standard CNN pipeline to obtain highquality object detections. The focus of this paper is on proposal generation. In particular, we propose an energy minimization approach that places object candidates in 3D using the fact that objects should be on the ground-plane. We then score each candidate box projected to the image plane via several intuitive potentials encoding semantic segmentation, contextual information, size and location priors and typical object shape. Our experimental evaluation demonstrates that our object proposal generation approach significantly outperforms all monocular approaches, and achieves the best detection performance on the challenging KITTI benchmark, among published monocular competitors.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>In recent years, autonomous driving has been a focus of attention of both industry as well as the research community. Most initial efforts rely on expensive LIDAR systems, such as the Velodyne, and hand-annotated maps of the environment. In contrast, recent efforts try to replace the LI-DAR with cheap on-board cameras, which are readily available in most modern cars. This is an exciting time for the vision community, as this application domain provides us with many interesting challenges.</p><p>The focus of this paper is on high-performance 2D and 3D object detection from monocular imagery in the context of autonomous driving. Most of the recent object detection pipelines <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b19">20]</ref> typically proceed by generating a diverse set of object proposals that have a high recall and are relatively fast to compute <ref type="bibr" target="#b44">[45,</ref><ref type="bibr" target="#b1">2]</ref>. By doing this, computationally more intense classifiers such as CNNs <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b41">42]</ref> can be devoted to a smaller subset of promising image re-gions, avoiding computation on a large set of futile candidates. Our paper follows this line of work.</p><p>Different types of object proposal methods have been developed in the past few years. A common approach is to over-segment the image into superpixels and group these using several similarity measures <ref type="bibr" target="#b44">[45,</ref><ref type="bibr" target="#b1">2]</ref>. Approaches that efficiently explore an exhaustive set of windows using simple "objectness" features <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b10">11]</ref>, or contour information <ref type="bibr" target="#b54">[55]</ref> have also been proposed. The most recent line of work aims to learn how to propose promising object candidates using either ensembles of binary segmentation models <ref type="bibr" target="#b26">[27]</ref>, parametric energies <ref type="bibr" target="#b28">[29]</ref> or window classifiers based on CNN features <ref type="bibr" target="#b17">[18]</ref>.</p><p>These proposal generation approaches have been shown to be very effective in the context of the PASCAL VOC challenge, which require a rather loose notion of localization, i.e., a detection is said to be correct if it overlaps more than 50% with the ground truth. In the context of autonomous driving, however, a much more strict overlap is required, in order to provide a more accurate estimate of the distance from the ego-car to the potential obstacles. As a consequence, popular approaches, such as R-CNN <ref type="bibr" target="#b19">[20]</ref> fall significantly behind the competitors on autonomous driving benchmarks such as KITTI <ref type="bibr" target="#b15">[16]</ref>. The current leader on KITTI is Chen et al. <ref type="bibr" target="#b9">[10]</ref>, which exploits stereo imagery to create accurate 3D proposals. However, most cars are currently equipped with a single camera, and thus monocular object detection is of crucial importance.</p><p>Inspired by this approach, this paper proposes a method that learns to generate class-specific 3D object proposals with very high recall by exploiting contextual models as well as semantics. These proposals are generated by exhaustively placing 3D bounding boxes on the ground-plane and scoring them via simple and efficiently computable image features. In particular, we use semantic and object instance segmentation, context, as well as shape features and location priors to score our boxes. We learn per-class weights for these features using S-SVM <ref type="bibr" target="#b23">[24]</ref>, adapting to each individual object class. The top object candidates are then scored with a CNN, resulting in the final set of detec-  <ref type="figure">Figure 1</ref>: Overview of our approach: We sample candidate bounding boxes with typical physical sizes in the 3D space by assuming a prior on the ground-plane. We then project the boxes to the image plane, thus avoiding multi-scale search in the image. We score candidate boxes by exploiting multiple features: class semantic, instance semantic, contour, object shape, context, and location prior. A final set of object proposals is obtained after non-maximum suppression.</p><p>tions. Our experiments show that our approach is able to perform really well on KITTI, outperforming all published monocular object detectors and being almost on par with the leader <ref type="bibr" target="#b9">[10]</ref>, which exploits stereo imagery.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>Our work is related to methods for object proposal generation, as well as monocular 3D object detection. We will mainly focus our literature review on the domain of autonomous driving.</p><p>Significant progress in deep neural nets <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b41">42]</ref> has brought increased interest in methods for object proposal generation since deep nets are typically computationally demanding, making sliding window challenging <ref type="bibr" target="#b19">[20]</ref>. Most of the existing work on proposal generation uses RGB <ref type="bibr" target="#b44">[45,</ref><ref type="bibr" target="#b54">55,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b1">2,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b28">29]</ref>, RGB-D <ref type="bibr" target="#b3">[4,</ref><ref type="bibr">21,</ref><ref type="bibr" target="#b30">31,</ref><ref type="bibr" target="#b24">25]</ref>, or video <ref type="bibr" target="#b34">[35]</ref>. In RGB, most methods combine superpixels into larger regions via several similarity functions using e.g. color and texture <ref type="bibr" target="#b44">[45,</ref><ref type="bibr" target="#b1">2]</ref>. These approaches prune the exhaustive set of windows down to about 2K proposals per image achieving almost perfect recall on PASCAL VOC <ref type="bibr" target="#b11">[12]</ref>. <ref type="bibr" target="#b8">[9]</ref> defines parametric affinities between pixels and finds the regions using parametric min-cut. The resulting regions are then scored via simple features, and the top-ranked proposals are used in recognition tasks <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b14">15,</ref><ref type="bibr" target="#b52">53]</ref>. Exhaustively sampled boxes are scored using several "objectness" features in <ref type="bibr" target="#b0">[1]</ref>. BING proposals <ref type="bibr" target="#b10">[11]</ref> score boxes based on an object closure measure as a proxy for "objectness". Edgeboxes <ref type="bibr" target="#b54">[55]</ref> score an exhaustive set of windows based on contour information inside and on the boundary of each window.</p><p>The most related approaches to ours are recent methods that aim to learn how to propose objects. <ref type="bibr" target="#b28">[29]</ref> learns parametric energies in order to propose multiple diverse regions. In <ref type="bibr" target="#b26">[27]</ref>, an ensemble of figure-ground segmentation models are learnt. Joint learning of the ensemble of local and global binary CRFs enables the individual predictors to specialize in different ways. <ref type="bibr" target="#b25">[26]</ref> learned how to place promising object seeds and employ geodesic distance transform to obtain candidate regions. Parallel to our work, <ref type="bibr" target="#b17">[18]</ref> introduced a method that generates object proposals by cascading the layers of the convolutional neural network. The method is efficient since it explores an exhaustive set of windows via integral images over the CNN responses. Our approach also exploits integral images to score the candidates, however, in our work we exploit domain priors to place 3D bounding boxes and score them with semantic features. We use pixellevel class scores from the output layer of the grid CNN, as well as contextual and shape features.</p><p>In RGB-D, <ref type="bibr" target="#b9">[10]</ref> exploited stereo imagery to exhaustively scored 3D bounding boxes using a conditional random field with several depth-informed potentials. Our work also evaluates 3D bounding boxes, but uses semantic object and instance segmentation and 3D priors to place proposals on the ground plane. Our RGB potentials are partly inspired by <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b52">53]</ref> which exploits efficiently computed segmentation potentials for 2D object detection.</p><p>Our work is also related to detection approaches for autonomous driving. <ref type="bibr" target="#b53">[54]</ref> first detects a candidate set of objects via a poselet-like approach and then fits a deformable wireframe model within the box. <ref type="bibr" target="#b37">[38]</ref> extends DPM <ref type="bibr" target="#b12">[13]</ref> to 3D by linking parts across different viewpoints, while <ref type="bibr" target="#b13">[14]</ref> extends DPM to reason about deformable 3D cuboids. <ref type="bibr" target="#b33">[34]</ref> uses an ensemble of models derived from visual and geometrical clusters of object instances. Regionlets <ref type="bibr" target="#b31">[32]</ref> proposes boxes via Selective Search and re-localizes them using a top-down approach. <ref type="bibr" target="#b45">[46]</ref> introduced a holistic model that re-reasons about DPM object candidates via cartographic priors. Recently proposed 3DVP <ref type="bibr" target="#b46">[47]</ref> learns occlusion patterns in order to significantly improve performance of occluded cars on KITTI.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Monocular 3D Object Detection</head><p>In this paper, we present an approach to object detection, which exploits segmentation, context as well as location priors to perform accurate 3D object detection. In particular, we first make use of the ground plane in order to propose objects that lie close to it. Since our input is a single monocular image, our ground-plane is assumed to be orthogonal to  <ref type="figure">Figure 2</ref>: CNN architecture adopted from <ref type="bibr" target="#b9">[10]</ref> used to score our proposals for object detection and orientation estimation. the image plane and a distance down from the camera, the value of which we assume to be known from calibration. Since this ground-plane may not reflect perfect reality in each image, we do not force objects to lie on the ground, and only encourage them to be close. The 3D object candidates are then exhaustively scored in the image plane by utilizing class segmentation, instance level segmentation, shape, contextual features and location priors. We refer the reader to <ref type="figure">Fig. 1</ref> for an illustration. The resulting 3D candidates are then sorted according to their score, and only the most promising ones (after non-maxima suppression) are further scored via a Convolutional Neural Net (CNN). This results in a fast and accurate approach to 3D detection.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Generating 3D Object Proposals</head><p>We represent each object with a 3D bounding box, y = (x, y, z, θ, c, t), where (x, y, z) is the center of the 3D box, θ denotes the azimuth angle and c ∈ C is the object class (Cars, Pedestrians and Cyclists on KITTI). We represent the size of the bounding box with a set of representative 3D templates t, which are learnt from the training data. We use 3 templates per class and two orientations θ ∈ {0, 90}. We then define our scoring function by combining semantic cues (both class and instance level segmentation), location priors, context as well as shape:</p><formula xml:id="formula_0">E(x, y) =w ⊤ c,sem φ c,sem (x, y) + w ⊤ c,inst φ c,inst (x, y)+ w ⊤ c,cont φ c,cont (x, y) + w ⊤ c,loc φ c,loc (x, y)+ w ⊤</formula><p>c,shape φ c,shape (x, y) We next discuss each of these potentials in more detail. Semantic segmentation: This potential takes as input a pixelwise semantic segmentation containing multiple semantic classes such as car, pedestrian, cyclist and road. We incorporate two types of features encoding semantic segmentation. The first feature encourages the presence of an object inside the bounding box by counting the percentage of pixels labeled as the relevant class: with Ω(y) the set of pixels in the 2D box generated by projecting the 3D box y to the image plane, and S c the segmentation mask for class c. The second feature computes the fraction of pixels that belong to classes other than the object class</p><formula xml:id="formula_1">φ c,seg (x, y) = i∈Ω(y) S c (i) |Ω(y)| ,</formula><formula xml:id="formula_2">φ c,non−seg,c ′ (x, y) = i∈Ω(y) S c ′ (i) |Ω(y)| ,</formula><p>This feature is two dimensional, as one dimension contains the road and the other aggregates all other classes (but the class of the proposal). Hence this potential tries to minimize the fraction of pixels inside the bounding box belonging to other classes. Note that these features can be computed very efficiently using as many integral images as classes. In this paper we use <ref type="bibr" target="#b40">[41,</ref><ref type="bibr" target="#b51">52,</ref><ref type="bibr" target="#b2">3]</ref> to compute the semantic segmentation features. <ref type="bibr" target="#b40">[41,</ref><ref type="bibr" target="#b51">52]</ref> jointly learn the convolutional features as well as the pairwise Gaussian MRF potentials to smooth the output labeling. SegNet <ref type="bibr" target="#b2">[3]</ref> performs semantic labeling via a fully convolutional encoder-decoder. In particular, we use the pre-trained model on PASCAL VOC + COCO from <ref type="bibr" target="#b51">[52]</ref> for Car segmentation. To reduce discrepancies of surrogate classes, we use the pre-trained Seg-Net model from <ref type="bibr" target="#b2">[3]</ref> for Pedestrian and Cyclist segmentation. Note that very few semantic annotations are available for KITTI and thus we did not fine-tune their models. Additionally, we exploited the annotations in the road benchmark of KITTI, and fine-tuned the network of <ref type="bibr" target="#b40">[41]</ref> for road.</p><p>Shape: This feature captures the shape of the objects. Specifically, we first compute the contours in the output of the segmentation (instead of the original image). We then create two grids for the 2D candidate box, one containing only a single cell and one that has K × K cells. For each cell, we count the number of contour pixels inside it. Overall, this gives us a (1 + K × K) feature vector across all cells. This potential tries to place a bounding box tightly around the object, encouraging the spatial distribution of contours within its grid to match the expected shape of a specific class. These features can be computed very efficiently using an integral image (counting contour pixels).</p><p>Instance Segmentation: Similar to <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b52">53]</ref>, we exploit instance level segmentation features, which score the amount of segment inside the box and outside the box. However, we simply choose the best segment for each bounding box based on the IoU overlap, and not reason about the segment ID at inference time. This speeds up computation. This feature helps us to detect objects that are occluded as they form different instances. Note that these features can be very efficiently computed using as many integral images as instances that compose the segmentation. To compute instance-level segmentation we exploit the approach of <ref type="bibr" target="#b50">[51,</ref><ref type="bibr" target="#b49">50]</ref>, which uses a CNN to create both instance-level pixel labeling as well as ordering in depth.</p><p>We re-trained their model so that no overlap (not even in terms of sequences) exist between our training and validation. Note that this approach is only available for Cars.</p><p>Context: This feature encodes the presence of contextual labels, e.g. cars are on the road, and thus we can see road below them. We use a rectangle below the 2D projection of the 3D bounding box as the contextual region. We set its height to 1/3 of the height of the box, and use the same width, as in <ref type="bibr" target="#b32">[33]</ref>. We then compute the semantic segmentation features in the contextual region. We refer the reader to <ref type="figure">Fig. 1</ref>. for an illustration.</p><p>Location: This feature encodes a location prior of objects in both birds-eye perspective as well as in the image plane. We learn the prior using kernel density estimation (KDE) with a fixed standard deviation of 4m for the 3D prior and 2 pixels for the image domain. The 3D prior is learned using the 3D ground-truth bounding boxes available in <ref type="bibr" target="#b15">[16]</ref>. We visualize the prior in <ref type="figure">Fig. 1</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">3D Proposal Learning and Inference</head><p>We use exhaustive search as inference to create our candidate proposals. This can be done efficiently as all the features can be computed with integral images. In particular, it takes 1.8s in a single core, but inference can be trivially parallelized to be real time. We learn the weights of the model using structured SVM <ref type="bibr" target="#b43">[44]</ref>. We use the parallel cutting plane implementation of <ref type="bibr" target="#b39">[40]</ref>. We use 3D Intersectionover-Union (IoU) as our task loss.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">CNN Scoring of Top Proposals</head><p>In this section, we describe how the top candidates (after non-maxima suppression) are further scored via a CNN. We employ the same network as in <ref type="bibr" target="#b9">[10]</ref>, which for completeness we briefly describe here. The network is built using the Fast R-CNN <ref type="bibr" target="#b18">[19]</ref> implementation. It computes convolutional features from the whole image and splits it into two branches after the last convolutional layer, i.e., conv5. One branch encodes features from the proposal regions while another is specific to context regions, which are obtained by enlarging the proposal regions by a factor of 1.5, following <ref type="bibr" target="#b52">[53]</ref>. Both branches are composed of a RoI pooling layer and two fully-connected layers. RoIs are obtained by projecting the proposals or context regions onto the conv5 feature maps. We obtain the final feature vectors by concatenating the output features from the two branches. The network architecture is illustrated in <ref type="figure">Fig. 2</ref>.</p><p>We use a multi-task loss to jointly predict category labels, bounding box offsets, and object orientation. For background boxes, only the category label loss is employed. We weight each loss equally, and define the category loss as cross entropy, the orientation loss as a smooth ℓ 1 and the bounding box offset loss as a smooth ℓ 1 loss over the 4 coordinates that parameterized the 2D bounding box, as in <ref type="bibr" target="#b19">[20]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Implementation Details</head><p>Sampling Strategy: We discretize the 3D space such that the voxel size is 0.2m along each dimension. To reduce the search space during inference in our proposal generation model, we place 3D candidate boxes on the ground plane. As we only use one monocular image as input, we cannot estimate an accurate road plane. Instead, as the camera location is known in KITTI, we use a fixed ground plane for all images with the normal of the plane facing up along camera's Y axis (assuming that the image plane is orthogonal to the ground plane), and the distance of the camera from the plane is h cam = 1.65m. To be robust to ground plane errors (e.g., if the road has a slope), we also sample candidate boxes on additional planes obtained by deviating the default plane by several offsets. In particular, we fix the normal of the plane and set height to h cam = 1.65 + δ. We set δ ∈ {0, ±σ} for Car and δ ∈ {0, ±σ ± 2σ} for Pedestrian and Cyclist, where σ is the MLE estimate of the standard deviation by assuming a Gaussian distribution of the distance from the objects to the default ground plane. We use more planes for Pedestrian and Cyclist as small objects are more sensitive to errors. We further reduce the number of sampled boxes by removing boxes inside which all pixels were labeled as road, and those with very low prior probability of 3D location. This results in around 14K candidate boxes per ground plane, template and per image. Our sampling strategy reduces it to 28%, thus speeding up inference significantly.</p><p>Network Setup: We use the VGG16 model from <ref type="bibr" target="#b41">[42]</ref> trained on ImageNet to initialize our network. We initialize the two branches with the weights of the fully-connected layers of VGG16. To handle particularly small objects in KITTI images, we upscale the input image by a factor of 3.5 following <ref type="bibr" target="#b9">[10]</ref>, which was found to be crucial to achieve very good performance. We employ a single scale for the images during both training and testing. We use a batch size of N = 1 for images and a batch size of R = 128 for pro-  <ref type="bibr" target="#b9">[10]</ref> and MCG <ref type="bibr" target="#b1">[2]</ref> is unfair as we use a monocular image and they use a stereo pair. posals. We run SGD with an initial learning rate of 0.001 for 30K iterations and then reduce it to 0.0001 for another 10K iterations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experimental Evaluation</head><p>We evaluate our approach on the challenging KITTI dataset <ref type="bibr" target="#b15">[16]</ref>. The KITTI object detection benchmark has three classes: Car, Pedestrian, and Cyclist, with 7,481 training and 7,518 test images. Detection for each class is evaluated in three regimes: easy, moderate, hard, which are defined according to the occlusion and truncation levels of objects. We use the train/val split provided by <ref type="bibr" target="#b9">[10]</ref> to evaluate the performance of our class-dependent proposals. The split ensures that images from the same sequence do not exist in both training and validation sets. We then evaluate our full detection pipeline on the test set of KITTI. We refer the reader to the supplementary material for many additional results.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Metrics:</head><p>We evaluate our class-dependent proposals using best achievable (oracle) recall following <ref type="bibr" target="#b21">[22,</ref><ref type="bibr" target="#b44">45]</ref>. Oracle recall computes the percentage of ground-truth objects covered by proposals with IoU overlap above a certain threshold. We set the threshold to 70% for Car and 50% for Pedestrian and Cyclist, following the KITTI setup. We also report average recall (AR), which has been shown to be highly correlated with detection performance. We also evaluate the whole pipeline of our 3D object detection model on KITTI's two tasks: object detection, and object detection and orientation estimation. Following the standard KITTI setup, we use the Average Precision (AP) metric for the object detection task, and Average Orientation Similarity (AOS) for object detection and orientation estimation task.</p><p>Baselines: We compare our proposal generation method to several top-performing approaches on the validation set: 3DOP <ref type="bibr" target="#b9">[10]</ref>, MCG-D [21], MCG <ref type="bibr" target="#b1">[2]</ref>, Selective Search (SS) <ref type="bibr" target="#b44">[45]</ref>, BING <ref type="bibr" target="#b10">[11]</ref>, and Edge Boxes (EB) <ref type="bibr" target="#b54">[55]</ref>. Note that 3DOP and MCG-D exploit depth information, while  the remaining methods as well as our approach only use a single RGB image. Note that all of the above approaches, but 3DOP, are class independent (trained to detect any foreground object), while we use class-specific weights as well as semantic segmentation in our features.</p><p>Proposal Recall: We evaluate the oracle recall for the generated proposals on the validation set. <ref type="figure" target="#fig_1">Fig. 4</ref> shows recall as a function of the number of proposals. Our approach achieves significantly higher recall than all baselines when using less than 500 proposals on Car and Pedestrian. In    particular, our approach requires only 100 proposals for Car and 300 proposals for Pedestrian to achieve 90% recall in the easy regime. Note that the other 2D methods require orders of magnitude more proposals to reach the same recall. When using 2K proposals, we achieve recall on par with the best 3D approach, 3DOP <ref type="bibr" target="#b9">[10]</ref>, while being more than 20% higher than other baselines. Note that the comparison to 3DOP <ref type="bibr" target="#b9">[10]</ref> and MCG <ref type="bibr" target="#b1">[2]</ref> is unfair as we use a monocular image and they use depth information. We also show recall as a function of the overlap threshold for top 500 pro-posals in <ref type="figure">Fig. 5</ref>. Our approach outperforms the baselines except for 3DOP (which uses stereo) across all IoU thresholds. Compared with 3DOP, we get lower recall at high IoU thresholds on Pedestrian and Cyclist.</p><p>Ablation Study: We study the effects of different features on the object proposal recall in <ref type="figure">Fig. 6</ref>. It can be seen that adding each potential improves performance, particularly at the regime of fewer proposals. The instance semantic feature improves recall especially when using fewer proposals (e.g., &lt; 300). Without the instance feature, we still achieve 90% recall using 1000 proposals. By removing both instance and shape features, we would need twice the number of proposals (i.e., 2000) to reach 90% recall.</p><p>Object Detection and Orientation Estimation: We use the network described in Sec. 3.3 to score our proposals for object detection. We test our full detection pipeline on the KITTI test set. Results are reported and compared with state-of-the-art monocular methods in <ref type="table" target="#tab_4">Table 1</ref> and Table 2. Our approach significantly outperforms all published monocular methods. In terms of AP, we outperform the second best method Faster R-CNN <ref type="bibr" target="#b38">[39]</ref> by a significant margin of 7.84%, 2.26%, and 2.97% for Car, Pedestrian, and Cyclist, respectively, in the hard regime. For orientation estimation, we achieve 12.73% AOS improvement over 3DVP <ref type="bibr" target="#b46">[47]</ref> on Car in the hard regime.</p><p>Comparison with Baselines: As strong baselines, we also use our CNN scoring on top of three other proposals methods, 3DOP <ref type="bibr" target="#b9">[10]</ref>, EdgeBoxes (EB) <ref type="bibr" target="#b54">[55]</ref>, and Selective Search (SS) <ref type="bibr" target="#b44">[45]</ref>, where we re-train the network accordingly. <ref type="table" target="#tab_6">Table 3</ref> shows detection and orientation estimation results on KITTI validation. We can see that our approach outperforms Edge Boxes and Selective Search by around 20% in terms of AP and AOS, while being competitive with the best method, 3DOP. Note that this comparison is not fair as 3DOP uses stereo imagery, while we employ a single monocular image. Nevertheless it is interesting to see that we achieve similar performance. We also report AP as a function of the number of proposals for Car in the mod-erate setting, in <ref type="figure" target="#fig_0">Fig. 3</ref>. When using only 10 proposals per image, our approach already achieves AP of 53.7%, while 3DOP is 35.7%. With more than 100 proposals, our AP is almost the same as 3DOP. EdgeBoxes reaches its best performance (78.7%) with 5000 proposals, while we need only 200 proposals to achieve AP of 80.6%.</p><p>Qualitative Results: Examples of our 3D detection results are in <ref type="figure" target="#fig_3">Fig. 7</ref>. Notably, our approach produces highly accurate detections in 2D and 3D even for very small or occluded objects.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusions</head><p>We have proposed an approach to monocular 3D object detection, which generates a set of candidate class-specific object proposals that are then run through a standard CNN pipeline to obtain high-quality object detections. Towards this goal, we have proposed an energy minimization approach that places object candidates in 3D using the fact that objects should be on the ground-plane, and then scores each candidate box via several intuitive potentials encoding semantic segmentation, contextual information, size and location priors and typical object shape. We have shown that our object proposal generation approach significantly outperforms all monocular approaches, and achieves the best detection performance on the challenging KITTI benchmark.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 3 :</head><label>3</label><figDesc>AP vs #proposals on Car for moderate setting.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 4 :</head><label>4</label><figDesc>Proposal Recall vs #Candidates. We use an overlap threshold of 0.7 for Car, and 0.5 for Pedestrian and Cyclist. Methods that use depth information are indicated in dashed lines. Note that the comparison to 3DOP</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 5 :Figure 6 :</head><label>56</label><figDesc>Recall vs IoU using 500 proposals. The number next to the labels indicates the average recall (AR). Note that 3DOP and MCG-D exploit stereo imagery, while the remaining methods as well as our approach use a single monocular image. Ablation study of features on Car proposals for moderate data: From left to right: average recall (AR) vs #candidates, Recall vs #candidates at IoU threshold of 0.7, Recall vs IoU for 500 proposals. We start from the basic model (Loc), which only uses location prior feature, and then gradually add other types of features: class semantics, context, shape, and instance semantics.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 7 :</head><label>7</label><figDesc>Qualitative examples of car detections results: (left) top 50 scoring proposals (color from blue to red indicates increasing score), (middle) 2D detections, (right) 3D detections.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="true"><head>Table 1 :</head><label>1</label><figDesc>Average Precision (AP) (in %) on the test set of the KITTI Object Detection Benchmark.</figDesc><table>Cars 
+Pedestrians 
+Cyclists 
+Easy Moderate Hard 
+Easy Moderate Hard 
+Easy Moderate Hard 
+AOG [30] 
+33.79 
+30.77 
+24.75 
+-
+-
+-
+-
+-
+-
+LSVM-MDPM-sv [17, 13] 
+67.27 
+55.77 
+43.59 
+43.58 
+35.49 
+32.42 
+27.54 
+22.07 
+21.45 
+DPM-VOC+VP [38] 
+72.28 
+61.84 
+46.54 
+53.55 
+39.83 
+35.73 
+30.52 
+23.17 
+21.58 
+OC-DPM [37] 
+73.50 
+64.42 
+52.40 
+-
+-
+-
+-
+-
+-
+SubCat [34] 
+83.41 
+74.42 
+58.83 
+44.32 
+34.18 
+30.76 
+-
+-
+-
+3DVP [47] 
+86.92 
+74.59 
+64.11 
+-
+-
+-
+-
+-
+-
+Ours 
+91.01 
+86.62 
+76.84 
+71.15 
+58.15 
+54.94 
+65.56 
+54.97 
+48.77 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_5" validated="true"><head>Table 2 :</head><label>2</label><figDesc>AOS scores (in %) on the test set of KITTI's Object Detection and Orientation Estimation Benchmark.</figDesc><table>Metric 
+Proposals 
+Type 
+Cars 
+Pedestrians 
+Cyclists 
+Easy Moderate Hard 
+Easy Moderate Hard 
+Easy Moderate Hard 
+
+AP 
+
+SS [45] 
+Monocular 
+75.91 
+60.00 
+50.98 
+54.06 
+47.55 
+40.56 
+56.26 
+39.16 
+38.83 
+EB [55] 
+Monocular 
+86.81 
+70.47 
+61.16 
+57.79 
+49.99 
+42.19 
+55.01 
+37.87 
+35.80 
+3DOP [10] 
+Stereo 
+93.08 
+88.07 
+79.39 
+71.40 
+64.46 
+60.39 
+83.82 
+63.47 
+60.93 
+Ours 
+Monocular 
+93.89 
+88.67 
+79.68 
+72.20 
+65.10 
+60.97 
+84.26 
+64.25 
+61.94 
+
+AOS 
+
+SS [45] 
+Monocular 
+73.91 
+58.06 
+49.14 
+44.55 
+39.05 
+33.15 
+39.82 
+28.20 
+28.40 
+EB [55] 
+Monocular 
+83.91 
+67.89 
+58.34 
+46.80 
+40.22 
+33.81 
+43.97 
+30.36 
+28.50 
+3DOP [10] 
+Stereo 
+91.58 
+85.80 
+76.80 
+61.57 
+54.79 
+51.12 
+73.94 
+55.59 
+53.00 
+Ours 
+Monocular 
+91.90 
+86.28 
+77.09 
+62.20 
+55.77 
+51.78 
+71.95 
+53.10 
+51.32 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_6" validated="false"><head>Table 3 :</head><label>3</label><figDesc>Object detection and orientation estimation results on validation set of KITTI. We use 2000 proposals for all methods.</figDesc><table></table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Acknowledgements. The work was partially supported by NSFC 61171113, NSERC and Toyota Motor Corporation.</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title level="m" type="main">Measuring the objectness of image windows</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Alexe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Deselares</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ferrari</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Multiscale combinatorial grouping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbelaez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pont-Tusetand</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Barron</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Marques</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Segnet: A deep convolutional encoder-decoder architecture for image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Badrinarayanan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kendall</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cipolla</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1511.00561</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<monogr>
+		<title level="m" type="main">Cpmc-3d-o2p: Semantic segmentation of rgb-d images using cpmc and second order pooling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Banica</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sminchisescu</surname></persName>
+		</author>
+		<idno>CoRR abs/1312.7715</idno>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Seeking the strongest rigid detector</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Benenson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mathias</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tuytelaars</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">A fast, modular scene understanding system using context-aware object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Cadena</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Reid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Learning complexity-aware cascades for deep pedestrian detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Cai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Saberian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Vasconcelos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<monogr>
+		<title level="m" type="main">Semantic segmentation with second-order pooling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Carreira</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Caseiro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Batista</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sminchisescu</surname></persName>
+		</author>
+		<idno>ECCV. 2012. 2</idno>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">Cpmc: Automatic object segmentation using constrained parametric min-cuts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Carreira</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sminchisescu</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="page" from="1312" to="1328" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">3d object proposals for accurate object class detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Kundu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Berneshawi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">BING: Binarized normed gradients for objectness estimation at 300fps</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">The PASCAL Visual Object Classes Challenge 2010 (VOC2010) Results</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K I</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Object detection with discriminatively trained part based models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">F</forename><surname>Felzenszwalb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">3d object detection and viewpoint estimation with a deformable 3d cuboid model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Dickinson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Bottom-up segmentation for top-down detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Mottaghi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yuille</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Are we ready for autonomous driving? the kitti vision benchmark suite</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Lenz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Joint 3d estimation of objects and scene layout</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wojek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<monogr>
+		<title level="m" type="main">Deepproposal: Hunting objects by cascading deep convolutional layers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ghodrati</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Diba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pedersoli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tuytelaars</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">V</forename><surname>Gool</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1510.04445</idno>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Fast R-CNN</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Rich feature hierarchies for accurate object detection and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">CVPR</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Learning rich features from RGB-D images for object detection and segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbelaez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<monogr>
+		<title level="m" type="main">What makes for effective detection proposals?</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hosang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Benenson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1502.05082</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Taking a deeper look at pedestrians</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hosang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Omran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Benenson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<idno>arXiv</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Cutting-plane training of structural svms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Joachims</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Finley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C.-N</forename><forename type="middle">J</forename><surname>Yu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">JLMR</title>
+		<imprint>
+			<biblScope unit="issue">1</biblScope>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Object discovery in 3d scenes via shape analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Miller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Geodesic object proposals</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Learning to propose objects</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">A learning framework for generating region proposals with mid-level cues</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Dickinson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Integrating context and occlusion for car detection by hierarchical and-or model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Holistic scene understanding for 3d object detection with rgbd cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Accurate object detection with location relaxation and regionlets relocalization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lin</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">The role of context for object detection and semantic segmentation in the wild</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Mottaghi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yuille</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Learning to detect vehicles by clustering appearance patterns</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Ohn-Bar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">M</forename><surname>Trivedi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Intelligent Transportation Systems</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Spatiotemporal object detection proposals</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Oneata</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Revaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Verbeek</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<monogr>
+		<title level="m" type="main">Pedestrian detection with spatially pooled features and structured ensemble learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Paisitkriangkrai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Shen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Van Den</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Hengel</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.5209</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Occlusion patterns for object class detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Pepik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Stark</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Gehler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Multi-view and 3d deformable part models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Pepik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Stark</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Gehler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Faster R-CNN: Towards real-time object detection with region proposal networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Box in the box: Joint 3d layout and object reasoning from single images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<monogr>
+		<title level="m" type="main">Fully connected deep structured networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<monogr>
+		<title level="m" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1409.1556</idno>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Deep learning strong parts for pedestrian detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Tang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Support Vector Learning for Interdependent and Structured Output Spaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Tsochantaridis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Hofmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Joachims</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Altun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Segmentation as selective search for object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Van De Sande</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Uijlings</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Gevers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Smeulders</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Holistic 3d scene understanding from a single geo-tagged image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">Data-driven 3d voxel patterns for object category recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Xiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Choi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<monogr>
+		<title level="m" type="main">Hierarchical Adaptive Structural SVM for Domain Adaptation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ramos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Vozquez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Lopez</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1408.5400</idno>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<monogr>
+		<title level="m" type="main">Filtered channel features for pedestrian detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Benenson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1501.05759</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">Instance-level segmentation with deep densely connected mrfs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">Monocular Object Instance Segmentation and Depth Ordering with CNNs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Schwing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Jayasumana</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Romera-Paredes</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vineet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Du</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H S</forename><surname>Torr</surname></persName>
+		</author>
+		<title level="m">Conditional random fields as recurrent neural networks. In ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b52">
+	<analytic>
+		<title level="a" type="main">SegDeepM: Exploiting segmentation and context in deep neural networks for object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b53">
+	<analytic>
+		<title level="a" type="main">Towards scene understanding with detailed 3d object representations</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Stark</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Schindler</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b54">
+	<analytic>
+		<title level="a" type="main">Edge boxes: Locating object proposals from edges</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

@@ -1,0 +1,1503 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">They Are Not Equally Reliable: Semantic Event Search using Differentiated Concept Classifiers</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Xiaojun</forename><surname>Chang</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Centre for Quantum Computation and Intelligent Systems</orgName>
+								<orgName type="institution">University of Technology Sydney</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yao-Liang</forename><surname>Yu</surname></persName>
+							<email>yaoliang@cs.cmu.edu</email>
+							<affiliation key="aff1">
+								<orgName type="department">Machine Learning Department</orgName>
+								<orgName type="institution">Carnegie Mellon University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yi</forename><surname>Yang</surname></persName>
+							<email>yi.yang@uts.edu.au</email>
+							<affiliation key="aff0">
+								<orgName type="department">Centre for Quantum Computation and Intelligent Systems</orgName>
+								<orgName type="institution">University of Technology Sydney</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Eric</forename><forename type="middle">P</forename><surname>Xing</surname></persName>
+							<email>epxing@cs.cmu.edu</email>
+							<affiliation key="aff1">
+								<orgName type="department">Machine Learning Department</orgName>
+								<orgName type="institution">Carnegie Mellon University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">They Are Not Equally Reliable: Semantic Event Search using Differentiated Concept Classifiers</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:47+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Complex event detection on unconstrained Internet videos has seen much progress in recent years. However, state-of-the-art performance degrades dramatically when the number of positive training exemplars falls short. Since label acquisition is costly, laborious, and time-consuming, there is a real need to consider the much more challenging semantic event search problem, where no example video is given. In this paper, we present a state-of-the-art event search system without any example videos. Relying on the key observation that events (e.g. dog show) are usually compositions of multiple mid-level concepts (e.g. "dog," "theater," and "dog jumping"), we first train a skip-gram model to measure the relevance of each concept with the event of interest. The relevant concept classifiers then cast votes on the test videos but their reliability, due to lack of labeled training videos, has been largely unaddressed. We propose to combine the concept classifiers based on a principled estimate of their accuracy on the unlabeled test videos. A novel warping technique is proposed to improve the performance and an efficient highly-scalable algorithm is provided to quickly solve the resulting optimization. We conduct extensive experiments on the latest TRECVID MEDTest 2014, MEDTest 2013 and CCV datasets, and achieve state-of-the-art performances.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Multimedia event detection (MED) refers to the task of ranking a sequence of unseen videos according to their likelihood of containing a certain event, e.g. birthday party. Unlike concept/attribute (e.g. actions, scenes, objects) recognition, an event is a high level abstraction, possibly consisting of multiple concepts and spreading over the entire duration of long videos. For example, the marriage proposal event can be described by multiple objects (e.g. ring, faces), scene (e.g. in a restaurant), actions (e.g. talking, kneeling down) and acoustic concepts (e.g. music, cheer-ing). Due to its apparent complexity and enormous utility in retrieval tasks, MED has drawn a lot of research attention in the computer vision and multimedia communities <ref type="bibr" target="#b13">[14,</ref><ref type="bibr" target="#b14">15,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b30">31,</ref><ref type="bibr" target="#b8">9,</ref><ref type="bibr" target="#b53">54,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b12">13]</ref>. A usual MED system first extracts low-level features from videos of interest to capture salient gradient <ref type="bibr" target="#b33">[34,</ref><ref type="bibr" target="#b4">5]</ref>, color <ref type="bibr" target="#b50">[51]</ref> or motion <ref type="bibr" target="#b51">[52]</ref> patterns, and then encode these with a pre-trained codebook to get a succinct representation. With labeled training data, sophisticated statistical classifiers, such as support vector machines (SVM), are then applied on top to yield predictions. With enough labeled training examples, these systems have achieved remarkable performance in the past <ref type="bibr" target="#b28">[29,</ref><ref type="bibr" target="#b46">47,</ref><ref type="bibr" target="#b30">31]</ref>. However, it is observed that performance decreases rapidly when the number of positive training exemplars falls short. Since in practice label acquisition is costly, laborious, and time-consuming, and also because of the constant need to handle new unseen events, the National Institute of Standards and Technology (NIST) initiated the zero-example search (0Ex for short) in TRECVID 2013 <ref type="bibr" target="#b0">[1]</ref> and 2014 <ref type="bibr" target="#b1">[2]</ref>. Promising progress <ref type="bibr" target="#b42">[43,</ref><ref type="bibr" target="#b52">53,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b10">11]</ref> has been made in this direction, but further improvement is still anticipated.</p><p>In this work we mainly focus on the semantic event search problem, where no example videos are provided for training whatsoever. Our system is built on the observation that an event is a composition of multiple mid-level concepts <ref type="bibr" target="#b29">[30,</ref><ref type="bibr" target="#b38">39,</ref><ref type="bibr" target="#b9">10]</ref>. These concepts are shared among events and can be collected from other sources (not necessarily related to the event search task). We then train a skip-gram language model <ref type="bibr" target="#b36">[37]</ref> to automatically identify the most relevant concepts to a particular event of interest. For example, the most relevant concepts for the marriage proposal event might be "face," "ring," "kissing," "kneeling down," etc. Such concept bundle view of event also aligns with the cognitive science literature, where humans are found to conceive objects as bundles of attributes <ref type="bibr" target="#b44">[45]</ref>. The concept scores on the test videos are combined to yield a final ranking of the presence of the event of interest. However, this approach, as well as most existing works on semantic event <ref type="figure">Figure 1</ref>: The proposed framework for large-scale semantic event search ( §3), illustrated on the particular horse riding competition event. The relevance of concept classifiers to the event of interest are measured using the skip-gram language model ( §3.2), followed by some further refinements ( §3.3). To account for their reliability, the concept scores are combined through the warped spectral meta-learner ( §3.6) and solved using the efficient GCG algorithm ( §3.7).</p><p>search <ref type="bibr" target="#b42">[43,</ref><ref type="bibr" target="#b52">53,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b19">20]</ref>, ignore the fact that not all concept classifiers are equally reliable, especially when they are trained from other source domains. For example, "face" in video frames can now be reasonably accurately detected, but in contrast, the action "brush teeth" remains hard to recognize in short video clips. Consequently, a relevant concept can be of limited use or even misuse if its classifier is highly unreliable. Therefore, when combining concept scores, we propose to take their relevance, predictive power, and reliability all into account. This is achieved through a novel extension of the spectral meta-learner in <ref type="bibr" target="#b39">[40]</ref>, which provides a principled way to estimate classifier accuracies using purely unlabeled data. <ref type="figure">Figure 1</ref> gives an overview of our entire system.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Contributions.</head><p>To summarize, we make the following contributions in this work: • To account for the unreliability of concept classifiers, we propose to use the warped spectral meta-learner to estimate the concept accuracies and combine them in a principled and purely unsupervised manner ( §3.5 and §3.6). • We provide an efficient implementation based on the recent generalized conditional gradient ( §3.7), which is the key to conduct event search in large-scale video datasets. • We conduct experiments on three real video datasets (MEDTest 2014, MEDTest 2013 and CCV sub ), and achieve state-of-the-art performances ( §4).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related works</head><p>Complex event detection on unconstrained Internet videos remains a very challenging task due to the large quality variations of Internet videos, the inherent complexity in event definitions, the limited number of positive training examples, and also the irregular appearance of the event in hour-long videos. Nevertheless, significant progress has been made in the past <ref type="bibr" target="#b28">[29,</ref><ref type="bibr" target="#b30">31,</ref><ref type="bibr" target="#b46">47]</ref>. These approaches first extract low-level features (including appearance, motion, acoustic) from local spatial or spatial-temporal patches, and then aggregate them through coding <ref type="bibr" target="#b6">[7,</ref><ref type="bibr" target="#b40">41]</ref> and pooling <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b48">49]</ref> to arrive at a succinct fixed-dimensional representation. Sophisticated supervised classifiers <ref type="bibr" target="#b32">[33,</ref><ref type="bibr" target="#b49">50]</ref> are then applied on top to yield predictions. With enough labeled training data, superb predictions can be achieved, but the performance of these supervised approaches drops dramatically when the number of positive examples decreases. Instead, we consider the more challenging semantic event search problem where no labeled exemplar data is provided.</p><p>Event detection with no training examples is called 0Ex for short. It mostly resembles a real-world video search scenario, where users search desired videos without providing any example video. Recent works have begun to explore intermediate semantic concepts <ref type="bibr" target="#b8">[9]</ref>, and achieved limited success on the 0Ex problem <ref type="bibr" target="#b42">[43]</ref>. <ref type="bibr" target="#b52">[53,</ref><ref type="bibr" target="#b15">16,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b19">20]</ref> also considered selecting more informative concepts. However, none of these works considered the unreliability of the concept classifiers for event detection. <ref type="bibr" target="#b22">[23]</ref> is closest to us in spirit, and considered unreliability for image classification without labeled training data. The limitation of their method is that they rely on the labeled validation data to account for attribute prediction unreliability. In our setting, no labeled validation data is provided. Hence, we cannot directly apply their algorithm to our problem.</p><p>We build on recent advances <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b39">40,</ref><ref type="bibr" target="#b41">42]</ref> in estimating classifier accuracy using unlabeled data, which has received considerable attention in medical applications and more recently in crowdsourcing <ref type="bibr" target="#b43">[44]</ref>. However, our work is the first to apply these techniques to the semantic event search problem, enhanced with a novel warping technique that significantly improves performance and an efficient implementation that allows scaling to real video datasets.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Semantic event search</head><p>In this work we mainly consider the semantic event search problem, where the learning algorithm is asked to rank unlabeled test videos according to their likelihood of containing a certain event of interest, for instance, birthday party. The significant challenge here is that we do not sup-ply the learning algorithm with any labeled training data.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Concept classifiers</head><p>Without labeled training data, we can no longer train a supervised statistical classifier but resort to rule based learning. The key observation is that each object class can be described as the composition of a set of semantic concepts, i.e., middle-level interpretable attributes. For example, the event marriage proposal can be described as the composition of multiple objects (e.g., ring, faces), scene (e.g., in a restaurant), and actions (e.g., talking, kneeling down). Since concepts are shared among many different classes (events) and each concept classifier can be trained independently on datasets from other sources, semantic event search can be achieved by combining the relevant concept classification scores, even in the absence of event labeled training data. Different from the pioneer work <ref type="bibr" target="#b29">[30]</ref>, which largely relied on human knowledge to decompose classes (events) into attributes (concepts), we seek below an automated way.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Semantic concept relevance</head><p>Events come with short textual information, e.g., an event name or a short description. For example, the event dog show in the TRECVID MEDTest 2014 <ref type="bibr" target="#b1">[2]</ref> is defined as "a competitive exhibition of dogs." We exploit this textual information by learning a relevance score between the event description and the pre-trained concept (attribute) classifiers. Since the concept classifiers are trained without any event label information, the relevance score makes it possible to share information between the concept space and the event space. More precisely, we pre-train a skip-gram model <ref type="bibr" target="#b36">[37]</ref> using the English Wikipedia dump 1 . The skipgram model infers a D-dimensional vector space representation of words by fitting the joint probability of the cooccurrence of surrounding contexts on large unstructured text in the embedding vector space. Thus it is able to capture a large number of precise syntactic and semantic word relationships. For short phases consisting of multiple words (e.g., event descriptions), we simply average its word-vector representation. After properly normalizing the respective word-vectors, we compute the cosine distance of the event description and all individual concepts, resulting in a relevance vector w ∈ [0, 1] m , where w k measures a priori relevance of the k-th concept and the event of interest. Similar approaches have appeared before in e.g. <ref type="bibr" target="#b35">[36,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b52">53</ref>].</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Concept pruning and refining</head><p>In the above we have introduced the relevance score vector w ∈ [0, 1] m that measures the similarity between the m concepts and the event of interest. We further prune and refine these weights for the following reasons: 1). Some concepts, although relevant to the event of interest, may not be very discriminative (low predictive power). For example, the concept people is relevant to the event Birthday party, but it appears almost in every video hence does not provide much discriminative power. 2). Some concepts may not be very reliable, possibly because they are trained on different domains. In the experiments, we use the (unlabeled) MED 2014 Research dataset 2 to crudely refine the concepts as follows: We first compute a similarity score between the concept names and the text description of each video in the research dataset, which acts as a concept label, i.e. the likelihood of each video to contain a particular concept. Then we run concept classifiers on each video in the research dataset, and use the aforementioned concept labels to compute the average precisions. Concepts with low precision or low predictive power (such as concept people) are then dropped. Importantly, our procedure does not require any manual annotation on the research dataset.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Combine the classifier ensemble</head><p>Suppose for event e we have selected m concepts 3 , each with a weight w i ∈ [0, 1], i = 1, . . . , m. Then, for any test video v, the i-th concept classifier generates a confidence score s i (v) ∈ [−1, 1]. Since different concept classifiers result in different confidence scores, we need a principled way to combine them, preferably also taking their relevance w into account. This can be treated as an ensemble learning problem, and there are many different ways to approach it. For instance, we can use each concept classifier i to induce a total ordering among n test videos, namely,</p><formula xml:id="formula_0">video k ranked above video l ⇐⇒ s i (v k ) &gt; s i (v l ). (1)</formula><p>Then we can use rank aggregation techniques <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b54">55]</ref> to combine the resulting ranks. A very intuitive and straightforward approach is to use the weighted score vector</p><formula xml:id="formula_1">s = m i=1 w i s i<label>(2)</label></formula><p>and its induced ranking as in <ref type="formula">(1)</ref>. This is known as the Borda count in social choice theory, and has been explored in <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b25">26,</ref><ref type="bibr" target="#b35">36,</ref><ref type="bibr" target="#b37">38]</ref>  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.5.">Spectral meta-learning</head><p>Assuming for a moment that each score vector is binary, i.e. s i (v) ∈ {−1, 1}. We assume that the videos v are i.i.d.</p><p>samples from an unknown distribution. The accuracy of the i-th concept classifier is defined as follows <ref type="bibr" target="#b3">4</ref> :</p><formula xml:id="formula_2">p i = Pr(s i (v) = 1|y = 1), (3) n i = Pr(s i (v) = −1|y = −1), (4) π i = (p i + n i )/2,<label>(5)</label></formula><p>where y is the true event label of the test video v, and π i ∈ [0, 1] is the average accuracy. Since we do not have labeled data, it is not immediately clear how we can estimate π i .</p><p>The following assumption is standard for estimating classifier accuracy using unlabeled data <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b39">40]</ref>:</p><formula xml:id="formula_3">Assumption 1 (Conditional Independence) Pr(s i (v), s j (v)|y) = Pr(s i (v)|y) · Pr(s j (v)|y)<label>(6)</label></formula><p>In other words, given the label y, the classifiers make independent predictions. In our setting, the concept classifiers are trained from different sources, therefore the conditional independence assumption is reasonable. Based on the conditional independence assumption, the following key observation is made in <ref type="bibr" target="#b39">[40]</ref>:</p><formula xml:id="formula_4">Lemma 1 Let b = Pr(y = 1) − Pr(y = −1) be the class imbalance, µ i = E v (s i (v)</formula><p>) be the mean prediction of the ith concept classifier, and the population covariance matrix</p><formula xml:id="formula_5">Q ij = E v [(s i (v) − µ i )(s j (v) − µ j )].<label>(7)</label></formula><p>Then, under the conditional independence assumption,</p><formula xml:id="formula_6">Qij = 1 − µ 2 i , i = j (2πi − 1)(2πj − 1)(1 − b 2 ), i = j .<label>(8)</label></formula><p>Crucially, from Lemma 1 we see that, except the diagonals, the population matrix Q arises from a rank-1 matrix, whose leading eigenvector u satisfies</p><formula xml:id="formula_7">u i ∝ (2π i − 1).<label>(9)</label></formula><p>This immediately leads to a principled way to estimate the accuracies π i (up to a scale factor), since the covariance matrix Q can be easily estimated using unlabeled data. Consider the sample covariance matrix</p><formula xml:id="formula_8">Q ij = 1 n − 1 n k=1 (s i (v k ) −μ i )(s j (v k ) −μ j ),<label>(10)</label></formula><formula xml:id="formula_9">whereμ i = 1 n n k=1 s i (v k ).</formula><p>Clearly,Q is an unbiased estimator of the population covariance matrix Q, and it can be shown that Q − Q = O p ( 1 √ n ). Therefore, for a large number of unlabeled data, we can estimate the accuracy π i by solving the following problem:</p><formula xml:id="formula_10">min R 0, rank(R)=1 i =j (Q ij − R ij ) 2 .<label>(11)</label></formula><p>Note that it is important to exclude the diagonals of Q. Indeed, as shown in <ref type="bibr" target="#b39">[40]</ref>, the leading eigenvector of Q is a <ref type="bibr" target="#b3">4</ref> We implicitly assume that the scores are positively related to the label.</p><p>biased estimator of the accuracy π i , and the bias depends on the number of classifiers m and the class imbalance b. Unfortunately, (11) is a non-convex problem hence may be hard to solve. Instead, we turn to the following alternative, which uses the trace (since R is constrained to be positive semidefinite) as a convex surrogate for the nonconvex rank constraint:</p><formula xml:id="formula_11">min R 0 i =j (Q ij − R ij ) 2 + λ tr(R).<label>(12)</label></formula><p>The regularization constant λ controls the desired rank of the optimal solution. <ref type="bibr" target="#b39">[40]</ref> proposed to solve (12) using generic semidefinite programming (SDP) toolboxes, which unfortunately do not scale very well. In Section 3.7 we will provide a much faster O(m 2 ) time algorithm. After solving R from <ref type="formula" target="#formula_1">(12)</ref>, we extract the accuracy π i from its leading eigenvector u. Now the question is can we combine the classifiers more smartly by taking their accuracy into account? The answer is yes, and traces back to <ref type="bibr" target="#b16">[17]</ref>, which considered the maximum likelihood estimator:</p><formula xml:id="formula_12">y * = sign m i=1 (si(v) log αi + log βi) ,<label>(13)</label></formula><formula xml:id="formula_13">αi = pini (1 − pi)(1 − ni) , βi = pi(1 − pi) ni(1 − ni) .<label>(14)</label></formula><p>To get α and β from the accuracy π, <ref type="bibr" target="#b39">[40]</ref> considered Taylor expansion of the MLE at the most inaccurate setting p i = n i = 1/2. This yields the spectral meta-learner (SML): <ref type="bibr" target="#b14">(15)</ref> where recall that u is the leading eigenvector of the minimizer R of (12). Interestingly, the spectral meta-learner is essentially a weighted majority voting rule, where the weights come from the estimates of the accuracy. Intuitively, it gives more weight to classifiers whose estimated accuracy is high, and vice versa. We note that it is possible to construct the meta-learner using more sophisticated tensor approaches <ref type="bibr" target="#b21">[22]</ref>.</p><formula xml:id="formula_14">y = sign m i=1 si(v)(2πi − 1) ≈ sign m i=1 si(v)ui ,</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.6.">specialization and extension</head><p>In this section we specialize the spectral meta-learner above to our semantic event search framework. Probabilistic classifiers. Recall that we obtain m concept classifiers from other domains and apply them to n unlabeled test videos, resulting in the score vectors s i ∈ [−1, 1] n , i = 1, . . . , m. The theory in section 3.5 requires s i to be binary, but this can be easily addressed by treating each score vector s i as probabilistic classifiers, namely, we classify the k-th test video as positive with probability s i (v k ), independently of everything else. Under this interpretation we can still derive Lemma 1, the sample covari-anceQ, and the spectral meta-learner as before, without the need of thresholding the score vectors.</p><p>Warping functions. Next, we wish to incorporate the relevance vector w that we constructed in section 3.2 and refined in section 3.3. To see why this is desirable, let us first note that Lemma 1 applies to any classifiers, as long as they satisfy the conditional independence assumption. More precisely, for transformations f i that do not depend on the unseen test video v or its unknown label y, we can consider the "warped" classifiers</p><formula xml:id="formula_15">t i (v) = f i (s i (v)), i = 1, . . . , m.<label>(16)</label></formula><p>Clearly, the warped classifiers t are conditionally independent if and only if the original classifiers s are so. Therefore Lemma 1 still holds, and we can construct the sample covariance matrix</p><formula xml:id="formula_16">Q f ij = 1 n − 1 n k=1 (ti(v k ) −μ f i )(tj(v k ) −μ f j ),<label>(17)</label></formula><p>where as beforeμ f i = 1 n n k=1 t i (v k ). The spectral metalearner for the warped classifiers is thus given as:</p><formula xml:id="formula_17">y f = sign m i=1 f i (s i (v))u i ,<label>(18)</label></formula><p>where u is the leading eigenvector of R, the minimizer of <ref type="bibr" target="#b11">(12)</ref> where we useQ f ij instead. Warped spectral meta-learner. Straightforward as it is, the extension using different warping functions f i can lead to a significant performance improvement. This is because the accuracy of the spectral meta-learnerŷ in (15) depends on the accuracies of the base classifiers s i : SML is a smart way to combine the base classifiers, but we should not expect it to improve the accuracy much if the base classifiers are themselves near random. After all, garbage in garbage out. The warping functions f i provide an extremely simple way to adjust the base classifiers. Since the relevance vector w we constructed in Section 3.2 provides a crude assessment of the relevance between the concept classifiers and the event of interest, we consider the following warped concept classifiers:</p><formula xml:id="formula_18">t = (w 1 s 1 , . . . , w m s m ),<label>(19)</label></formula><p>although other warping functions can similarly be used. Intuitively, the weight w i is the a priori co-occurrence frequency of the i-th concept and the event of interest while s i is the confidence likelihood of detecting the i-th concept. As we will see in the experiments, this simple warping trick significantly improves the performance.</p><p>Few exemplars. The warped spectral meta-learner above can also be applied for few-exemplar event detection, where few (say 10) labeled training videos are provided. In this case, we can train an additional classifier (or few) using the provided labeled videos. Due to the small training size, the accuracy of the resulting supervised classifier is likely also low. We combine the supervised classifier with the concept classifiers but give it the maximum weight w = 1. Then we apply the warped spectral learner to get the final prediction.</p><p>Algorithm 1: The warped SML algorithm. <ref type="bibr" target="#b0">1</ref> Construct concept classifiers s and relevance vector w. <ref type="bibr" target="#b1">2</ref> Apply warping t = (f 1 (s 1 ), . . . , f m (s m )). <ref type="bibr" target="#b2">3</ref> Assemble the sample covarianceQ f .</p><formula xml:id="formula_19">4 Set U 1 = 0. 5 for t = 1, 2, . . . do 6 R ← U t U ⊤ t ; 7 G ij ← 0, i = j R ij −Q ij , i = j ; 8 u ← leading eigenvector of −G ; 9 (a t , b t ) ← arg min a,b≥0 i =j (aR ij + bu i u j −Q ij ) 2 + λ(a tr(R) + b) ; 10 U init ← ( √ a t U t−1 , √ b t u) ; 11</formula><p>U t ← local minimizer of (23), initial with U init ; 12 u ← leading eigenvector of R ; 13 Rank test videos using (18).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.7.">Optimization using GCG</head><p>Lastly, we provide a fast algorithm for solving the semidefinite program <ref type="bibr" target="#b11">(12)</ref>. This is crucial if we want to combine a large number of concept classifiers.</p><p>We use the generalized conditional gradient (GCG, a.k.a Frank-Wolfe) algorithm in <ref type="bibr" target="#b56">[57,</ref><ref type="bibr" target="#b9">10]</ref>, with essential modifications to take the positive semidefinite constraint into account. In each iteration, GCG first computes the gradient</p><formula xml:id="formula_20">G = ∇ R i =j (R ij −Q ij ) 2 .<label>(20)</label></formula><p>Then it finds a rank-1 update u = argmin</p><formula xml:id="formula_21">z 2 ≤1 z ⊤ Gz,<label>(21)</label></formula><p>which amounts to the leading eigenvector of −G. This step takes into account the trace regularizer, and is essentially its dual operator (spectral norm). Finally, GCG augments the previous iterate R with the new rank-1 update:</p><formula xml:id="formula_22">R ← a · R + b · uu ⊤ ,<label>(22)</label></formula><p>where the positive coefficients a, b are found by line search.</p><p>To accelerate convergence, we consider the following smooth unconstrained problem:</p><formula xml:id="formula_23">min U i =j ((U U ⊤ ) ij −Q ij ) 2 + λ U 2 F ,<label>(23)</label></formula><p>which, unlike the original problem <ref type="bibr" target="#b11">(12)</ref>, is nonconvex. But we can combine the global GCG algorithm with a local fast solver for the nonconvex problem <ref type="bibr" target="#b22">(23)</ref>. The intuition is that both <ref type="bibr" target="#b11">(12)</ref> and <ref type="formula" target="#formula_1">(23)</ref> share the same set of global minimizers, and by combining them we gain both global optimality and local fast convergence, especially because the latter nonconvex problem has no constraint at all. We summarize the entire procedure in Algorithm 1. Following a similar argument as in <ref type="bibr" target="#b56">[57]</ref>, we can prove that Algorithm 1 converges globally to an ǫ-optimal solution of (12) in at most O(1/ǫ) steps. In practice, once we arrive at the true rank of the minimizer, the local solver (e.g. lbfgs) for the nonconvex problem (23) usually finds the solution at once. The per-step time complexity is O(m 2 ) since the most time-consuming step is computing the rank-1 update in (21).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experimental results</head><p>In this section we conduct thorough experiments to validate our warped spectral meta-learner for both the semantic event search and few-exemplar event detection tasks.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Speed comparison on synthetic data</head><p>We first verify the efficiency of the GCG Algorithm 1. We randomly generate m score vectors s i ∈ R n , i = 1, . . . , m, and vary m from m = 2 to m = 100 (largest we were able to try). As can be seen from <ref type="figure" target="#fig_0">Figure 2</ref>, the running time of the naive SDP implementation (using YALMIP) increased sharply with the number of concepts. In comparison, the running time of our GCG implementation remains negligible (when achieving the same stopping criteria). It is clear that without our efficient GCG implementation, it is impossible to apply the (warped) spectral meta-learner to the large video datasets in the next section. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Experiment setup on real datasets</head><p>Datasets. We run experiments on three real datasets:</p><p>• MED14: The TRECVID MEDTest 2014 dataset <ref type="bibr" target="#b1">[2]</ref> is collected by the NIST for all participants in the TRECVID competition. There are in total 20 events, whose description can be found in <ref type="bibr" target="#b1">[2]</ref>. We use the official test split released by the NIST, and strictly follow its standard procedure <ref type="bibr" target="#b1">[2]</ref>. In particular, we detect each event separately, treating each of them as a binary classification/ranking problem. • MED13 <ref type="bibr" target="#b0">[1]</ref>: Similar to MED14. Note that 10 of its 20 events overlap with those of MED14. • CCV sub : The official Columbia Consumer Video dataset <ref type="bibr" target="#b26">[27]</ref> contains 9,317 videos in 20 semantic classes, including scenes like "beach," objects like "cat," and events like "baseball" and "parade." Since our goal is to detect events, we only use the 15 event categories.</p><p>We evaluate the performance using the mean Average Precision (mAP). Parameters of all compared algorithms are similarly tuned by grid search.</p><p>Concept detectors. 3,135 concept detectors are pretrained using TRECVID SIN dataset (346 categories), Google sports (478 categories) <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b23">24]</ref>, UCF101 dataset (101 categories) <ref type="bibr" target="#b45">[46,</ref><ref type="bibr" target="#b23">24]</ref>, YFCC dataset (609 categories) <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b23">24]</ref> and DIY dataset (1601 categories) <ref type="bibr" target="#b55">[56,</ref><ref type="bibr" target="#b23">24]</ref>. We first extracted the improved dense trajectory features (including trajectory, HOG, HOF and MBH) using the code of <ref type="bibr" target="#b51">[52]</ref> and encode them with the Fisher vector representation <ref type="bibr" target="#b40">[41]</ref>. Following <ref type="bibr" target="#b51">[52]</ref>, we first reduce the dimension of each descriptor by a factor of 2 and then use 256 components to generate the Fisher vectors. Then, on top of the extracted low-level features, we trained the cascade SVM <ref type="bibr" target="#b18">[19]</ref> for each concept detector. Using these concept detectors we obtain a 3,135-dimensional score vector for each video.</p><p>Competitors. We compare the following algorithms:</p><p>• Prim <ref type="bibr" target="#b19">[20]</ref>: Primitive concepts, separately trained.</p><p>• Sel <ref type="bibr" target="#b34">[35]</ref>: A subset of primitive concepts that are more informative for each event.</p><p>• Bi <ref type="bibr" target="#b42">[43]</ref>: Bi-concepts discovered in <ref type="bibr" target="#b42">[43]</ref>.</p><p>• OR <ref type="bibr" target="#b19">[20]</ref>: Boolean OR combinations of Prim concepts.</p><p>• Fu <ref type="bibr" target="#b19">[20]</ref>, Fu+: Boolean AND/OR combinations of Prim concepts, w/o concept refinement. • Bor: The Borda rank aggregation in (2), with equal weights on the discovered semantic concepts. • Bor+: Borda rank aggregation with equal weights on the refined semantic concepts. • wBor: Borda rank aggregation with relevance weights on the discovered semantic concepts. • wBor+: Borda rank aggregation with relevance weights on the refined semantic concepts. • SML: Spectral meta-learner (15) on discovered semantic concepts. • SML+: SML on refined semantic concepts.</p><p>• wSML: Warped SML (18) (with warping function <ref type="formula" target="#formula_7">(19)</ref>) on discovered semantic concepts. • wSML+: Warped SML on refined semantic concepts. The last eight methods are first proposed here. The refined concepts are subset of discovered semantic concepts, after dropping inaccurate, low predictive, and irrelevant ones.</p><p>Note that we did not compare with approaches that use multiple modalities of features, e.g. <ref type="bibr" target="#b24">[25,</ref><ref type="bibr" target="#b52">53]</ref>, since we only considered the visual feature. In future work we plan to exploit speech and OCR information.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Semantic event search</head><p>We report the full experimental results on the TRECVID MEDTest 2014 dataset in <ref type="table" target="#tab_1">Table 1</ref> and also a summary on the MEDTest 2013 dataset and the CCV sub dataset. We first consider the semantic event search setting where no labeled training video is available. As is clear from  . By further looking into the discovered semantic concepts for these events, we find they all benefit greatly from relevant classifiers that are discriminative and reliable. For example, for the Beekeeping event, the performance of wSML+ significantly relied on concepts such as "apiary bee house" and "honeycomb", which turn out to be the most reliable concepts for Beekeeping in our concept vocabulary. <ref type="figure" target="#fig_1">Figure 3</ref> shows the top 9 retrieved videos for the Beekeeping event. It is clear that videos retrieved by the proposed wSML+ are more accurate and visually coherent.</p><p>From <ref type="table" target="#tab_1">Table 1</ref> we make the following observations: • Comparing the columns w/o the "+" suffix, we can see that concept refinement generally improves performance than naively using all concepts. This confirms the importance of using data-driven word embeddings to eliminate irrelevant and non-discriminative concepts. • Comparing the Border and SML variants we verify the great benefit of using a principled method such as SML to combine classifiers. By taking into account the accuracy, albeit being estimated using unlabeled data, SML achieves better performance than simple majority voting. • Comparing the columns w/o the "w" prefix, we observe that warping through the relevance significantly improves performance. This confirms the necessity to improve base classifiers, and illustrates the limitation of SML. Similar conclusions can also be made from the results on MEDTest 2013 dataset and CCV sub dataset.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Few-exemplar event detection</head><p>As mentioned in Section 3.6, our semantic event search framework can also be used for few-exemplar event detection: We simply combine the concept classifiers and the supervised classifier using the warped spectral meta-learner (with maximum weight for the latter). In this section, we demonstrate the benefit of this hybrid approach. <ref type="table">Table 2</ref> summarizes the mAP on both MEDTest 2014 and 2013, while <ref type="figure" target="#fig_2">Figure 4</ref> compares the performance event-wise.</p><p>As a baseline (denoted as SVM in <ref type="table">Table 2</ref>), we trained an SVM classifier using the improved dense trajectory (IDT) features <ref type="bibr" target="#b51">[52]</ref> on 10 positive examples. Interestingly, this supervised classifier performed even slightly worse than our wSML+ which had no access to labeled data: mAP 13.92% vs 14.32% on MED14. This clearly demonstrates that a large pool of unsupervised but relevant concept classifiers, after proper correction of their accuracy, can outperform supervised classifiers trained with few positives. However, with more discriminative features such as convolutional neural networks (CNN), SVM with 10 positives outperformed wSML+: mAP 24.46% vs 14.32% on MED14. <ref type="figure" target="#fig_2">Figure 4</ref> gives a more detailed view of comparison: the supervised SVM (with IDT feature) is largely outperformed by our wSML+ on events E23, E24, E31, and E33, while the converse is observed on events E28, E30, E39, E40. In particular, on the event Beekeeping (E31), wSML+ improved    <ref type="table">Table 2</ref>: Few-exemplar mAPs on MED14 and MED13.</p><p>IDT more than 2x (82.86% vs 33.9%). As mentioned before, this is because wSML+ significantly benefited from the presence of informative and reliable concepts such as "apiary bee house" and "honeycomb" on the particular Beekeeping event.</p><p>Finally we combine SVM with wSML+ as described before. This again significantly improves the performance from 13.92% to 16.98% on the MEDTest 2014 dataset. We also tried to combine with the state-of-the-art algorithm in <ref type="bibr" target="#b53">[54]</ref>, and increased its performance from 24.46% to 25.82%. As expected, the gain obtained from such simple hybrid diminishes when combining with more sophisticated methods. Overall, the results clearly demonstrate the utility of our framework even in the few-exemplar setting.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.5.">Annotated vs. unannotated data</head><p>We also compared the unsupervised SML approach with a supervised approach as follows. For each event we randomly select k labeled data from the MED14 training set, which are used to estimate the accuracy of the concept classifiers (i.e., estimate p i and n i in <ref type="formula">(3)</ref>). Then we plug the estimates to the MLE (13) and obtain predictions on the test set. As can be seen from <ref type="figure" target="#fig_3">Figure 5</ref>, the unsupervised SML approach is advantageous when roughly 8 or less labeled training videos are used to estimate the concept accuracies. This experiment again demonstrates the utility of our method when the number of labeled training data is limited. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusions</head><p>To address the challenging task of semantic event search and few-exemplar event detection, we proposed to leverage on concept classifiers collected from other sources. Datadriven word embedding models were used to seek the relevance of the concepts to the event of interest. To further account for the unreliability of the concept classifiers, we extended the recent spectral meta-learner that combines the classifiers based on a principled estimate of their accuracies using unlabeled data. Efficient implementations were provided and promising experimental results were obtained on three real video datasets. In the future we plan to incorporate temporal and spatial information <ref type="bibr" target="#b31">[32,</ref><ref type="bibr" target="#b47">48,</ref><ref type="bibr" target="#b5">6]</ref> into our framework.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 2 :</head><label>2</label><figDesc>Efficiency comparison between GCG and SDP.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 3 :</head><label>3</label><figDesc>Top ranked videos for the event Beekeeping. From top to below: Sel (AP: 53.19), Bi (AP: 45.87), OR (AP: 69.52), and wSML+ (AP: 82.86). True/false labels (provided by NIST) are marked in the lower-right of each frame.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 4 :</head><label>4</label><figDesc>Performance comparison of CNN on MEDTest 2014 dataset, wSML+, and the hybrid of CNN and wSML+.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 5 :</head><label>5</label><figDesc>mAPs with increasing number of annotated pairs.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="false"><head></head><label></label><figDesc>when no labeled training examples are given. In our later experiments, Borda works reasonably well. However, rank aggregation techniques can still be suboptimal, because the concept classifiers are obtained from other domains thus their accuracy on the test domain differs a lot. This motivates us to consider a recent approach that explicitly estimates the inaccuracy using unlabeled data.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 1 ,</head><label>1</label><figDesc></figDesc><table>abcd 
+ID 
+
+E021 
+E022 
+E023 
+E024 
+E025 
+E026 
+E027 
+E028 
+E029 
+E030 
+E031 
+E032 
+E033 
+E034 
+E035 
+E036 
+E037 
+E038 
+E039 
+E040 
+
+mean 
+
+mean 
+
+mean 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 1 :</head><label>1</label><figDesc>Experiment results for 0Ex event detection on MEDTest 2014, MEDTest 2013, and CCV Sub . Mean average precision (mAP), in percentages, is used as the evaluation metric. Larger mAP indicates better performance. 14.32% vs the second best 10.76% achieved by OR) . The improvements are particularly impressive on some events, including Dog Show (E23), Rock Climbing (E27), Beekeeping (E31) and Non-motorized vehicle repair (E33)</figDesc><table>the proposed methods (last eight columns) compare favor-
+ably against existing alternatives (first four columns), with 
+a large margin obtained by the most sophisticated method 
+wSML+ (</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">http://dumps.wikimedia.org/enwiki/</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="2">This adheres strictly to the NIST standard: "research set may be used for training concepts and assigning importance weights." 3 Different events may use different concepts. For notational clarity, throughout we omit the dependence on the event e.</note>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Acknowledgment</head><p>We thank the reviewers for their critical comments. This work was in part supported by the Data to Decisions Cooperative Research Centre www.d2dcrc.com.au, in part supported by NIH R01GM114311, in part supported by the ARC DECRA, and in part supported by the NSFC (U1509206).</p></div>
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Med</forename><surname>Trecvid</surname></persName>
+		</author>
+		<ptr target="http://nist.gov/itl/iad/mig/med13.cfm.1" />
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Med</forename><surname>Trecvid</surname></persName>
+		</author>
+		<ptr target="http://nist.gov/itl/iad/mig/med14.cfm.1" />
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yfcc</forename><surname>The</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Dataset</surname></persName>
+		</author>
+		<ptr target="http://webscope.sandbox.yahoo.com/catalog.php?datatype=i&amp;did=67.6" />
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Label-embedding for attribute-based classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Akata</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Perronnin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Harchaoui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">SURF: speeded up robust features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tuytelaars</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">J V</forename><surname>Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Recognition of complex events: Exploiting temporal dynamics between underlying concepts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bhattacharya</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">M</forename><surname>Kalayeh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sukthankar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Learning mid-level features for recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Boureau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Bach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ponce</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Scene aligned pooling for complex video recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Cao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Mu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Natsev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">R</forename><surname>Smith</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="688" to="701" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Hauptmann. Bi-Level Semantic Representation Analysis for Multimedia Event Detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zeng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Cybernetics</title>
+		<imprint>
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Semantic concept discovery for large-scale zero-shot event detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Hauptmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">P</forename><surname>Xing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IJCAI</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">5</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Dynamic concept composition for zeroexample event detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Hauptmann</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AAAI</title>
+		<imprint>
+			<date type="published" when="2016" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Complex event detection using semantic saliency and nearlyisotonic SVM</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">P</forename><surname>Xing</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Searching persuasively: Joint event detection and evidence recounting with limited supervision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Hauptmann</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACM MM</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Event-driven semantic concept discovery by exploiting weakly tagged internet images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Cui</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Ye</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICMR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Temporal sequence modeling for video event detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Cheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Fan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Pankanti</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">N</forename><surname>Choudhary</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Zero-shot video retrieval using content and concepts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dalton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Allan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Mirajkar</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CIKM</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Maximum likelihood estimation of observer error-rates using the em algorithm</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">P</forename><surname>Dawid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">M</forename><surname>Skene</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Applied Statistics</title>
+		<imprint>
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="1979" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Rank aggregation methods for the web</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Dwork</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kumar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Naor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Sivakumar</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">WWW</title>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Parallel support vector machines: The cascade SVM</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">P</forename><surname>Graf</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Cosatto</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bottou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Durdanovic</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Vapnik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Composite concept discovery for zero-shot video event detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Habibian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mensink</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">G M</forename><surname>Snoek</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICMR</title>
+		<imprint>
+			<date type="published" when="2002" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Recommendations for video event recognition using concept vocabularies</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Habibian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">E A</forename><surname>Van De Sande</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">G M</forename><surname>Snoek</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICMR</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Estimating the accuracies of multiple classifiers without labeled data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Jaffe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Nadler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Kluger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">AISTATS</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">4</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Zero-shot recognition with unreliable attributes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Jayaraman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Grauman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Self-paced learning with diversity</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Jiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Meng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Shan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Hauptmann</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Zero-example event search using multimodal pseudo relevance feedback</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Jiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mitamura</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Hauptmann</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICMR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="page">297</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">High-level event recognition in unconstrained videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bhattacharya</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJMIR</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="73" to="101" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Consumer video understanding: a benchmark database and an evaluation of human and machine performance</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Ye</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">P W</forename><surname>Ellis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Loui</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICMR</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Large-scale video classification with convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Toderici</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Shetty</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Leung</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Sukthankar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Video event detection by inferring temporal instance labels</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Lai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><forename type="middle">X</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Learning to detect unseen object classes by between-class attribute transfer</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">H</forename><surname>Lampert</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Nickisch</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Harmeling</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Dynamic pooling for complex event recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Divakaran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Vasconcelos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Recognizing activities via bag of words for attribute dynamics</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">S</forename><surname>Sawhney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Vasconcelos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Local expert forest of score fusion for video event classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Mccloskey</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Distinctive image features from scaleinvariant keypoints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Lowe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision</title>
+		<imprint>
+			<biblScope unit="volume">60</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="91" to="110" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Searching informative concept banks for video event detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mazloom</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Gavves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">E A</forename><surname>Van De Sande</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Snoek</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICMR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">COSTA: co-occurrence statistics for zero-shot classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mensink</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Gavves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">G M</forename><surname>Snoek</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Distributed representations of words and phrases and their compositionality</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mikolov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">S</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page">3</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Zeroshot learning by convex combination of semantic embeddings</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Norouzi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mikolov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bengio</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Singer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shlens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Frome</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">S</forename><surname>Corrado</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Dean</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Zero-shot learning with semantic output codes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Palatucci</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Pomerleau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">M</forename><surname>Mitchell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Ranking and combining multiple predictors without labeled data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Parisi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Strino</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Nadler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Kluger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Proceedings of the National Academy of Sciences</title>
+		<imprint>
+			<biblScope unit="volume">111</biblScope>
+			<biblScope unit="page">4</biblScope>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Improving the Fisher kernel for large-scale image classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Perronnin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sánchez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mensink</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2010" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Estimating accuracy from unlabeled data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><forename type="middle">A</forename><surname>Platanios</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Blum</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Mitchell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">UAI</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Multi-attribute queries: To merge or not to merge</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Rastegari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Diba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Parikh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Farhadi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR, 2013. 1</title>
+		<imprint>
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Learning from crowds</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><forename type="middle">C</forename><surname>Raykar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">H</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">H</forename><surname>Valadez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Florin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bogoni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Moy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Machine Learning Research</title>
+		<imprint>
+			<biblScope unit="volume">11</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="1297" to="1322" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<monogr>
+		<title level="m" type="main">Cognition and categorization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Roach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">B</forename><surname>Lloyd</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1978" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<monogr>
+		<title level="m" type="main">UCF101: A dataset of 101 human actions classes from videos in the wild</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Soomro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">R</forename><surname>Zamir</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Shah</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">DISCOVER: discovering important segments for classification of video events and recounting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Nevatia</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Learning latent temporal structure for complex event detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">D</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Koller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">Combining the right features for complex event recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">D</forename><surname>Tang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Yao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Koller</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">Compositional models for video event detection: A multiple kernel learning latent variable approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Vahdat</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">J</forename><surname>Cannons</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Mori</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Oh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kim</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">Evaluating color descriptors for object and scene recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">E A</forename><surname>Van De Sande</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Gevers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">G M</forename><surname>Snoek</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. Pattern Anal. Mach. Intell</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page">1</biblScope>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<analytic>
+		<title level="a" type="main">Action recognition with improved trajectories</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b52">
+	<analytic>
+		<title level="a" type="main">Zero-shot event detection using multimodal fusion of weakly supervised concepts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bondugula</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Luisier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhuang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Natarajan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2003" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b53">
+	<analytic>
+		<title level="a" type="main">A discriminative CNN video representation for event detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Hauptmann</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b54">
+	<analytic>
+		<title level="a" type="main">Robust late fusion with rank minimization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Ye</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Jhuo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Chang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b55">
+	<analytic>
+		<title level="a" type="main">Instructional videos for unsupervised harvesting and learning of action examples</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Jiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">G</forename><surname>Hauptmann</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACM MM</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b56">
+	<analytic>
+		<title level="a" type="main">Accelerated training for matrix-norm regularization: A boosting approach</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Schuurmans</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">5</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

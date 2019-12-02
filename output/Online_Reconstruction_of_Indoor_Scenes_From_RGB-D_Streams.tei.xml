@@ -1,0 +1,1154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Online Reconstruction of Indoor Scenes from RGB-D Streams</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Hao</forename><surname>Wang</surname></persName>
+							<email>wanghao29@baidu.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Baidu Research -Institute of Deep Learning</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Jun</forename><surname>Wang</surname></persName>
+							<email>wangjun21@baidu.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Baidu Research -Institute of Deep Learning</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Liang</forename><surname>Wang</surname></persName>
+							<email>wangliang18@baidu.com</email>
+							<affiliation key="aff0">
+								<orgName type="institution">Baidu Research -Institute of Deep Learning</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Online Reconstruction of Indoor Scenes from RGB-D Streams</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:44+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>A system capable of performing robust online volumetric reconstruction of indoor scenes based on input from a handheld RGB-D camera is presented. Our system is powered by a two-pass reconstruction scheme. The first pass tracks camera poses at video rate and simultaneously constructs a pose graph on-the-fly. The tracker operates in real-time, which allows the reconstruction results to be visualized during the scanning process. Live visual feedbacks makes the scanning operation fast and intuitive. Upon termination of scanning, the second pass takes place to handle loop closures and reconstruct the final model using globally refined camera trajectories. The system is online with low delay and returns a dense model of sufficient accuracy. The beauty of this system lies in its speed, accuracy, simplicity and ease of implementation when compared to previous methods. We demonstrate the performance of our system on several real-world scenes and quantitatively assess the modeling accuracy with respect to ground truth models obtained from a LIDAR scanner.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>The paper is about generating dense models of rigid indoor scenes using inputs streamed from a handheld RGB-D camera. The reconstruction is performed online with low delay as the sensor moves. The system also continuously estimates the 6 degrees of freedom (6DOF) pose of the sensor and returns the globally optimized camera trajectory. An example is shown in figure 1. In computer vision, structure from motion (SFM) and visual odometry have been highly active research topics for a long time. In the robotics community, closely related is what is known as simultaneous localization and mapping (SLAM). Seminal works <ref type="bibr" target="#b19">[20,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b13">14]</ref> demonstrate that robust tracking and sparse 3D mapping is possible in real-time from visual input alone. Attempts at real-time dense surface modelling from passive cameras to date have had limited results, most- * indicates equal contributions and joint first authors ly on outdoor scenes <ref type="bibr" target="#b22">[23,</ref><ref type="bibr" target="#b29">30]</ref>, small objects and compact workspaces <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b17">18,</ref><ref type="bibr" target="#b23">24]</ref>.</p><p>Dense modeling research has recently experienced somewhat of a new era, as a result of the emergence of consumer-level depth sensors. The availability of real-time, reliable depth sensing capabilities together with the advance of general purpose graphics processing units (GPG-PU) open new avenues for camera tracking and dense mapping. The pioneer work in RGB-D reconstruction literature is KinectFusion <ref type="bibr" target="#b16">[17]</ref>. Since <ref type="bibr" target="#b16">[17]</ref>, many methods (both online and offline) have been proposed to address the RGB-D scene reconstruction problem <ref type="bibr" target="#b33">[34,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b35">36,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b36">37,</ref><ref type="bibr" target="#b34">35,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b31">32]</ref>, from graphics, vision and robotics communities.</p><p>Previous work on RGB-D reconstruction can be categorized into two groups based on the method's emphasis and target application. Robotics researchers in general formulate the problem in a SLAM framework <ref type="bibr" target="#b7">[8,</ref><ref type="bibr" target="#b33">34,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b30">31,</ref><ref type="bibr" target="#b31">32]</ref>, minimizing the absolute trajectory error (ATE) is their main focus and the root mean square error (RMSE) of the ATE is used as the evaluation metric. These SLAM systems are seldom designed for high fidelity modeling, thus mesh quality and geometry details are not fully appreciated. By contrast, graphics and vision communities focus more on the fidelity of the reconstructed model <ref type="bibr" target="#b35">[36,</ref><ref type="bibr" target="#b37">38,</ref><ref type="bibr" target="#b36">37,</ref><ref type="bibr" target="#b34">35,</ref><ref type="bibr" target="#b3">4]</ref>. Qualitative or quantitative analysis of 3D models is performed to assess the surface quality. Note that to obtain high quality meshes, expert users are required to operate the sensor and image surfaces at close range. The scanning process is inherently different from some of the dense SLAM applications, in which a robot drives a rigidly mounted camera to create a dense map for an unknown environment.</p><p>Our work belongs to the second category, i.e., meshes are the main outcome of our system and high accuracy is desired in our applications. While methods for modeling small objects are relatively mature <ref type="bibr" target="#b28">[29,</ref><ref type="bibr" target="#b16">17]</ref>, modeling indoor scenes automatically still remains a tough challenge. To one part this is because real-world environments contain sophisticated structures and must be reconstructed from complex camera trajectories, with each view covering only a small portion of the scene, making tracking prone to gross failure. More importantly, scanning large environments suffers <ref type="bibr">Figure 1</ref>. Automatic online reconstruction from a sequence of handheld RGB-D images. The top shows the reconstructed 3D model of our two-pass system. The middle shows our optimized camera trajectory and the rest show some details of the model. The area of this scene is about 40m 2 and the camera trajectory is about 79 meters long. Scanning the room takes about 360 seconds and the online reconstruction finishes within 170 seconds, i.e. 170 seconds after the user terminates the scanning process. from odometry drift. Error accumulation can distort the reconstructed surface model. The rest of the paper presents a system for reconstructing indoor scenes from live RGB-D streams. The philosophy behind our system is to achieve computationally reasonable reconstruction online. Robustness, simplicity and ease of implementation are also crucial factors considered when designing the system. In addition to system contributions, we quantitatively investigate the surface reconstruction quality using geometrical ground truth acquired by a LIDAR system. We prepare evaluation sets for benchmarking dense RGB-D reconstruction approaches in a principled way. This is an important point which enables a fair comparison between different reconstruction algorithms.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Relation to Previous Work</head><p>This paper owes a lot to a sizable body of literature on dense RGB-D reconstruction, more than we hope to account for here. For the scope of this paper, of particular interest are automatic indoor reconstruction systems designed for quality demanding applications. This excludes methods that use high level semantic cues <ref type="bibr" target="#b14">[15]</ref> or human interaction <ref type="bibr" target="#b34">[35]</ref>.</p><p>The most influential related work is KinectFusion <ref type="bibr" target="#b16">[17]</ref>. It represents the scene with a signed distance field (SDF) which is defined on a volumetric grid. Each incoming depth image is registered to the SDF and integrated with it using a frame-to-model alignment scheme. Real-time performance is achieved by leveraging GPGPU. Systems built upon the original KinectFusion framework are later proposed to improve its scalability and odometry accuracy <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b1">2]</ref>. These systems perform online tracking but are lack of effective mechanisms to protect against error propagation and error buildup, which are serious concerns from the system point of view. Therefore in practice they can not well handle furnished scenes that require comprehensive scanning with complex camera trajectories.</p><p>The importance of loop closure and map optimization for large scale RGB-D SLAM has been recognized by <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b33">34,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b31">32]</ref>. These works follow a SLAM architecture and their systems can be broken up into three modules, i.e. frontend, backend, and map generation <ref type="bibr" target="#b6">[7]</ref>. Typically the frontend tracks the 6DOF camera pose using either frame-to-frame <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b12">13,</ref><ref type="bibr" target="#b6">7]</ref> or frame-to-model approaches <ref type="bibr" target="#b31">[32]</ref>. The backend maintains a pose graph which models the geometric relations between keyframes. Stateof-the-art RGB-D SLAM systems have complicated system architectures. Frontend (pose tracker and loop detection) and backend (graph optimization and map correction) modules run in several asynchronous threads. Each time a loop closure is encountered, a constraint is added to the graph and an optimization process is triggered. Since the reconstructed map and refined trajectories are from asynchronous threads, a non-rigid map optimization is coupled with incremental pose graph optimization to obtain consistent results. The backend latency is high according to the statistics reported in <ref type="bibr" target="#b31">[32]</ref>, e.g., about 10 seconds for an indoor sequence that contains two looping points. Recently, <ref type="bibr" target="#b32">[33]</ref> uses incremental bundle adjustment with non-rigid deformation for real-time consistent reconstruction. However, its point-based representation might lack general applicability <ref type="figure">Figure 2</ref>. Illustration of the intrinsic RGB-D sensor calibration. From left to right: ground truth scan from LIDAR, plots of 3D measurements of a single shot before (red) and after (green) distortion compensation, partial RGB-D reconstruction from inputs without and with applying distortion compensation. compared with continuous surface representations.</p><p>For fidelity demanding applications, several authors report high quality RGB-D reconstructions by performing intensive offline optimization to mitigate alignment inconsistencies and odometry drift <ref type="bibr" target="#b35">[36,</ref><ref type="bibr" target="#b36">37,</ref><ref type="bibr" target="#b3">4]</ref>. While their results are visually very plausible, long processing time makes these approaches inapplicable for online applications. We argue that online reconstruction is both favorable and crucial for obtaining accurate 3D models because by seeing a continuously-updated model as the surface is imaged, user can control the coverage by moving the camera appropriately, making the scanning process intuitive and fast.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Compensate for Geometric Distortion</head><p>Depth measurements from most consumer RGB-D sensors suffer from distortions that increase with range. Discussion about the exact origin of this distortion is not within the scope of this paper. We detail the geometric distortion compensation step because we experimentally found it brings significant accuracy improvements and also suppresses error buildup during the online scene reconstruction. We emphasize that distortion compensation (sensor pre-calibration) should be considered the gold standard for RGB-D reconstruction and SLAM applications. The accuracy gain is well worth the trouble of implementation. This problem, unfortunately, were rarely discussed in previous RGB-D mapping literature. An exception is <ref type="bibr" target="#b37">[38]</ref>, in which the authors mentioned that the calibration approach of <ref type="bibr" target="#b27">[28]</ref> has been applied to their sensor.</p><p>A general, unsupervised calibration procedure is described in detail in <ref type="bibr" target="#b27">[28]</ref>. In this work, we adopt a supervised method by leveraging a high accuracy LIDAR scanner that we have in house. Multiple markers are attached on a flat wall. The ground truth structure of the wall is obtained from the LIDAR system. The wall is also observed using our RGB-D sensor from different distances and orientations. At each observation spot, we collect 50 to 60 independent measurements and average them to compute a depth map. The depth camera is then registered into the ground truth's coordinate frame from manually labeled 2D-3D correspondences. The infrared image from depth sensor and the laser points' reflection factors provide visual cues for humans to establish correspondences. Depth cameras' extrinsic parameters (pose) w.r.t. the LIDAR metric system are computed via perspective-n-point (PnP) algorithm followed by iterative non-linear optimization. Using the observed depth measurements and LIDAR ground truth, a 3D look-up table (LUT) can be built offline to compensate for depth distortion. In detail, the image plane is spatially divided into 80×80 rectangular tiles. The Z-axis is sampled from various distances and for each discrete range a depth multiplier image is fitted to form a slice of the 3D LUT. At runtime, to avoid discrete jumps we apply linear interpolation along the beam to compute the per-pixel correction factor. The undistorted depth maps are used as our system input. Examples of our calibration results are shown in figure 2. For users who have difficulties obtaining ground truth measurements, unsupervised methods such as <ref type="bibr" target="#b27">[28]</ref> is also a good option.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Method</head><p>Our system adopts a two-pass scheme. The first pass performs parallel camera tracking and pose graph construction, while the second pass handles loop closure and reconstructs the final model. The online system consists of the following three modules.</p><p>Camera Tracking: We extends the voxel hashing based volumetric fusion <ref type="bibr" target="#b18">[19]</ref> approach to achieve robust real-time camera tracking. The reconstruction results can be visualized instantly to guide the scanning.  <ref type="bibr" target="#b12">[13]</ref>, indoor reconstruction method <ref type="bibr" target="#b3">[4]</ref> with nonrigid refinement, method <ref type="bibr" target="#b3">[4]</ref> with rigid optimization, ElasticFusion <ref type="bibr" target="#b32">[33]</ref>, and our method without/with pose graph optimization.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Pose Graph Construction:</head><p>We detect loops with visual information and construct a pose graph incrementally onthe-fly.</p><p>Model Reconstruction: Upon termination of scanning, we perform pose graph optimization to refine the trajectory and handle loop closures. After that, we make use of the volumetric fusion to fuse these depth images into a final 3D model with refined trajectory.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Preliminaries</head><p>The depth camera outputs a sequence of RGB-D frames {I i , D i }, where I i and D i denote the ith color and depth image respectively. To reconstruct the 3D scene, for each incoming frame, we need to estimate the camera transformation matrix</p><formula xml:id="formula_0">T i = R i t i 0 ⊤ 1<label>(1)</label></formula><p>where R i ∈ SO <ref type="formula" target="#formula_2">(3)</ref> is the rotation matrix and t i ∈ R 3 is a translation vector. An inhomogeneous world pointX in 3D is transformed into the camera's coordinate frame as RX + t. We will use the pinhole camera model with precalibrated intrinsic parameters. Suppose f x , f y are focal lengths and c x , c y are the image centers of the camera, a 3D pointX = (X, Y, Z) in the camera coordinate system is projected to the image plane under perspective projection</p><formula xml:id="formula_1">π(X) = (f x X Z + c x , f y Y Z + c y ) ⊤<label>(2)</label></formula><p>Conversely, a pixel (u, v) ∈ R 2 with depth Z = D(u, v) can be backprojected through</p><formula xml:id="formula_2">φ(u, v, Z) = ( u − c x f x Z, v − c y f y Z, Z) ⊤<label>(3)</label></formula><p>In this paper, the 3D world scene is represented as a TSDF (truncated signed distance function)</p><formula xml:id="formula_3">ψ : R 3 → R<label>(4)</label></formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Camera Tracking with Volumetric Fusion</head><p>To perform real-time 6DOF camera tracking, we adopt the framework of volumetric fusion with voxel hashing <ref type="bibr" target="#b18">[19]</ref>, which can handle large-scale reconstruction with fine-grained details. The reconstructed scene is represented as a TSDF on a volumetric grid with voxel hashing data structure. Voxel hashing structure allows real-time access and update using GPGPU. With streaming algorithms, data can be easily streamed in and out the hash table while the camera is moving. The volumetric fusion framework stores the TSDF value ψ(p) and an associated weighting factor W (p) in a voxel whose center locates at point p. And it has two important components, i.e., frame-to-model registration and model integration.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.1">Frame-to-Model Registration</head><p>For frame-to-model registration, we adopt a weighted TS-DF tracking method, which is similar to <ref type="bibr" target="#b1">[2]</ref> and performs better than the original projective ICP method <ref type="bibr" target="#b16">[17]</ref>. It registers each incoming depth image to the reconstructed TSDF model instead of a rendered depth image generated from ray casting. For each pixel (u, v), suppose the corresponding inhomogeneous 3D point isX u,v , to compute the camera transformation {R, t}, we need to minimize an objective function of the form</p><formula xml:id="formula_4">E R,t = u,v w u,v ψ(RX u,v + t) 2<label>(5)</label></formula><p>For the rest of the paper we will omit the subscript u, v for concision. To solve equation <ref type="formula" target="#formula_4">(5)</ref>, we use Gaussian-Newton nonlinear minimization method. At iteration k + 1 (k ≥ 0), we start to linearize T k+1 around T k by a linear function</p><formula xml:id="formula_5">T k+1 ≈     1 −γ β a γ 1 −α b −β α 1 c 0 0 0 1     T k<label>(6)</label></formula><p>A 6-dimensional vector ξ k+1 = (α, β, γ, a, b, c) is a twist coordinate representing the incremental transformation relative to T k at iteration k. <ref type="figure">(α, β, γ) and (a, b, c)</ref> are the angular velocity and the translation vector, respectively.</p><p>By denoting Y = T k X, ξ k+1 is computed from equation</p><formula xml:id="formula_6">w∇ψ(Ỹ)∇ψ(Ỹ) ⊤ ξ k+1 = − wψ(Ỹ)∇ψ(Ỹ)<label>(7)</label></formula><p>whereỸ represents Y's inhomogeneous version (a 3vector), ∇ψ(Ỹ) is the derivative of the TSDF function evaluated at pointỸ. ξ k+1 can be computed efficiently by solving this 6 × 6 linear equation. The incremental transformation can then be obtained from ξ i+1 . We update T k+1 and iterate this process until convergence. We terminate when either the change of ξ between iterations is small enough or a certain number of iteration is reached. The max number of allowed iteration is set to 20 in our implementation. Similar to <ref type="bibr" target="#b1">[2]</ref>, we parallelize the per-pixel computation using GPU to obtain real-time performance.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.2">Model Integration</head><p>For model integration, we apply a non-uniform weighting strategy to integrate the ith incoming depth image with the previously reconstructed model (ψ i−1 , W i−1 ). Suppose p is the center of a voxel that is close to the underlying surface of the incoming depth image. Through projection we can compute its distance to the ith camera, denoted by C i (p), and the depth value on the projected pixel D i (π(p)). The distance of p to the underlying surface is f i (p) = C i (p) − D i (π(p)). Then the voxel with center p is updated by:</p><formula xml:id="formula_7">ψ i (p) = W i−1 (p)ψ i−1 (p) + λ i (p)f i (p) W i−1 (p) + λ i (p) (8) W i (p) = W i−1 (p) + λ i (p)<label>(9)</label></formula><p>The parameter λ i (p) makes the model integration favor points from the near range, which usually has better accuracy than points from a far distance. In our experiments, we use a linear weighting function λ i (p) = 1 − (D i (π(p)) − d min )/(d max − d min ) with d min = 0.5m, d max = 4.0m.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Online Pose Graph Construction</head><p>To alleviate error accumulation and prevent the system from drifting, we construct a pose graph incrementally in a backend thread parallel to the frontend tracking thread. We denote the pose graph by G = {V, E}. When the ith frame arrives, we create a new node V i and add an edge connecting V i with its predecessor (previous frame) V i−1 . Similar to fragment based methods <ref type="bibr" target="#b35">[36,</ref><ref type="bibr" target="#b3">4]</ref>, we make a valid assumption that the frame-to-model tracker returns locally accurate pose estimates. Therefore the relative pose between nodes V i and V i−1 is simply computed from their absolute poses returned by the tracker. Note that unlike <ref type="bibr" target="#b12">[13]</ref>, we do not add additional local edges to G thus simplifying our graph structure.</p><p>In addition to edges that link successive frames, there are loop edges which are added to the graph through loop detection. To reduce data redundance and system delay, we only establish loop edges between keyframes. For keyframe selection, the incoming frame is identified as a new keyframe if its pose is sufficiently different from the last keyframe in the pose graph's keyframe queue. In our implementation we set the threshold for this relative pose change to be (5 • , 0.02m). To enable real-time performance, loops have to be detected efficiently. We amend the visual place recognition technique DBoW <ref type="bibr" target="#b8">[9]</ref> by replacing original SURF feature with fast ORB feature <ref type="bibr" target="#b24">[25]</ref>. Once a new incoming frame is being recognized as a keyframe, we treat it as a query image and DBoW returns the best matched keyframe from the keyframe queue.</p><p>To estimate the relative pose between two keyframes, we first extract 2D feature correspondences using a direct index strategy, i.e. only feature pairs that are within the same visual word are considered as matching candidates. Then, we use Random Sample Consensus (RANSAC) and Nister's three-point pose algorithm <ref type="bibr" target="#b21">[22]</ref> to calculate their relative transformation δT . In our implementation, if RANSAC inlier ratio is less than 25% or inlier number is lower than 15, we consider it as a false detection. Otherwise, we refine δT using all the inliers via Levenberg-Marquardt (LM) optimization.</p><p>By now, we obtain an initial estimate of the relative pose from 2D-3D correspondences. We further validate δT 's correctness and continue refining it before adding it to the pose graph. We experimentally found that cautious validation of edge constraints is crucial for pose graph construction because false loop edges and incorrect pairwise transformations can distort the final trajectory. First, in practice the distribution of matched visual features can be non-uniform, leading to biased pose estimation. To address this problem, we use δT as an initial guess and employ point-to-plane ICP to refine it (we experimentally found point-to-plane ICP outperforms its point-to-point counterpart for robustness). Due to the narrow field of view, aligning two indi-vidual depth frames can be unreliable. To increase robustness, we instead align two 3D point clouds formed using the keyframes and their K-nearest neighbors in the RGB-D sequence (in our system we set K=10). To speedup ICP, depth maps are downsampled by half and we project 3D points to depth image to reduce the ICP search space form 3D to 2D. Second, since geometric-based ICP is sensitive to planar structures, we perform PCA analysis on one of the two 3D point clouds and discard the loop edge if points are mostly sampled from a planar object.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Model Reconstruction</head><p>Before the second pass model reconstruction, we need to optimize the pose graph to achieve globally consistent frame poses. We incrementally optimize the pose graph but not coupled with the graph construction procedure. We control the optimization frequency to balance the delay between threads and accuracy. Denoting c i,j as a 6-vector constraint derived from either tracking measurement or loop detection, and f (T i , T j ) as the relative transformation (also 6-vector) from pose T i and T j , we optimize the pose graph through minimizing the following energy function</p><formula xml:id="formula_8">r i,j = f (T i , T j ) − c i,j E G ({T }) = ei,j ∈E ρ(r T i,j Ω −1 i,j r i,j )<label>(10)</label></formula><p>, where Ω i,j is the covariance matrix of edge e i,j , and ρ(.) is the Cauchy robust function. To approximate and unify the covariance from different measurements, we adopt the Monte Carlo estimation <ref type="bibr" target="#b10">[11]</ref>. We use the ceres-solver <ref type="bibr" target="#b0">[1]</ref> to solve this minimization problem. Finally, we apply the volumetric fusion described in section 4.2 to reconstruct the final model. Camera tracking is replaced by the optimized trajectory and only depth image integration is performed.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experiments</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Trajectory Evaluation</head><p>To evaluate the trajectory accuracy of our method, we test our system on the RGB-D benchmark presented in <ref type="bibr" target="#b26">[27]</ref>. This benchmark provides synchronized ground truth camera poses for the RGB-D sensor, recorded by a precise motion capture system. As shown in table 1, we compare our system with four other state-of-the-art RGB-D based SLAM systems: RGB-D SLAM <ref type="bibr" target="#b5">[6]</ref>, MRS-MAP <ref type="bibr" target="#b25">[26]</ref>, DVO S-LAM <ref type="bibr" target="#b12">[13]</ref> and Kintinuous SLAM <ref type="bibr" target="#b31">[32]</ref>. We also provide our camera tracking results with volumetric fusion only (without pose graph optimization). We use the RMSE of the ATE as evaluation metric in our comparison. From the table, we can see that our system achieves consistent performance except the fr1/room dataset which has motion blur caused by high angular velocity. Our camera tracking via volumetric  </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">Model Quality Evaluation</head><p>For RGB-D dense reconstruction, based on our knowledge, there is no ground truth on real data for evaluating reconstruction accuracy. We thus make use of a high pre-  With the ground truth data, we compare our system with state-of-the-art RGB-D SLAM and reconstruction methods: the DVO-SLAM <ref type="bibr" target="#b12">[13]</ref>, robust indoor reconstruction system <ref type="bibr" target="#b3">[4]</ref> and ElasticFusion <ref type="bibr" target="#b32">[33]</ref>. For DVO-SLAM, we use its optimized trajectory as inputs for volumetric fusion to obtain the reconstructed model. For <ref type="bibr" target="#b3">[4]</ref>, we compare with its non-rigid refinement and rigid refinement versions. For ElasticFusion, we compare with the reconstructed pointbased representation. We also evaluate the performance of our volumetric fusion without pose graph optimization.</p><p>We use two kinds of error metrics. One is the mean and median distance of the reconstructed surface to the ground truth surface as adopted in <ref type="bibr" target="#b9">[10]</ref>. The other is cumulative histogram of the distance from the ground truth surface to the reconstructed surface. Both metrics evaluate the reconstruction accuracy and the second one can also reflect the reconstruction completeness.</p><p>From the heat map 4, the cumulative histogram in <ref type="figure" target="#fig_1">Figure 5</ref>, the reconstruction results in <ref type="figure" target="#fig_0">Figure 3</ref> and <ref type="table" target="#tab_2">Table 3</ref>, it can be seen that our system performs better than DVO-SLAM and nonrigid indoor reconstruction system, and is comparable to rigid indoor reconstruction system and Elastic Fusion on both datasets. Compared with DVO-SLAM, our frame-to-model registration is more suitable for surface reconstruction. DVO-SLAM detects much more loop edges and might fail to estimate the relative camera pose correctly for such complicated handheld RGB-D sequences. For the nonrigid indoor reconstruction system, it can produce bet-  ter reconstruction locally, however, the reconstructed model bears some contraction due to non-rigid deformation. From <ref type="figure" target="#fig_0">Figure 3</ref>, we can see the size of result produced by nonrigid indoor reconstruction is smaller than other approaches. And from the heat map in <ref type="figure" target="#fig_2">Figure 4</ref>, we can also see that its errors are mainly introduced by the walls. For ElasticFusion, we can see that it produces better reconstruction accuracy while our system obtains superior completeness. This is because ElasticFusion removes unreliable (low confidence) points to guarantee high reconstruction accuracy at the cost of sacrificing model completeness.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">Speed Evaluation</head><p>We perform all experiments on a Laptop PC with an Intel i7-4710 HQ CPU with @2.50GHz, 16GB of RAM and a nVidia Geforce GTX 980M GPU with 4GB of memory. We evaluate the performance of our system on the Reading Room and UE Lab datasets. Our system is composed of tracking and fusion threads (Tr), pose graph construction and optimization threads (Opt), and the second-pass reconstruction module (Recon). We illustrate the processing time of these components as well as the number of nodes and edges of our pose graphs in <ref type="table" target="#tab_3">Table 4</ref>. The tracking thread can process at real-time and the parallel optimization thread keeps up closely (the 1.5s delay comes from the pose graph optimization). The second-pass reconstruction and its visualized results can be presented to user at high frame-rate (about 70 FPS). We also compare our performance with the offline method <ref type="bibr" target="#b3">[4]</ref> and online method DVO <ref type="bibr" target="#b12">[13]</ref>. Our system can achieve comparable reconstruction accuracy but with a much lower time cost compared with <ref type="bibr" target="#b3">[4]</ref>. The DVO system has longer delay of its graph optimization thread. This is caused by the dense graph structure constructed in DVO's backend thread, which is much denser than our pose graph structure. Thanks to the frame-to-model tracking strategy, we are able to maintain a sparse graph structure and achieve better efficiency.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.4.">Limitation</head><p>Like most real-time camera tracking methods, the online tracking module in our system tends to fail when there are fast motions, especially fast rotation. But we argue that live visual feedbacks can alleviate this problem. By observing the quality of online reconstruction, the scan operator can adjust his/her motion accordingly. Our reconstruction system makes use of visual features for loop detection and pose graph construction. It will have troubles for loop closure in large texture-less scenes and scenes with repeated textures/structures.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>We present a system for online dense reconstruction of indoor scenes using inputs from a handheld RGB-D camera. Encouraged by the low latency, accuracy and robustness of our results, we describe all the key components and their implementation details, including offline depth sensor calibration, real-time frame-to-model tracking, online pose graph construction and surface model reconstruction. Unlike existing dense RGB-D SLAM systems, we concentrate on the fidelity of the reconstructed models. The output meshes are evaluated quantitatively by comparing with LIDAR ground truth using meaningful metrics. Thorough experiments demonstrate that our system produces coherent and accurate results comparable with state-of-the-art offline methods and meanwhile it is efficient, simple, and easy to implement. We also hope that the LIDAR datasets, of which we created for evaluating our system, can contribute on benchmarking indoor RGB-D reconstruction algorithms, encouraging further research. The full dataset is available for downloading at: http://research.baidu.com/institute-ofdeep-learning/rgbd-recon/.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 3 .</head><label>3</label><figDesc>Reconstruction of the Reading Room (top row) and the UE Lab (bottom row) datasets. From left to right are results produced by DVO-SLAM</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 5 .</head><label>5</label><figDesc>Cumulative histogram of errors from ground truth surface to the reconstructed surface on Reading Room and UE Lab datasets.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 4 .</head><label>4</label><figDesc>Heat maps showing errors from ground truth surface to the reconstructed surface on Reading Room and UE Lab datasets with different methods. From blue to red, the error increases from zero to 0.2m.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 6 .</head><label>6</label><figDesc>Ground truth of Reading Room and UE Lab.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_0" validated="true"><head>Table 1 .</head><label>1</label><figDesc>Comparison of the ATE RMSE on the RGB-D SLAM benchmark datasets<ref type="bibr" target="#b26">[27]</ref>.</figDesc><table>Dataset RGB-D DVO MRS Kintinuous 
+Ours 
+SLAM SLAM Map 
+SLAM Tracking Optimize 
+
+fr1/desk 
+0.023 0.021 0.043 
+0.037 
+0.023 
+0.024 
+fr1/desk2 0.043 0.046 0.049 
+0.071 
+0.050 
+0.044 
+fr1/room 0.084 0.053 0.069 
+0.075 
+0.238 
+0.093 
+fr1/xyz 
+0.014 0.011 0.013 
+0.017 
+0.013 
+0.013 
+fr1/rpy 
+0.026 0.020 0.027 
+0.028 
+0.037 
+0.029 
+fr1/plant 0.091 0.028 0.026 
+0.047 
+0.055 
+0.050 
+fr2/desk 
+0.057 0.017 0.052 
+0.034 
+0.100 
+0.044 
+fr2/xyz 
+0.008 0.018 0.020 
+0.029 
+0.027 
+0.017 
+fr3/office 0.032 0.018 0.042 
+0.030 
+0.056 
+0.036 
+
+fusion shows a comparable performance on trajectory eval-
+uation. 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="true"><head>Table 2 .</head><label>2</label><figDesc>Ground truth information of the two datasets.</figDesc><table>Dataset 
+Vertex 
+Frame 
+Area(m 2 ) 
+
+Reading Room 
+7468347 
+10465 
+40 
+UE Lab 
+9691886 
+10414 
+36 
+
+cision LIDAR system (Riegl VZ 400) to sense the environ-
+ments and build ground truth 3D point clouds for two indoor 
+scenes (named Reading Room and UE Lab dataset, respec-
+tively). Each dataset contains a ground truth point clouds, a 
+RGB-D video stream, and corresponding calibration infor-
+mation (see 2 and 6). 
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head>Table 3 .</head><label>3</label><figDesc>Comparison of reconstructed surface to ground truth distance error (cm), measured by mean and median statistics.Dataset DVO Choi-Nonrigid Choi-Rigid Elastic Ours-Fusion Ours-Full</figDesc><table>Reading (8.54,5.89) (7.63, 6.11) (2.77,1.91) (1.90,1.35) (7.16,4.62) (2.76,1.93) 
+UE Lab (5.99,4.26) (6.31,4.96) (4.25,2.99) (2.50,1.99) (5.25,3.42) (3.29,2.24) 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_3" validated="true"><head>Table 4 .</head><label>4</label><figDesc>Computational performance of our system and comparison with other methods. Quantities of processing time of each component and graph structures are illustrated. Delay here measures the latency between end time of online tracking and starting time of reconstruction.</figDesc><table>Dataset Method 
+Time(s) 
+Graph 
+Tr Tr+Opt Delay Recon Nodes Edges 
+
+Reading 
+
+Ours 361.4 362.9 
+1.5 169.5 10465 83 
+DVO 666.9 1295.8 628.9 
+-
+688 2867 
+Choi 
+about 8 hours in total 
+-
+-
+
+UE Lab 
+
+Ours 359.0 360.4 
+1.4 157.2 10385 105 
+DVO 647.8 1079.1 431.4 
+-
+599 2464 
+Choi 
+about 8 hours in total 
+-
+-
+
+</table></figure>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<monogr>
+		<title/>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Mierle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Others</forename><surname>Ceres</surname></persName>
+		</author>
+		<ptr target="http://ceres-solver.org" />
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Realtime camera tracking and 3d reconstruction using signed distance functions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Bylow</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sturm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Kerl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Kahl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">RSS 2013</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">9</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Scalable real-time volumetric surface reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Bautembach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics (TOG)</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">4</biblScope>
+			<biblScope unit="page">113</biblScope>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Robust reconstruction of indoor scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Choi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q.-Y</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR 2015</title>
+		<imprint>
+			<biblScope unit="page" from="5556" to="5565" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Monoslam: Real-time single camera slam. PAMI</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Davison</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><forename type="middle">D</forename><surname>Reid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">D</forename><surname>Molton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Stasse</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">An evaluation of the rgb-d slam system</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Endres</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Engelhard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sturm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Burgard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Robotics and Automation (ICRA), 2012 IEEE International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1691" to="1696" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">3-d mapping with an rgb-d camera</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Endres</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sturm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Burgard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Robotics</title>
+		<imprint>
+			<biblScope unit="volume">30</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="177" to="187" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Real-time 3d visual slam with a hand-held rgb-d camera</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Engelhard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Endres</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sturm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Burgard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">RGB-D Workshop on 3D Perception in Robotics at the European Robotics Forum</title>
+		<imprint>
+			<date type="published" when="2011" />
+			<biblScope unit="page" from="1450" to="1457" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">Bags of binary words for fast place recognition in image sequences</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Gálvez-López</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">D</forename><surname>Tardós</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Transactions on Robotics</title>
+		<imprint>
+			<biblScope unit="volume">28</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="1188" to="1197" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">A benchmark for rgb-d visual odometry, 3d reconstruction and slam</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Handa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Whelan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Mcdonald</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Davison</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Multiple view geometry in computer vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Hartley</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2003" />
+			<publisher>Cambridge university press</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Rgbd mapping: Using kinect-style depth cameras for dense 3d modeling of indoor environments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Henry</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Krainin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Herbst</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Fox</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">The International Journal of Robotics Research</title>
+		<imprint>
+			<biblScope unit="volume">31</biblScope>
+			<biblScope unit="issue">5</biblScope>
+			<biblScope unit="page" from="647" to="663" />
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Dense visual slam for rgb-d cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Kerl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sturm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IROS</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Parallel tracking and mapping for small ar workspaces</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Klein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Murray</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Mixed and Augmented Reality</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2007" />
+			<biblScope unit="page" from="225" to="234" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">A search-classify approach for cluttered indoor scene understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Nan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Xie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Sharf</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics (TOG)</title>
+		<imprint>
+			<biblScope unit="volume">31</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page">137</biblScope>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Live dense reconstruction with a single moving camera</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">A</forename><surname>Newcombe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Davison</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2010 IEEE Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2010" />
+			<biblScope unit="page" from="1498" to="1505" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Kinectfusion: Real-time dense surface mapping and tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">A</forename><surname>Newcombe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Hilliges</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Molyneaux</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Davison</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Shotton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hodges</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ISMAR</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Dtam: Dense tracking and mapping in real-time</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">A</forename><surname>Newcombe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">J</forename><surname>Lovegrove</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">J</forename><surname>Davison</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision, 2011 IEEE International Conference on</title>
+		<imprint/>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Real-time 3d reconstruction at scale using voxel hashing</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Nießner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zollhöfer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Stamminger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Transactions on Graphics</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page">169</biblScope>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Automatic passive recovery of 3d from images and video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Nister</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">3D Data Processing, Visualization and Transmission (3DPVT)</title>
+		<imprint>
+			<date type="published" when="2004" />
+			<biblScope unit="page" from="438" to="445" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Visual odometry</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Nister</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Naroditsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bergen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of the IEEE Computer Society Conference on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>the IEEE Computer Society Conference on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">A minimal solution to the generalised 3-point pose problem</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Nistér</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Stewénius</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Mathematical Imaging and Vision</title>
+		<imprint>
+			<biblScope unit="volume">27</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="67" to="79" />
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Detailed real-time urban 3d reconstruction from video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Nister</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-M</forename><surname>Frahm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Akbarzadeh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Mordohai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Clipp</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Engels</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Gallup</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S.-J</forename><surname>Kim</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Merrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">78</biblScope>
+			<biblScope unit="issue">2-3</biblScope>
+			<biblScope unit="page" from="143" to="167" />
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Monofusion: Real-time 3d reconstruction of small scenes with a single web camera</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Pradeep</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rhemann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Izadi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bleyer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bathiche</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IEEE ISMAR</title>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page" from="83" to="88" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Orb: an efficient alternative to sift or surf</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Rublee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Rabaud</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Konolige</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Bradski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision, 2011 IEEE International Conference on</title>
+		<imprint>
+			<biblScope unit="page" from="2564" to="2571" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Largescale multi-resolution surface reconstruction from rgb-d sequences</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Steinbrucker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Kerl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sturm</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">A benchmark for the evaluation of rgb-d slam systems</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sturm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Engelhard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Endres</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Burgard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cremers</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Intelligent Robots and Systems (IROS), 2012 IEEE/RSJ International Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="573" to="580" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Unsupervised intrinsic calibration of depth sensors via slam</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Teichman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Miller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Thrun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">RSS</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">In-hand scanning with online loop closure. In Computer Vision Workshops</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Weise</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Wismer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Leibe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE</title>
+		<imprint>
+			<date type="published" when="2009" />
+			<publisher>IEEE</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">Dense reconstruction on-the-fly</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Wendel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Maurer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Graber</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pock</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Computer Vision and Pattern Recognition (CVPR), 2012 IEEE Conference on</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2012" />
+			<biblScope unit="page" from="1450" to="1457" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Robust real-time visual odometry for dense rgb-d mapping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Whelan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Johannsson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kaess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Leonard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>M-Cdonald</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Real-time large scale dense rgbd slam with volumetric fusion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Whelan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kaess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Johannsson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Fallon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Leonard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Mcdonald</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">The International Journal of Robotics Research</title>
+		<imprint>
+			<biblScope unit="volume">34</biblScope>
+			<biblScope unit="issue">4-5</biblScope>
+			<biblScope unit="page" from="598" to="626" />
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Elasticfusion: Dense slam without a pose graph</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Whelan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Leutenegger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">S</forename><surname>Moreno</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Glocker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Davison</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proceedings of Robotics: Science and Systems</title>
+		<meeting>Robotics: Science and Systems<address><addrLine>Rome, Italy</addrLine></address></meeting>
+		<imprint>
+			<date type="published" when="2015-07" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Kintinuous: Spatially extended kinectfusion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Whelan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Mcdonald</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Kaess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Fallon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Johannsson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Leonard</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">RSS Workshop on RGB-D: Advanced Reasoning with Depth Cameras</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Online structure analysis for real-time indoor scene reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Tong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Zhou</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. on Graph</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Dense scene reconstruction with points of interest</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q.-Y</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ACM Trans. on Graph</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Simultaneous localization and calibration: Self-calibration of consumer depth cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q.-Y</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<analytic>
+		<title level="a" type="main">Elastic fragments for dense scene reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q.-Y</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Miller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Koltun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

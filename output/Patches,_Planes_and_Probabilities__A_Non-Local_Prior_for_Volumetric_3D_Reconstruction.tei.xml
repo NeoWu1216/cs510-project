@@ -1,0 +1,1400 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Patches, Planes and Probabilities: A Non-local Prior for Volumetric 3D Reconstruction</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ali</forename><surname>Osman</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Max Planck Institute for Intelligent Systems</orgName>
+								<address>
+									<settlement>Tübingen</settlement>
+									<country key="DE">Germany</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Ulusoy</forename><surname>Michael</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Max Planck Institute for Intelligent Systems</orgName>
+								<address>
+									<settlement>Tübingen</settlement>
+									<country key="DE">Germany</country>
+								</address>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Black</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="department">Max Planck Institute for Intelligent Systems</orgName>
+								<address>
+									<settlement>Tübingen</settlement>
+									<country key="DE">Germany</country>
+								</address>
+							</affiliation>
+						</author>
+						<author role="corresp">
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Andreas</forename><surname>Geiger</surname></persName>
+							<email>andreas.geiger@tue.mpg.de</email>
+							<affiliation key="aff0">
+								<orgName type="department">Max Planck Institute for Intelligent Systems</orgName>
+								<address>
+									<settlement>Tübingen</settlement>
+									<country key="DE">Germany</country>
+								</address>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Patches, Planes and Probabilities: A Non-local Prior for Volumetric 3D Reconstruction</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:44+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>In this paper, we propose a non-local structured prior for volumetric multi-view 3D reconstruction. Towards this goal, we present a novel Markov random field model based on ray potentials in which assumptions about large 3D surface patches such as planarity or Manhattan world constraints can be efficiently encoded as probabilistic priors. We further derive an inference algorithm that reasons jointly about voxels, pixels and image segments, and estimates marginal distributions of appearance, occupancy, depth, normals and planarity. Key to tractable inference is a novel hybrid representation that spans both voxel and pixel space and that integrates non-local information from 2D image segmentations in a principled way. We compare our non-local prior to commonly employed local smoothness assumptions and a variety of state-of-the-art volumetric reconstruction baselines on challenging outdoor scenes with textureless and reflective surfaces. Our experiments indicate that regularizing over larger distances has the potential to resolve ambiguities where local regularizers fail.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Dense 3D reconstruction from multiple RGB images is a long-standing problem in computer vision with numerous practical applications. Unfortunately, it is also a highly illposed problem. Ambiguities arise in textureless areas or when photo-consistency assumptions are violated, e.g., at reflecting surfaces. For instance, consider the grass region in <ref type="figure">Fig. 1a</ref>. The surface contains little texture, thus multiple reconstructions satisfy the input images equally well.</p><p>Most previous work on multi-view stereo does not address such ambiguities and outputs a 3D model with no uncertainty information. In contrast, probabilistic approaches model and expose the uncertainty in the reconstruction <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b36">37,</ref><ref type="bibr" target="#b49">50,</ref><ref type="bibr" target="#b54">55]</ref>. <ref type="figure">Fig. 1b</ref> shows the result of a recent probabilistic method <ref type="bibr" target="#b49">[50]</ref> that is able to expose the ambiguity (a) Input Image (b) Occupancy Probability <ref type="bibr" target="#b49">[50]</ref> (c) <ref type="bibr" target="#b49">[50]</ref>+Pairwise Smoothness (d) Our Result <ref type="figure">Figure 1</ref>: Motivation: (a) The grass surface contains little texture, leading to reconstruction ambiguity. (b) Voxel occupancy probabilities reveal this ambiguity where lighter colors encode higher uncertainty <ref type="bibr" target="#b49">[50]</ref>. (c) Pairwise smoothness priors cannot resolve the ambiguity and lead to a biased 3D model. (d) Our planarity prior regularizes over large distances and helps reconstruct the correct surface.</p><p>caused by the textureless region. Ulusoy et al. <ref type="bibr" target="#b49">[50]</ref> formulate 3D reconstruction as inference in a Markov random field defined over the 3D voxel grid. Image evidence (input pixels) is modeled using ray potentials that accurately incorporate visibility and free-space constraints. While their method exposes reconstruction ambiguity, it is not able to resolve this ambiguity to recover the correct surface because their model does not incorporate any prior information; it models only image evidence. Luckily, the 3D world we live in is not completely random but exhibits geometric structure. Previous works impose smoothness constraints via pairwise potentials that encourage adjacent voxels to take on the same occupancy state <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b30">31]</ref> or condition surface orientations on semantic information <ref type="bibr" target="#b39">[40]</ref>.</p><p>While these priors reduces surface noise to some extent, they impose regularization only locally and are therefore not sufficient to resolve large ambiguous regions as shown in <ref type="figure">Fig. 1c</ref>.</p><p>In this paper, we propose a novel prior formulation for volumetric 3D reconstruction that encourages piece-wise planarity. We are inspired by the planar nature of many elements in man-made environments, i.e., 3D range images of generic scenes can be approximated by piecewise smooth regions with discontinuities at object boundaries <ref type="bibr" target="#b22">[23]</ref>. <ref type="figure">Fig. 1d</ref> shows that our prior is able to disambiguate large textureless regions to recover the correct surface.</p><p>Implementing a non-local prior in 3D is challenging. Even in 2D, high-order spatial priors are expensive to represent and optimize <ref type="bibr" target="#b26">[27,</ref><ref type="bibr" target="#b32">33,</ref><ref type="bibr" target="#b38">39]</ref>. Representing the planarity prior directly in voxel space is complicated by the large variety of planes each single subvolume may contain, resulting in numerous high-order cliques in the MRF.</p><p>Inspired by the success of non-local segmentation <ref type="bibr" target="#b24">[25,</ref><ref type="bibr" target="#b28">29]</ref> and stereo matching <ref type="bibr" target="#b18">[19,</ref><ref type="bibr" target="#b31">32,</ref><ref type="bibr" target="#b52">53]</ref> techniques, we encourage planarity within coherent image segments in all viewpoints. Our MRF reasons jointly about the occupancy and intensity of each voxel, the depth values observed at each pixel, and the planarity and plane parameters in each image segment. This hybrid 2D/3D representation with auxiliary variables allows the inference algorithm to propagate viewbased planarity assumptions into 3D voxel space in a principled way and implicitly defines smoothness constraints over very large neighborhoods in 3D.</p><p>The proposed MRF model is flexible in how plane priors can be integrated. In this work, we investigate a Manhattan world prior that encourages planes to align with the three dominant orthogonal directions. Existing works on planar multi-view stereo or Manhattan world representations treat these as hard constraints <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b31">32]</ref>. In contrast, we take a probabilistic approach where deviations from the model are allowed as necessary (e.g., the sphereshaped dome in <ref type="figure">Fig. 1)</ref>. Besides specifying the model, we develop a message-passing algorithm for inferring approximate marginal distributions at every voxel, pixel and segment. Our experiments demonstrate that the proposed method improves upon state-of-the-art volumetric reconstruction techniques, in particular for challenging outdoor scenes with large ambiguous (e.g., textureless) areas. Our code and supplementary material are available at http://ps. is.tue.mpg.de/research projects/volumetric-reconstruction.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>We first review the most relevant work on probabilistic volumetric reconstruction and then discuss approaches that exploit primitives for scene modeling. For a more complete review, we refer the reader to <ref type="bibr" target="#b14">[15,</ref><ref type="bibr" target="#b43">44]</ref>.</p><p>Volumetric Reconstruction: Following early work <ref type="bibr" target="#b0">[1,</ref><ref type="bibr" target="#b6">7,</ref><ref type="bibr" target="#b27">28,</ref><ref type="bibr" target="#b42">43]</ref>, Pollard and Mundy <ref type="bibr" target="#b36">[37]</ref> propose a volumetric reconstruction method that updates the occupancy and color of each voxel sequentially for each image. GPU implementations of this framework show impressive results <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b48">49]</ref>. However, their framework lacks a global probabilistic formulation leading to evidence overcounting <ref type="bibr" target="#b37">[38,</ref><ref type="bibr" target="#b49">50]</ref>. To address this, a number of recent approaches have phrased 3D volumetric reconstruction as MRF inference, exploiting the special characteristics of high-order ray potentials to accurately model the image formation process <ref type="bibr" target="#b17">[18,</ref><ref type="bibr" target="#b30">31,</ref><ref type="bibr" target="#b39">40,</ref><ref type="bibr" target="#b49">50]</ref>.</p><p>Reconstruction with Primitives: Several methods exploit planar patches to represent piece-wise planar <ref type="bibr" target="#b2">[3,</ref><ref type="bibr" target="#b5">6,</ref><ref type="bibr" target="#b9">10,</ref><ref type="bibr" target="#b11">12,</ref><ref type="bibr" target="#b33">34,</ref><ref type="bibr" target="#b40">41,</ref><ref type="bibr" target="#b44">45,</ref><ref type="bibr" target="#b45">46,</ref><ref type="bibr" target="#b55">56]</ref> or Manhattan world <ref type="bibr" target="#b12">[13,</ref><ref type="bibr" target="#b13">14,</ref><ref type="bibr" target="#b41">42,</ref><ref type="bibr" target="#b46">47]</ref> scenes. While the approaches produce impressive results, they enforce planarity as a hard constraint and thus only apply to piece-wise planar scenes. In contrast, our spatial prior can be viewed as a soft constraint on planarity because it allows deviations from planarity where it does not hold.</p><p>In a similar spirit, Häne et al. <ref type="bibr" target="#b21">[22]</ref> propose a model for piecewise planar depth map fusion. Their method takes as input depth maps and a dictionary of patches and integrate these patches as soft constraints in a total variation framework that leads to improved results wrt. classical TV priors. In contrast to the proposed hybrid pixel/voxel approach, their method is restricted to a 2.5D image representation and handles only very small patches (3 − 5 pixels) while we regularize over much larger regions (up to 10k pixels).</p><p>Gallup et al. <ref type="bibr" target="#b16">[17]</ref> sample planes from initial depth maps and exploit a semantic classifier to classify the image into planar and non-planar regions. Inference is then performed via graph cuts, segmenting the image into regions explained by planes and non-planar regions. Similar to <ref type="bibr" target="#b21">[22]</ref>, their method uses a 2.5D image representation and requires depth maps as input, while our approach integrates all constraints into a single joint volumetric reconstruction and directly takes RGB images as input.</p><p>Lafarge et al. <ref type="bibr" target="#b29">[30]</ref> propose a method that simultaneously optimizes 3D primitives and a mesh using an objective that combines photo-consistency terms, mesh smoothness and priors on pairwise primitive arrangements. While their method demonstrate impressive results, it is limited by the topology and shape of the mesh initialization. Additionally, their method outputs a deterministic 3D model while our approach yields a probabilistic 3D interpretation.</p><p>More recently, semantic and shape information has been leveraged as prior knowledge for stereo matching <ref type="bibr" target="#b18">[19]</ref> and multi-view reconstruction <ref type="bibr" target="#b16">[17,</ref><ref type="bibr" target="#b19">20,</ref><ref type="bibr" target="#b20">21,</ref><ref type="bibr" target="#b34">35,</ref><ref type="bibr" target="#b56">57]</ref>, e.g., by constraining the set of plausible geometries <ref type="bibr" target="#b1">[2,</ref><ref type="bibr" target="#b10">11,</ref><ref type="bibr" target="#b18">19]</ref> or by modeling class specific normal distributions <ref type="bibr" target="#b19">[20,</ref><ref type="bibr" target="#b20">21]</ref>. While our focus in this work is on planarity and Manhattan world priors, semantic information can be easily integrated into our framework.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Probabilistic Model</head><p>This section introduces our hybrid model for probabilistic volumetric 3D reconstruction with segment-based priors. As input we assume a set of images and camera poses which we obtain using structure-from-motion <ref type="bibr" target="#b50">[51,</ref><ref type="bibr" target="#b51">52]</ref>. As our work extends <ref type="bibr" target="#b49">[50]</ref>, we use their notation whenever possible. To make this paper self-contained, we briefly repeat the image formation process described in <ref type="bibr" target="#b49">[50]</ref> in Section 3.2. We then specify our model in Section 3.3. Details about our inference algorithm will be given in Section 4.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Notation</head><p>The 3D space is decomposed into a grid of voxels. Each voxel is assigned a unique index from the index set X . We associate each voxel i ∈ X with two random variables: a binary occupancy variable o i ∈ {0, 1} which signals if the voxel is occupied (o i = 1) or free (o i = 0), and an appearance variable a i ∈ R describing the voxel intensity (or more generally, color).</p><p>Let R denote the set of viewing rays of all cameras. Note that we model one viewing ray per pixel, thus R also corresponds to the total set of pixels. For a single ray r ∈ R, let o r = {o r 1 , . . . , o r Nr } and a r = {a r 1 , . . . , a r Nr } denote the ordered sets of occupancy and appearance variables associated with voxels intersecting ray r. The ordering is defined by the distance to the respective camera. We further associate each pixel/ray r ∈ R with an auxiliary depth variable d r , discretized according to the depth of each voxel along the ray r.</p><p>Each input image is segmented using the superpixelization algorithm of <ref type="bibr" target="#b53">[54]</ref>, yielding a set S that comprises all segments from all input images. We associate each segment s ∈ S with two random variables: a binary planarity variable p s ∈ {0, 1} indicating whether the segment is planar (p s = 1) or not (p s = 0), and a variable n s ∈ R 3 specifying 3D plane parameters (i.e., x T n s = 1 if x ∈ R 3 on plane n s ) for this segment. We abbreviate the total set of occupancy and appearance variables in the voxel grid with o = {o i |i ∈ X } and a = {a i |i ∈ X }. We further summarize all depth, planarity and plane normal variables by d = {d r |r ∈ R}, p = {p s |s ∈ S} and n = {n s |s ∈ S}, respectively.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Image Formation</head><p>An image is formed by assigning each pixel the appearance of the first occupied voxel along ray r <ref type="bibr" target="#b49">[50]</ref>:</p><formula xml:id="formula_0">I r = Nr i=1 o r i j&lt;i (1 − o r j ) a r i + ǫ<label>(1)</label></formula><p>where ǫ ∼ N (0, σ) is a noise term, I r denotes the intensity (or color) at the pixel corresponding to ray r. Note that the </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Markov Random Field</head><p>We formulate volumetric 3D reconstruction as inference in a Markov random field. We specify the joint distribution over o, a, d, p and n as</p><formula xml:id="formula_1">p(o, a, d, p, n) = 1 Z i∈X ϕ o i (o i ) r∈R ψ a r (o r , a r ) ψ d r (o r , d r ) × s∈S ϕ p s (p s ) ϕ n s (n s ) r∈Rs ψ d sr (d r , p s , n s )<label>(2)</label></formula><p>where Z denotes the partition function, R s contains all rays/pixels associated with segment s, and ϕ and ψ denote unary and high-order potentials, respectively. The corresponding factor graph is illustrated in <ref type="figure" target="#fig_0">Fig. 2</ref> </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>(top).</head><p>Voxel Occupancy Prior: We model our prior belief about the state of the occupancy variables using a Bernoulli distribution</p><formula xml:id="formula_2">ϕ o i (o i ) = γ oi (1 − γ) 1−oi (3)</formula><p>where γ is the prior probability that voxel i is occupied.</p><p>Appearance Ray Potential: Our ray potentials model the image generation process as specified by Eq. 1, i.e., they encourage the appearance of the first occupied voxel along ray r to agree with the image observation I r at pixel r:</p><formula xml:id="formula_3">ψ a r (o r , a r ) = Nr i=1 o r i j&lt;i (1 − o r j ) ν r (a r i )<label>(4)</label></formula><p>Here, ν r (a) denotes the probability of observing intensity a at ray r which we model as ν r (a) = N (a|I r , σ).</p><p>Depth Ray Potential: The depth ray potential models the constraint that the depth d r at pixel r must equal the depth of the first occupied voxel along the ray,</p><formula xml:id="formula_4">ψ d r (o r , d r ) = 1 if d r = Nr i=1 o r i j&lt;i (1 − o r j ) d ri 0 otherwise (5) where d ri denotes the depth of voxel i along ray r. Note that the potential ψ d r (o r , d r )</formula><p>is 1 if and only if d r is equal to the depth of the first occupied voxel along the ray. Otherwise, the potential evaluates to 0, indicating an invalid state.</p><p>Planarity Prior: We now describe our planarity prior, which favors piece-wise planar depth maps in each of the input views. As illustrated in <ref type="figure" target="#fig_0">Fig. 2</ref> (right), the prior comprises the three components below.</p><p>Planarity Potential: We encourage segment planarity via</p><formula xml:id="formula_5">ϕ p s (p s ) = exp(λ s |R s | p s )<label>(6)</label></formula><p>where p s ∈ {0, 1} is the planarity indicator variable of segment s. Note that each segment comprises many pixels. Thus, we weight this planarity potential by the segment area |R s |. The weight λ s determines the strength of the prior, i.e., how much planarity should be enforced.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Plane Normal Potential:</head><p>Our prior belief about the orientation of planar patches is modeled as a mixture distribution on the plane normal n s</p><formula xml:id="formula_6">ϕ n s (n s ) = K k=1 w k M n s n s µ k , κ k<label>(7)</label></formula><p>where M (· | µ, κ) denotes the von Mises-Fisher distribution with parameters µ (mean direction) and κ (concentration parameter). While any kind of surface orientation information can be incorporated into this potential (e.g., semantic information), in Section 6, we will investigate a rather generic Manhattan world prior (K = 3, κ &gt; 0).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Plane Depth Potential:</head><p>To ensure that the plane parameters of a planar patch agree with the depth variables of the corresponding image pixels, we define</p><formula xml:id="formula_7">ψ p sr (d r , p s , n s ) = exp (−λ p η(d r − D r (n s ))) if p s = 1 1 otherw. (8)</formula><p>where λ p is a consistency weight, η(·) denotes a penalty function and D r (n s ) returns the depth of plane n s along ray r. The intuition behind this potential is simple: if p s = 0, then all possible depth values d r are equally likely for each r ∈ R s . In contrast, when p s = 1, we favor depth values d r that are close to the plane n s . To account for segmentation errors, which can lead to outliers within a segment, we model this factor using a robust Lorentzian penalty η(·).</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Inference</head><p>We are interested in estimating the marginal distributions of o, a, d, p and n in the proposed MRF. Given these marginals, we can easily calculate several quantities of interest, e.g., the probability of voxel occupancy and intensity, the probability of a segment s being planar and the expected plane normal, as well as the probability distribution of depth along each ray. Importantly, these depth distributions enable the computation of depth maps that are optimal in terms of Bayes decision theory <ref type="bibr" target="#b49">[50]</ref>.</p><p>Unfortunately, inference in our graphical model is challenging due to the large number of <ref type="figure">variables (o, a, d)</ref>, the high-order potentials for modeling visibility constraints (ψ a r , ψ d r ) and the mixed discrete (o, d, p) and continuous (a, n) state spaces of the variables. Furthermore, our factor graph in <ref type="figure" target="#fig_0">Fig. 2</ref> contains a large number of loops due to intersecting viewing rays R. Thus, exact inference is intractable. In this section, we show how an approximation to the desired marginals can be obtained using message passing. In particular, we derive an algorithm based on sum-product particle belief propagation <ref type="bibr" target="#b23">[24]</ref> in factor graphs <ref type="bibr" target="#b25">[26]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Message Passing</head><p>Let µ f →x denote the message sent from factor f to variable x, and let µ x→f denote the corresponding variable-tofactor message. The messages from the unary factors to the variables, as well as the variable-to-factor messages are straightforward and we omit them here to save space. In the following, we present the message equations for the appearance ray potential ψ a r , the depth ray potential ψ d r and the plane depth potential ψ p sr . The supplementary document contains detailed derivations of all the equations. Below, we assume that all incoming messages to a factor are normalized such that they sum/integrate to 1.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Plane Depth Messages:</head><p>The continuous message from the plane depth potential ψ p sr to the plane parameters n s is given by</p><formula xml:id="formula_8">µ ψ p sr →ns (n s ) = ps dr ψ p sr (d r , p s , n s )µ(p s )µ(d r ) (9) = µ(p s = 1) dr ψ p sr (d r , p s = 1, n s )µ(d r ) + µ(p s = 0)</formula><p>where we have abbreviated the incoming messages using µ(p s ) = µ ps→ψ d r (p s ) and µ(d r ) = µ dr→ψ d r (d r ). Note that the message µ ψ p sr →ns (n s ) becomes uniform if there is strong evidence of non-planarity, i.e., µ(p s = 0) = 1, from the other pixels in the segment, e.g., in case of a highly curved surface. Otherwise, i.e. µ(p s = 1) = 1, the message evaluates high for planes n s that agree with the depth distribution µ(d r ).</p><p>The message to the binary planarity variable p s reads as</p><formula xml:id="formula_9">µ ψ p sr →ps (p s = 1) = ns dr ψ p sr (d r , p s = 1, n s )µ(n s )µ(d r ) µ ψ p sr →ps (p s = 0) = 1<label>(10)</label></formula><p>with µ(n s ) = µ ps→ψ d r (n s ) and µ(d r ) = µ dr→ψ d r (d r ). The planarity message is high if the depths of likely planes (where µ(n s ) is high) coincide with likely depths (high value of µ(d r )). Otherwise, the depth distribution at the pixel cannot be explained with the incoming plane distribution, and therefore, the planarity message is low.</p><p>Finally, the message to the depth variable d r is given by If there is strong evidence of non-planarity from the other pixels in the segment, i.e. µ(p s = 0) = 1, then the message to the depth variable becomes uniform, i.e. the depth variables are not affected. Otherwise, the message is high for values d r that match the depth of likely planes, i.e., d r ≈ D r (n s ) where µ(n s ) is high.</p><p>Appearance Ray Messages: In a naïve application of belief propagation, computing the factor-to-variable messages requires exponential time in the number of variables involved in the potential. Since each viewing ray intersects hundreds of voxels, the appearance ray potentials typically involve hundreds of variables, making this computation intractable. However, the special structure of the ray potentials allows for reducing the computation time from exponential to linear in the number of variables <ref type="bibr" target="#b30">[31,</ref><ref type="bibr" target="#b49">50]</ref>. Exploiting this property, Ulusoy et al. <ref type="bibr" target="#b49">[50]</ref> derived the sum-product message equations for this factor, which we include below for completeness:</p><formula xml:id="formula_10">µ ψ a r →o r i (o r i = 1) = j&lt;i µ(o r j = 1) k&lt;j µ(o r k = 0) ρ rj + k&lt;i µ(o r k = 0) ρ ri (12) µ ψ a r →o r i (o r i = 0) = j&lt;i µ(o r j = 1) k&lt;j µ(o r k = 0) ρ rj + j&gt;i µ(o r j = 1) k&lt;j k =i µ(o r k = 0) ρ rj<label>(13)</label></formula><p>The incoming occupancy messages are abbreviated by µ(o r i ) = µ o r i →ψ a r (o r i ) and ρ rj is a photo-consistency measure at the jth voxel along ray r, see <ref type="bibr" target="#b49">[50]</ref> for details. This message has an intuitive interpretation: it increases the occupancy probability of voxels that are photo-consistent and visible. The probability of voxels between the camera and the likely surface location are decreased. For occluded voxels the message is uniform.</p><p>Ulusoy et al. also showed that the messages to the continuous appearance variables, i.e. µ ψ a r →ai , can be computed analytically and that they can be compactly represented as a constant plus a weighted Gaussian distribution. The variable-to-factor messages µ ai→ψ a r cannot be computed analytically. We follow <ref type="bibr" target="#b49">[50]</ref> and approximate them using Mixture-of-Gaussians (MoG) distributions. We refer the reader to <ref type="bibr" target="#b49">[50]</ref> (Section 4.1) for all necessary details.</p><p>Depth Ray Messages: The message from ψ d r to d r is readily given by</p><formula xml:id="formula_11">µ ψ d r →dr (d r = d ri ) ∝ µ(o r i ) j&lt;i µ(o r j = 0)<label>(14)</label></formula><p>where the incoming occupancy messages are again abbreviated by µ(o r i ) = µ o r i →ψ d r (o r i ). By following a similar argument to the derivation of the appearance ray messages (see supplementary document), the message to the occupancy variable o r i is given by</p><formula xml:id="formula_12">µ ψ d r →o r i (o r i = 1) = j&lt;i µ(o r j = 1) k&lt;j µ(o r k = 0) µ(d rj ) + k&lt;i µ(o r k = 0) µ(d ri ) (15) µ ψ d r →o r i (o r i = 0) = j&gt;i µ(o r j = 1) k&lt;j k =i µ(o r k = 0) µ(d rj ) + j&lt;i µ(o r j = 1) k&lt;j µ(o r k = 0) µ(d rj ) (16)</formula><p>where the incoming depth messages are abbreviated as µ(d ri ) = µ dr→ψ d r (d r = d ri ). Note that the messages Eq. 15+16 are very similar to those of the appearance ray factor in Eq. 12+13. The difference is that the photoconsistency measure ρ in Eq. 12+13 is replaced with the incoming depth message µ(d) which carries information from our planarity prior. The messages in Eq. 15+16 intuitively increase the occupancy probability of voxels at likely depths, i.e., where µ(d rj ) is high. The probability of voxels between the camera and the likely depth are decreased whereas the message to the occluded voxels are uniform.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Particle Belief Propagation</head><p>Unfortunately, the continuous plane parameter variables n complicate the message computations. In particular, Eq. 9 is of continuous form and therefore difficult to represent. Further, the integrals that arise in Eq. 10+11 cannot be calculated in closed form.</p><p>To tackle these challenges, we exploit particle belief propagation <ref type="bibr" target="#b23">[24]</ref>, which has been adopted by many works with great success <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b35">36,</ref><ref type="bibr" target="#b52">53]</ref>. The main idea is to discretize the continuous space with a finite set of particles and use this discretization to approximate the integral equations with a Monte Carlo estimate.</p><p>For each segment, we draw K particles, {n (k) s } K k=1 , from a proposal distribution W s (n). Using these particles, we approximate the integral in Eq. 10 via importance sampling</p><formula xml:id="formula_13">µ ψ p sr →ps (p s = 1) ≈ (17) 1 K K k=1 dr ψ p sr (d r , 1, n s ) µ(n (k) s ) W s (n (k) s ) µ(d r )</formula><p>where W s (·) denotes an appropriate proposal distribution. The approximation of the depth variable message in Eq. 11 is similar and can be found in the supplementary material.</p><p>Note that the quality of these approximations depend on how well the set of particles explores the continuous space. For instance, consider a perfectly planar patch. If none of the particles come close to the correct plane, the planarity message in Eq. 10 will be underestimated, hence incorrectly lowering the planarity belief of the segment.</p><p>To avoid this situation, in this work, we take advantage of a data-driven strategy <ref type="bibr" target="#b47">[48]</ref> that generates samples from an initial 3D reconstruction of the scene. More specifically, we first run inference for our model without the planarity patch prior and compute the most likely depth at each pixel. We then repeatedly draw three pixels from the segment, prioritizing pixels with low depth certainty (negative entropy) and fit a plane to them. Promising planes, i.e., planes that explain most of the depth values inside the segment, are added to the particle set. In addition to this particle set, we also generate particles by conditioning on the plane prior implied by the normal potentials. We draw plane normals from the prior in Eq. 7 and then for each sample, optimize the depth of the plane to best match the depth estimates within the segment. Compared to a naïve approach such as uniformly sampling the space of plane parameters, our data-driven strategy avoids unlikely particles. Further details of our particle sampling strategy are presented in the supplementary document.</p><p>Given the set of plane particles {n (k) s } K k=1 , we build a kernel density estimate in order to obtain an approximation to the proposal distribution W s (n)</p><formula xml:id="formula_14">W s (n) = 1 K K k=1 N (n; µ = n (k) s , Σ = σ kde I)<label>(18)</label></formula><p>where σ kde denotes the kernel bandwidth, which we empirically set to a fixed value for all our experiments. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Implementation</head><p>This section provides details of our implementation. We initialize all ray messages uniformly and first pass messages without the planarity prior, iterating over each image at least once. This yields an initial 3D model. The beliefs in the occupancy variables are then propagated to the per-pixel depth variables via Eq. 11. The median of these depth distributions yields a depth map which we use to segment the images using a depth-aware superpixelization algorithm <ref type="bibr" target="#b53">[54]</ref>.</p><p>We further use these depth maps to generate plane particles {n (k) s } K k=1 for each segment as discussed in Section 4.2, using K = 64 throughout all our experiments. Next, we compute the messages from the plane depth factor ψ p sr to the plane parameters (Eq. 9) and to the planarity variables (Eq. 10). Finally, the information aggregated from the plane depth factor and all other pixels in the image segment is passed back to the depth variables using Eq. 11. The depth variables in turn influence the occupancies along each image ray via Eq. 15+16.</p><p>We interleave this process with the message updates for the appearance ray factors and iterate over each image until convergence. All necessary algorithmic details can be found in the supplementary document. Our implementation uses GPU amenable octree data structures and GPU parallelization for message computations. Our current implementation takes roughly 20 seconds to process a 1 Megapixel image and 30 million voxels.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Experimental Evaluation</head><p>We evaluate our algorithm on three aerial datasets with LIDAR ground truth 1 provided by Restrepo et al. <ref type="bibr" target="#b37">[38]</ref>. The datasets exhibit several challenges, including large fea- Baselines: We compare our results to several state-of-theart baselines. First, we compare to the sum-product algorithm of Ulusoy et al. <ref type="bibr" target="#b49">[50]</ref>, whose formulation is equivalent to our model without the patch prior and which we call "SP" in the following. As their method does not encode any spatial regularization, we introduce an additional baseline "SP+pairwise" with pairwise smoothness potentials that encourage adjacent voxels to take the same occupancy label <ref type="bibr" target="#b30">[31]</ref> . We optimize the parameters of this potential using the CAPITOL dataset. Further details can be found in the supplementary document. Next, we compare to the approach of Liu and Cooper ("LC") whose max-product formulation utilizes ray potentials <ref type="bibr" target="#b30">[31]</ref> as our method, but suffers from a systematic bias in ambiguous regions as shown in <ref type="bibr" target="#b49">[50]</ref>. We also include comparisons to an improved version of Liu and Cooper's approach as proposed by <ref type="bibr" target="#b49">[50]</ref> with a more robust voxel color model, which we refer to as "LC+MoG". Finally, we include a comparison to Pollard and Mundy's approach ("PM") <ref type="bibr" target="#b36">[37]</ref>, which lacks a global probabilistic formulation but nevertheless achieves very good results on several datasets <ref type="bibr" target="#b8">[9,</ref><ref type="bibr" target="#b48">49]</ref>, including the Middlebury benchmark <ref type="bibr" target="#b43">[44]</ref>.</p><p>Evaluation: We evaluate reconstruction accuracy by comparing depth maps predicted by each method to ground truth. More specifically, we compute depth maps for all input viewpoints and report the sum of per-pixel absolute errors over all pixels in all views. We create ground truth depth maps by projecting the LIDAR mesh onto the view. For algorithms producing deterministic MAP outputs, i.e., "LC" and "LC+MoG", we consider the first occupied voxel along the ray as a depth prediction. For algorithms which compute occupancy marginals, we compute Bayes optimal depth estimates at each pixel under the ℓ 1 loss as described in <ref type="bibr" target="#b49">[50]</ref> and the supplementary document.</p><p>We set the parameters of the superpixelization algorithm <ref type="bibr" target="#b53">[54]</ref> to product roughly 500 segments. We found this segmentation granularity to yield a reasonable tradoff between over-and undersegmentation of the images. We empirically chose a single set of parameters that we use for all three datasets: λ s = 5, λ d = 1, κ = 20.</p><p>All three datasets contain many surfaces that are orthogonal to each other as can be seen in <ref type="figure" target="#fig_3">Fig. 4 (first column)</ref>. This structure motivates a Manhattan world prior on the plane orientations in Eq. 7, which favors planes oriented along the X, Y or Z directions. However, this prior requires orienting the scene such that the dominant directions in the scene coincide with the X, Y and Z direction. Towards this goal, we first compute the ground plane normal (i.e., the Z direction) as the RANSAC fit to a sparse point cloud generated by running our model without the planarity prior and accumulating the 3D point clouds from each depth map. The only remaining unknown is the rotation around the Z axis, which we compute as the entropy minimizer of the point cloud projections onto canonical orthogonal X and Y planes (see <ref type="bibr" target="#b15">[16]</ref> for details). Discussion of Results: <ref type="figure" target="#fig_2">Fig. 3</ref> and <ref type="figure" target="#fig_4">Fig. 5a</ref> present cumulative accuracy plots for the three datasets and all methods. Overall our algorithm outperforms previous methods for the CAPITOL and DOWNTOWN datasets and achieves similar performance for BARUS&amp;HOLLEY. We visualize the error maps for all datasets and methods in <ref type="figure" target="#fig_3">Fig. 4</ref>. For the CAPITOL and BARUS&amp;HOLLEY datasets (first two rows), the majority of errors are localized on the large featureless regions, e.g., the grass region for CAPI-TOL and the black rooftop in BARUS&amp;HOLLEY. The results show that "PM" as well as algorithms that estimate a MAP solution, i.e., "LC" and "LC+MoG", yield a systematic bias in textureless regions, leading to large errors. The sum-product ("SP") result is able to reveal the ambiguity in the region (see <ref type="figure">Fig. 1b</ref>) and obtains better results. Nonetheless, "SP" cannot resolve the ambiguity without additional prior information. The model with the pairwise smoothness potentials ("SP+pairwise") yields denser and smoother results, leading to lower errors on most structures, e.g. the building facades in CAPITOL and BARUS&amp;HOLLEY. However, results on the grass region in CAPITOL and the rooftop in BARUS&amp;HOLLEY indicate that the pairwise model is unable to resolve ambiguities on the large textureless regions. In contrast, our algorithm achieves significantly more accurate results in these regions as seen in <ref type="figure" target="#fig_3">Fig. 4g</ref>. To investigate this more closely, we evaluate errors only on the large featureless surfaces. The results are displayed in <ref type="figure" target="#fig_2">Fig. 3b+3d</ref> and show the clear improvement of our algorithm. <ref type="figure">Fig. 1d</ref> depicts a rendering of our reconstruction where the ambiguity in the model is resolved successfully.</p><p>Besides textureless regions, our planarity prior helps im-prove reconstruction of reflective surfaces as well. The last row of <ref type="figure" target="#fig_3">Fig. 4a</ref> displays a building with a reflective surface from DOWNTOWN. All baselines yield large errors on the building surface since it violates the Lambertian surface assumption. Our planarity prior helps correct these errors to achieve a denser and more accurate result. <ref type="figure" target="#fig_4">Fig. 5</ref> displays results for another reflective building. All algorithms produce large errors for the side surface of the building which has a mirror like reflectivity. However, the front side of the building contains a mixture of reflective and non-reflective materials. While all algorithms produce some correct depth values in this region, the results are in general very noisy and contain large holes. The model with pairwise smoothness potentials ("SP+pairwise") fails to bridge these large gaps in the reconstruction. In contrast, our algorithm regularizes over the entire facade and is able to reconstruct this facade surface correctly.</p><p>The results confirm that even though our prior favors piecewise planar reconstructions, non-planar structures are preserved, e.g. the building dome in <ref type="figure" target="#fig_3">Fig. 4</ref> (first row) shows very little error. Our algorithm is robust to non-planar structures due to two facts: First, our model allows for turning off the planarity prior wherever necessary. Second, we also allow for outliers within a segment, owing to our robust penalty function η(·) in Eq. 8. The latter property is important to deal with imprecise segmentation boundaries.</p><p>For BARUS&amp;HOLLEY, our planarity priors introduces errors around some of the shrubs and trees, which lowers the overall accuracy <ref type="figure" target="#fig_2">(Fig. 3c)</ref>. However, for some of these regions, the LIDAR ground truth is not accurate either due to the tree tops which have been extruded to the ground level. In the supplementary document, we present an additional evaluation excluding such regions, as well as further examples and failure cases.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="7.">Conclusion</head><p>We have presented a novel non-local prior for probabilistic volumetric 3D reconstruction that encourages planarity within image segments and regularizes over large voxel neighborhoods. Our experiments show that the proposed prior is able to resolve reconstruction ambiguities of textureless and partially reflective surfaces and achieves stateof-the-art results in reconstruction accuracy for highly challenging aerial datasets. In our future work, we plan to incorporate semantic information in our model. Furthermore, our prior formulation also allows for geometries beyond planar segments. We believe that integrating more complex primitives such as spheres, cylinders, deformable shapes or even wholistic 3D scene models will be promising extensions of the presented model.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 2 :</head><label>2</label><figDesc>Factor Graph. Our graphical model in plate notation. R comprises the set of all pixels/rays in all images and S comprises all segments. R s is the set of pixels inside segment s. Ray depth variables d r connect voxels with segments in our hybrid 3D/2D representation. Note that ψ p sr connects only to those d r 's for wich r ∈ R s . term o r i j&lt;i (1 − o r j ) evaluates to 1 for the first occupied voxel along the ray and to 0 for all other voxels.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head></head><label></label><figDesc>(d r , p s , n s )µ(p s )µ(n s ) (11) = µ(p s = 1) ns ψ p sr (d r , p s = 1, n s )µ(n s ) + µ(p s = 0)</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 :</head><label>3</label><figDesc>Reconstruction accuracy plots for the CAPITOL and BARUS&amp;HOLLEY datasets.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 4 :</head><label>4</label><figDesc>Qualitative Results. This figure shows qualitative results on the CAPITOL (top), BARUS&amp;HOLLEY (middle) and DOWNTOWN (bottom) dataset. (a) Region of interest. (b-g) Visualization of errors. Cooler colors correspond to lower error. (h) Depth map predicted by our model. We encourage the reader to zoom in for details. tureless regions, reflective and specular surfaces, severe occlusions and transient objects. The input images are roughly one megapixel in size and each dataset contains ∼ 200 images. The datasets are referred to as CAPITOL, BARUS&amp;HOLLEY and DOWNTOWN, and example image crops are presented in Fig. 4 (first column).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 5 :</head><label>5</label><figDesc>(5a) Accuracy plots for DOWNTOWN, (5b) Region of interest, (5c-5e) Visualization of errors.</figDesc></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">The original datasets are distributed with sparse LIDAR point clouds. Ulusoy et al. triangulated these point clouds to obtain a dense ground truth mesh<ref type="bibr" target="#b49">[50]</ref>. We use their meshes for a fair comparison to the baselines.</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">A probabilistic framework for surface reconstruction from multiple images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">S</forename><surname>Davis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Dense object reconstruction with semantic priors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Chandraker</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Savarese</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">A random sampling strategy for piecewise planar scene segmentation. Computer Vision and Image Understanding (CVIU)</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bartoli</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="volume">105</biblScope>
+			<biblScope unit="page" from="42" to="59" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">PMBP: PatchMatch Belief Propagation for correspondence field estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Besse</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fitzgibbon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kautz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">110</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="2" to="13" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">A probabilistic theory of occupancy and emptiness</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Bhotika</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Fleet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">N</forename><surname>Kutulakos</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the European Conf. on Computer Vision (ECCV)</title>
+		<meeting>of the European Conf. on Computer Vision (ECCV)</meeting>
+		<imprint>
+			<date type="published" when="2002" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Fast, approximate piecewise-planar modeling based on sparse structure-from-motion and superpixels</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bodis-Szomoru</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Riemenschneider</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Poxels: Probabilistic voxelized volume reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">D</forename><surname>Bonet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Viola</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the IEEE International Conf. on Computer Vision (ICCV)</title>
+		<meeting>of the IEEE International Conf. on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="1999" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">A probabilistic framework for space carving</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Broadhurst</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">W</forename><surname>Drummond</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Cipolla</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">ICCV</title>
+		<imprint>
+			<biblScope unit="issue">1</biblScope>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">High resolution surface reconstruction from multiview aerial imagery</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Calakli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">O</forename><surname>Ulusoy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">I</forename><surname>Restrepo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Taubin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">L</forename><surname>Mundy</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">3</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Robust piecewiseplanar 3d reconstruction and completion from large-scale unstructured point data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A.-L</forename><surname>Chauve</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Labatut</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-P</forename><surname>Pons</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Dense reconstruction using 3D object shape priors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dame</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Prisacariu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Reid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<monogr>
+		<title level="m" type="main">Piecewise planar scene reconstruction from sparse correspondences. Image and Vision Computing (IVC)</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Fraundorfer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Schindler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="volume">24</biblScope>
+			<biblScope unit="page" from="395" to="406" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Manhattan-world stereo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Furukawa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Reconstructing building interiors from images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Furukawa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the IEEE International Conf. on Computer Vision (ICCV)</title>
+		<meeting>of the IEEE International Conf. on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<monogr>
+		<title level="m" type="main">Multi-view stereo: A tutorial. Foundations and Trends in Computer Graphics and Vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Furukawa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Hernandez</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">9</biblScope>
+			<biblScope unit="page" from="1" to="148" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Real-time plane-sweeping stereo with multiple sweeping directions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Gallup</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-M</forename><surname>Frahm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Mordohai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Piecewise planar and non-planar stereo for urban scene reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Gallup</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J.-M</forename><surname>Frahm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">An occupancy-depth generative model of multi-view images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Gargallo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sturm</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Pujades</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the Asian Conf. on Computer Vision (ACCV)</title>
+		<meeting>of the Asian Conf. on Computer Vision (ACCV)</meeting>
+		<imprint>
+			<date type="published" when="2007" />
+			<biblScope unit="volume">1</biblScope>
+			<biblScope unit="page" from="373" to="383" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Displets: Resolving stereo ambiguities using object knowledge</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Güney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Class specific 3d object shape priors using surface normals</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Haene</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Savinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Joint 3D scene reconstruction and class segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Haene</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Cohen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Angst</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">A patch prior for dense 3d reconstruction in man-made environments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Haene</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zach</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Zeisl</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the International Conf. on 3D Digital Imaging, Modeling, Data Processing, Visualization and Transmission (THREEDIMPVT)</title>
+		<meeting>of the International Conf. on 3D Digital Imaging, Modeling, Data essing, Visualization and Transmission (THREEDIMPVT)</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Statistics of range images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">B</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mumford</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2000" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Particle belief propagation. Conference on</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ihler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Artificial Intelligence and Statistics</title>
+		<imprint>
+			<biblScope unit="volume">4</biblScope>
+			<biblScope unit="page">6</biblScope>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Robust higher order potentials for enforcing label consistency</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ladicky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H S</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">82</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="302" to="324" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Probabilistic Graphical Models: Principles and Techniques</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Koller</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Friedman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2009" />
+			<publisher>MIT Press</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Beyond pairwise energies: Efficient optimization for higher-order MRFs</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Komodakis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Paragios</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">A theory of shape by space carving</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">N</forename><surname>Kutulakos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">38</biblScope>
+			<biblScope unit="issue">3</biblScope>
+			<biblScope unit="page" from="199" to="218" />
+			<date type="published" when="2000" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Associative hierarchical random fields</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ladicky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Russell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">H S</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. on Pattern Analysis and Machine Intelligence (PAMI)</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">6</biblScope>
+			<biblScope unit="page" from="1056" to="1077" />
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<analytic>
+		<title level="a" type="main">A hybrid multiview stereo algorithm for modeling urban scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Lafarge</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Keriven</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bredif</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H.-H</forename><surname>Vu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. on Pattern Analysis and Machine Intelligence (PAMI)</title>
+		<imprint>
+			<biblScope unit="volume">35</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="5" to="17" />
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Statistical inverse ray tracing for image-based 3d modeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cooper</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. on Pattern Analysis and Machine Intelligence (PAMI)</title>
+		<imprint>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="issue">10</biblScope>
+			<biblScope unit="page">7</biblScope>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Using surface model to correct and fit disparity data in stereo vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Luo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Maitre</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the International Conf. on Pattern Recognition (ICPR)</title>
+		<meeting>of the International Conf. on Pattern Recognition (ICPR)</meeting>
+		<imprint>
+			<date type="published" when="1990" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Nonparametric higher-order random fields for image segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Marquez-Neila</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Kohli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Rother</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Baumela</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the European Conf. on Computer Vision (ECCV)</title>
+		<meeting>of the European Conf. on Computer Vision (ECCV)</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">Multi-view superpixel stereo in urban environments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Micusik</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Kosecka</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">89</biblScope>
+			<biblScope unit="issue">1</biblScope>
+			<biblScope unit="page" from="106" to="119" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Shape anchors for data-driven multi-view reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Owens</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torralba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">T</forename><surname>Freeman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the IEEE International Conf. on Computer Vision (ICCV)</title>
+		<meeting>of the IEEE International Conf. on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Preserving modes and messages via diverse particle selection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pacheco</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zuffi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Sudderth</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the International Conf. on Machine learning (ICML)</title>
+		<meeting>of the International Conf. on Machine learning (ICML)</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<analytic>
+		<title level="a" type="main">Change detection in a 3-d world</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Pollard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">L</forename><surname>Mundy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title level="m" type="main">Characterization of Probabilistic Volumetric Models for 3-d Computer Vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">I</forename><surname>Restrepo</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+		<respStmt>
+			<orgName>Brown University</orgName>
+		</respStmt>
+	</monogr>
+	<note type="report_type">PhD thesis</note>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<analytic>
+		<title level="a" type="main">Fields of experts</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Roth</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">International Journal of Computer Vision (IJCV)</title>
+		<imprint>
+			<biblScope unit="volume">82</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="205" to="229" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Discrete optimization of ray potentials for semantic 3d reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Savinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Ladicky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Häne</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pollefeys</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="volume">1</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Make3D: learning 3D scene structure from a single still image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Saxena</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Sun</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">Y</forename><surname>Ng</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IEEE Trans. on Pattern Analysis and Machine Intelligence (PAMI)</title>
+		<imprint>
+			<biblScope unit="volume">31</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="824" to="840" />
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Omnidirectional 3d reconstruction in augmented manhattan worlds</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Schönbein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE International Conf. on Intelligent Robots and Systems (IROS)</title>
+		<meeting>IEEE International Conf. on Intelligent Robots and Systems (IROS)</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Photorealistic scene reconstruction by voxel coloring</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Dyer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">A comparison and evaluation of multi-view stereo reconstruction algorithms</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M</forename><surname>Seitz</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Diebel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Scharstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2006" />
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Piecewise planar stereo for image-based rendering</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">N</forename><surname>Sinha</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Steedly</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Szeliski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the IEEE International Conf. on Computer Vision (ICCV)</title>
+		<meeting>of the IEEE International Conf. on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">A rao-blackwellized mcmc algorithm for recovering piecewise planar 3d models from multiple view rgbd images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srinivasan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Dellaert</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE International Conf. on Image Processing (ICIP)</title>
+		<meeting>IEEE International Conf. on Image essing (ICIP)</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">A mixture of manhattan frames : Beyond the manhattan world</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Straub</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Rosman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Freifeld</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">J</forename><surname>Leonard</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">W</forename><surname>Fisher</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Image segmentation by data driven markov chain monte carlo</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Tu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">C</forename><surname>Zhu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Shum</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the IEEE International Conf. on Computer Vision (ICCV)</title>
+		<meeting>of the IEEE International Conf. on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2001" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">Dynamic probabilistic volumetric models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">O</forename><surname>Ulusoy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Biris</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">L</forename><surname>Mundy</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the IEEE International Conf. on Computer Vision (ICCV)</title>
+		<meeting>of the IEEE International Conf. on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">Towards probabilistic volumetric reconstruction using ray potentials</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">O</forename><surname>Ulusoy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the International Conf. on 3D Vision (3DV)</title>
+		<meeting>of the International Conf. on 3D Vision (3DV)</meeting>
+		<imprint>
+			<date type="published" when="2005" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">Towards linear-time incremental structure from motion</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the International Conf. on 3D Vision (3DV)</title>
+		<meeting>of the International Conf. on 3D Vision (3DV)</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<analytic>
+		<title level="a" type="main">Multicore bundle adjustment</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Wu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Agarwal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Curless</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Seitz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b52">
+	<analytic>
+		<title level="a" type="main">Continuous markov random fields for robust stereo estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yamaguchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Hazan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the European Conf. on Computer Vision (ECCV)</title>
+		<meeting>of the European Conf. on Computer Vision (ECCV)</meeting>
+		<imprint>
+			<date type="published" when="2012" />
+			<biblScope unit="volume">2</biblScope>
+			<biblScope unit="page">6</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b53">
+	<analytic>
+		<title level="a" type="main">Robust monocular epipolar flow estimation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yamaguchi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Urtasun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</title>
+		<meeting>IEEE Conf. on Computer Vision and Pattern Recognition (CVPR)</meeting>
+		<imprint>
+			<date type="published" when="2013" />
+			<biblScope unit="volume">6</biblScope>
+			<biblScope unit="page">7</biblScope>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b54">
+	<analytic>
+		<title level="a" type="main">Dense 3-d structure from image sequences using probabilistic depth carving</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Yao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Calway</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the British Machine Vision Conf. (BMVC)</title>
+		<meeting>of the British Machine Vision Conf. (BMVC)</meeting>
+		<imprint>
+			<date type="published" when="2003" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b55">
+	<analytic>
+		<title level="a" type="main">Fusion of feature-and area-based information for urban buildings modeling from aerial imagery</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Zebedin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Bauer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Karner</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bischof</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the European Conf. on Computer Vision (ECCV)</title>
+		<meeting>of the European Conf. on Computer Vision (ECCV)</meeting>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b56">
+	<analytic>
+		<title level="a" type="main">Exploiting object similarity in 3d reconstruction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Zhou</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Güney</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Geiger</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Proc. of the IEEE International Conf. on Computer Vision (ICCV)</title>
+		<meeting>of the IEEE International Conf. on Computer Vision (ICCV)</meeting>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

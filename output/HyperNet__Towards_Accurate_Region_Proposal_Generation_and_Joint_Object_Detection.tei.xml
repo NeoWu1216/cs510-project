@@ -1,0 +1,1044 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">HyperNet: Towards Accurate Region Proposal Generation and Joint Object Detection</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Tao</forename><surname>Kong</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="laboratory">State Key Lab. of Intelligent Technology and Systems</orgName>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="department">Tsinghua National Laboratory for Information Science and Technology (TNList)</orgName>
+							</affiliation>
+							<affiliation key="aff2">
+								<orgName type="department">Department of Computer Science and Technology</orgName>
+								<orgName type="institution">Tsinghua University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Anbang</forename><surname>Yao</surname></persName>
+							<email>anbang.yao@intel.com</email>
+							<affiliation key="aff3">
+								<orgName type="institution">Intel Labs China</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Yurong</forename><surname>Chen</surname></persName>
+							<email>yurong.chen@intel.com</email>
+							<affiliation key="aff3">
+								<orgName type="institution">Intel Labs China</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Fuchun</forename><surname>Sun</surname></persName>
+							<affiliation key="aff0">
+								<orgName type="laboratory">State Key Lab. of Intelligent Technology and Systems</orgName>
+							</affiliation>
+							<affiliation key="aff1">
+								<orgName type="department">Tsinghua National Laboratory for Information Science and Technology (TNList)</orgName>
+							</affiliation>
+							<affiliation key="aff2">
+								<orgName type="department">Department of Computer Science and Technology</orgName>
+								<orgName type="institution">Tsinghua University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">HyperNet: Towards Accurate Region Proposal Generation and Joint Object Detection</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:41+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>Almost all of the current top-performing object detection networks employ region proposals to guide the search for object instances. State-of-the-art region proposal methods usually need several thousand proposals to get high recall, thus hurting the detection efficiency. Although the latest Region Proposal Network method gets promising detection accuracy with several hundred proposals, it still struggles in small-size object detection and precise localization (e.g., large IoU thresholds), mainly due to the coarseness of its feature maps. In this paper, we present a deep hierarchical network, namely HyperNet, for handling region proposal generation and object detection jointly. Our HyperNet is primarily based on an elaborately designed Hyper Feature which aggregates hierarchical feature maps first and then compresses them into a uniform space. The Hyper Features well incorporate deep but highly semantic, intermediate but really complementary, and shallow but naturally high-resolution features of the image, thus enabling us to construct HyperNet by sharing them both in generating proposals and detecting objects via an end-to-end joint training strategy. For the deep VGG16 model, our method achieves completely leading recall and state-of-the-art object detection accuracy on PASCAL VOC 2007 and 2012 using only 100 proposals per image. It runs with a speed of 5 fps (including all steps) on a GPU, thus having the potential for real-time processing.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>Generic object detection methods are moving from dense sliding window approaches to sparse region proposal framework. High-quality and category-independent object pro- * This work was done when Tao Kong was an intern at Intel Labs China supervised by Anbang Yao who is responsible for correspondence. posals reduce the number of windows each classifier needs to consider, thus promoting the development of object detection. Most recent state-of-the-art object detection methods adopt such pipeline <ref type="bibr" target="#b27">[28]</ref>[14] <ref type="bibr" target="#b15">[16]</ref>[12] <ref type="bibr" target="#b34">[35]</ref>. A pioneering work is regions with convolutional neural network (R-CNN) <ref type="bibr" target="#b13">[14]</ref>. It first extracts ∼2k region proposals by Selective Search <ref type="bibr" target="#b32">[33]</ref> method and then classifies them with a pretrained convolutional neural network (CNN). By employing an even deeper CNN model (VGG16 <ref type="bibr" target="#b31">[32]</ref>), it gives 30% relative improvement over the best previous result on PASCAL VOC 2012 <ref type="bibr" target="#b8">[9]</ref>.</p><p>There are two major keys to the success of the R-CNN: (a) It replaces the hand-engineered features like HOG <ref type="bibr" target="#b5">[6]</ref> or SIFT <ref type="bibr" target="#b24">[25]</ref> with high level object representations obtained from CNN models. CNN features are arguably more discriminative representations. (b) It uses a few thousands of category-independent region proposals to reduce the searching space for an image. One may note that R-CNN relies on region proposals generated by Selective Search. Selective Search takes about 2 seconds to compute proposals for a typical 500×300 image. Meanwhile, feature computation in R-CNN is time-consuming, as it repeatedly applies the deep convolutional networks to thousands of warped region proposals per image <ref type="bibr" target="#b15">[16]</ref>.</p><p>Fast R-CNN <ref type="bibr" target="#b12">[13]</ref> has significantly improved the efficiency and accuracy of R-CNN. Under Fast R-CNN, the convolutional layers are pooled and reused. The region of interest (ROI) pooling strategy allows for extraction of high level feature on proposal windows much faster. Nevertheless, one main issue of Fast R-CNN is that it relies on Selective Search. The region proposal generation step consumes as much running time as the detection network. Another issue of Fast R-CNN is that the last layer output of a very deep CNN is too coarse. So it resizes the image's short size to 600. In this case, a 32×32 object will be just 2×2 when it goes to the last convolutional layer of VGG16 <ref type="bibr" target="#b31">[32]</ref> network. The feature map size is too coarse for classification of some instances with small size. Meanwhile, neighboring regions may overlap each other seriously. This is the reason why Fast R-CNN struggles with small objects on PASCAL VOC datasets.</p><p>Recently proposed Region Proposal Network (RPN, also known as Faster R-CNN) combines object proposal and detection into a unified network <ref type="bibr" target="#b27">[28]</ref>. The authors add two additional convolutional layers on top of traditional ConvNet output to compute proposals and share features with Fast R-CNN. Using 300 region proposals, RPN with Fast R-CNN produces detection accuracy better than the baseline of Selective Search with Fast R-CNN. However, because of the poor localization performance of the deep layer, this method still struggles with small instances and high IoU thresholds (e.g.,&gt; 0.8) <ref type="bibr" target="#b10">[11]</ref>. Moreover, fewer proposals not only reduce running time but also make detection more accuracy. A proposal generator that can guarantee high recall with small number(e.g., 50) of region boxes is required for better object detection system and other relevant applications <ref type="bibr" target="#b17">[18]</ref> <ref type="bibr" target="#b18">[19]</ref>.</p><p>Issues in Fast R-CNN and RPN indicate that (a) Features for object proposal and detection should be more informative and (b) The resolution of the layer pre-computed for proposal generation or detection should be reasonable. The deep convolutional layers can find the object of interest with high recall but poor localization performance due to the coarseness of the feature maps. While the low layers of the network can better localize the object of interest but with a reduced recall <ref type="bibr" target="#b10">[11]</ref>. A good object proposal/detection system should combine the best of both worlds.</p><p>Recently, Fully Convolution Network (FCN) is demonstrated impressive performance on semantic segmentation task <ref type="bibr" target="#b23">[24]</ref> <ref type="bibr" target="#b14">[15]</ref>. In <ref type="bibr" target="#b23">[24]</ref>, the authors combine coarse, high layer information with fine, low layer information for semantic segmentation. In-network upsampling enables pixelwise prediction and learning. Inspired by these works, we develop a novel Hyper Feature to combine deep, coarse information with shallow, fine information to make features more abundant. Our hypothesis is that the information of interest is distributed over all levels of the convolution network and should be well organised. To make resolution of the Hyper Feature appropriate, we design different sampling strategies for multi-level CNN features.</p><p>One of our motivations is to reduce the region proposal number from traditional thousands level to one hundred level and even less. We also propose to develop an efficient object detection system. Efficiency is an important issue so that the method can be easily involved in real-time and large-scale applications.</p><p>In this paper, we present HyperNet for accurate region proposal generation and joint object detection as shown in <ref type="figure" target="#fig_0">Figure 1</ref>. We demonstrate that proper fusion of coarse-tofine CNN features is more suitable for region proposal generation and detection. Our main results are:</p><p>• On object proposal task, our network achieves 95% recall with just 50 proposals and 97% recall with 100 proposals, which is significantly better than other existing top methods.</p><p>• On the detection challenges of PASCAL VOC 2007 and 2012, we achieve state-of-the-art mAP of 76.3% and 71.4%, outperforming the seminal Fast R-CNN by 6 and 3 points, correspondingly.</p><p>• Our speeding up version can guarantee object proposal and detection accuracy almost in real-time, with 5 fps using very deep CNN models.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>In this section, we review existing object proposal and detection methods most related to our work, especially deep leaning based methods.</p><p>Object proposals <ref type="bibr" target="#b4">[5]</ref> <ref type="bibr" target="#b21">[22]</ref>[36] <ref type="bibr" target="#b3">[4]</ref> considerably reduce the computation compared with sliding window methods [10] <ref type="bibr" target="#b25">[26]</ref> in detection framework. These methods can be classified into two general approaches: traditional methods and deep learning based methods. Traditional methods attempt to generate region proposals by merging multiple segments or by scoring windows that are likely be included in objects. These methods unusually adopt cues like superpixels <ref type="bibr" target="#b32">[33]</ref>, edges <ref type="bibr" target="#b35">[36]</ref>[5], saliency <ref type="bibr" target="#b0">[1]</ref> and shapes <ref type="bibr" target="#b1">[2]</ref> <ref type="bibr" target="#b22">[23]</ref> as features . Recently, some researchers are using CNN to generate region proposals. Deepbox <ref type="bibr" target="#b21">[22]</ref> is trained with a slight ConvNet model that learns to re-rank region proposals generated by EdgeBoxes <ref type="bibr" target="#b35">[36]</ref>. RPN <ref type="bibr" target="#b27">[28]</ref> has joined region proposal generator with classifier in one stage or two stages. Both region proposal generation and detection results are promising. In DeepProposal <ref type="bibr" target="#b10">[11]</ref>, a coarse-to-fine cascade on multiple layers of CNN features is designed for generating region proposals.  Object detection aims to localize and recognize every object instance with a bounding box <ref type="bibr" target="#b8">[9]</ref> <ref type="bibr" target="#b29">[30]</ref>. The DPM <ref type="bibr" target="#b9">[10]</ref> and its variants <ref type="bibr" target="#b6">[7]</ref> <ref type="bibr" target="#b2">[3]</ref> have been the dominating methods for years. These methods use image descriptors such as HOG <ref type="bibr" target="#b5">[6]</ref>, SIFT <ref type="bibr" target="#b24">[25]</ref>, and LBP <ref type="bibr" target="#b33">[34]</ref> as features and sweep through the entire image to find regions with a class-specific maximum response. With the great success of the deep learning on large scale object recognition <ref type="bibr" target="#b20">[21]</ref>, several works based on CNN have been proposed <ref type="bibr" target="#b30">[31]</ref>[35] <ref type="bibr" target="#b12">[13]</ref>. Girshick et al. <ref type="bibr" target="#b13">[14]</ref> propose R-CNN. In this framework, a few thousand category-independent region proposals are adopted for object detection. They also develop a fast version with higher accuracy and speed <ref type="bibr" target="#b15">[16]</ref> <ref type="bibr" target="#b12">[13]</ref>. Spyros et al. <ref type="bibr" target="#b11">[12]</ref> build a powerful localization system based on R-CNN pipeline. They add semantic segmentation results to enhance localization accuracy. In MultiBox <ref type="bibr" target="#b7">[8]</ref>, region proposals are generated from a CNN model. Different from these works, Redmon et al. <ref type="bibr" target="#b26">[27]</ref> propose a You Only Look Once (YOLO) framework that predicts bounding boxes and class probabilities directly from full images. Among these methods, R-CNN, Fast-RCNN and MultiBox are proposal based methods. Y-OLO is proposal free method. In practice, proposal based methods completely outperform proposal free methods with respect to detection accuracy. Some methods share similarities with our work, and we will discuss them in more detail in Section 4.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">HyperNet Framework</head><p>Our HyperNet framework is illustrated in <ref type="figure" target="#fig_1">Figure 2</ref>. Initially, an entire image is forwarded through the convolutional layers and the activation maps are produced. We aggregate hierarchical feature maps and then compress them into a uniform space, namely Hyper Feature. Next, a slight region proposal generation network is constructed to produce about 100 proposals. Finally, these proposals are classified and adjusted based on the detection module.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Hyper Feature Production</head><p>Given an image, we apply the convolutional layers of a pre-trained model to compute feature maps of the entire image. As Fast R-CNN, we keep the image's aspect ratio and resize the short side to 600. Because of subsampling and pooling operations in CNN, these feature maps are not at the same resolution. To combine multi-level maps at the same resolution, we carry out different sampling strategies for different layers. We add a max pooling layer on the lower layer to carry out subsampling. For higher layers, we add a deconvolutional operation (Deconv) to conduct upsampling. A convolutional layer (Conv) is applied to each sampled result. The Conv operation not only extracts more semantic features but also compresses them into a uniform space. Finally, we normalize multiple feature maps using local response normalization (LRN) <ref type="bibr" target="#b19">[20]</ref> and concatenate them to one single output cube, which we call Hyper Feature.</p><p>Hyper Feature has several advantages: (a) Multiple levels' abstraction. Inspired by neuroscience, reasoning across multiple levels has been proven beneficial in some computer vision problems <ref type="bibr" target="#b14">[15]</ref> <ref type="bibr" target="#b15">[16]</ref>. Deep, intermediate and shallow CNN features are really complementary for object detection task as shown in experiments. (b) Appropriate resolution. The feature map resolution for a resized 1000×600 image will be 250×150, which is more suitable for detection. (c) Computation efficiency. All features can be precomputed before region proposal generation and detection module. There is no redundant computation.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Region Proposal Generation</head><p>Designing deep classifier networks on top of feature extractor is as important as the extractor itself. Ren et al. <ref type="bibr" target="#b28">[29]</ref> show that a ConvNet on pre-computed feature maps performs well. Following their findings, we design a lightweight ConvNet for region proposal generation. This ConvNet includes a ROI pooling layer, a Conv layer and a Fully Connect (FC) layer, followed by two sibling output layers. For each image, this network generates about 30k candidate boxes with different sizes and aspect ratios.</p><p>The ROI pooling performs dynamic max pooling over w × h output bins for each box. In this paper, both w and h are set to 13 based on the validation set. On top of the ROI pooling output, we add two additional layers. One encodes each ROI position into a more abstract feature cube (13×13×4) and the other encodes each cube into a short feature vector (256-d). This network has two sibling output layers for each candidate box. The scoring layer computes the possibility of an object's existence and the bounding box regression layer outputs box offsets.</p><p>After each candidate box is scored and adjusted, some region proposals highly overlap each other. To reduce redundancy, we adopt greedy non-maximum suppression (N-MS) <ref type="bibr" target="#b13">[14]</ref> on the regions based on their scores. For a box region, this operation rejects another one if it has an intersection-over-union (IoU) overlap higher than a given threshold. More concretely, we fix the IoU threshold for N-MS at 0.7, which leaves us about 1k region proposals per image. After NMS, we select the top-k ranked region proposals for detection. We train the detection network using top-200 region proposals, but evaluate different numbers at test time.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Object Detection</head><p>The simplest way to implement object detection is to take the FC-Dropout-FC-Dropout pipeline <ref type="bibr" target="#b12">[13]</ref>[28] <ref type="bibr" target="#b28">[29]</ref>. Based on this pipeline, we make two modifications. (a) Before FC layer, we add a Conv layer (3×3×63) to make the classifier more powerful. Moreover, this operation reduces half of the feature dimensions, facilitating following computation. (b) The dropout ratio is changed from 0.5 to 0.25, which we find is more effective for object classification. As the proposal generation module, the detection network also has two sibling output layers for each region box. The difference is that there are N+1 output scores and 4×N bounding box regression offsets for each candidate box (where N is the number of object classes, plus 1 for background).</p><p>Each candidate box is scored and adjusted using the output layers. We also add a class specific NMS to reduce redundancy. This operation suppresses few boxes, as most boxes have been filtered at the proposal generation step.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.4.">Joint Training</head><p>For training proposals, we assign a binary class label (of being an object or not) to each box. We assign positive label to a box that has an IoU threshold higher than 0.45 with any ground truth box. We assign negative label to a box if its IoU threshold is lower than 0.3 with all ground truth boxes. We minimize a multi-task loss function.</p><formula xml:id="formula_0">L(k, k * , t, t * ) = L cls (k, k * ) + λL reg (t, t * )<label>(1)</label></formula><p>where the classification loss L cls is Softmax loss of two classes. And the second task loss L reg is bounding box regression for positive boxes. k * and k are the true and predicted label separately. L reg (t, t * ) = R(t − t * ) where R is the smoothed L 1 loss defined in <ref type="bibr" target="#b12">[13]</ref>. At proposal generation step, we set regularization λ = 3 , which means that we bias towards better box locations. At detection step, we optimize scoring and bounding box regression losses with the same weight. t = (t x , t y , t w , t h ) and a predicted vector t * = (t * x , t * y , t * w , t * h ) are for positive boxes. We use the parameterizations for t given in R-CNN.</p><formula xml:id="formula_1">t x = (G x − P x )/P w t y = (G y − P y )/P h t w = log(G w /P w ) t h = log(G h /P h )<label>(2)</label></formula><p>where P i = (P x , P y , P w , P h ) specifies the pixel coordinates of the center of proposal P 's bounding box together with P 's width and height in pixels. Each ground-truth bounding box G is specified in the same way. It is not an easy story to design an end-to-end network that includes both region proposal generation and detection, and then to optimize it jointly with back propagation. For detection, region proposals must be computed and adjusted in advance. In practice, we develop a 6-step training process for joint optimization as shown in Algorithm 1.</p><p>Algorithm 1 HyperNet training process. After 6 steps, the proposal and detection modules form a unified network.</p><p>Step 1: Pre-train a deep CNN model for initializing basic layers in Step 2 and Step 3.</p><p>Step 2: Train HyperNet for region proposal generation.</p><p>Step 3: Train HyperNet for object detection using region proposals obtained from Step 2.</p><p>Step 4: Fine-tune HyperNet for region proposal generation sharing Hyper Feature layers trained in Step 3.</p><p>Step 5: Fine-tune HyperNet for object detection using region proposals obtained from Step 4, with shared Hyper Feature layers fixed.</p><p>Step 6: Output the unified HyperNet jointly trained in</p><p>Step 4 and Step 5 as the final model.</p><p>Before step 4, object proposal and detection networks are trained separately. After fine-tune of step 4 and step 5, both networks share Network for Hyper Feature Extraction module as seen in <ref type="figure" target="#fig_1">Figure 2</ref>. Finally, we combine two separate networks into a unified network. For proposal/detection, we used a learning rate of 0.005 for the first 100k mini-batches, and 0.0005 for the next 50k mini-batches both in training and fine-tuning. At each mini-batch, 64 RoIs were sampled from a image. We used the momentum term weight 0.9 and the weight decay factor 0.0005. The weights of all new layers were initialized with "Xavier". In <ref type="bibr" target="#b27">[28]</ref>, Ren et al. develop a 4-step training strategy to share Region Proposal Network with Fast R-CNN. However, we train region proposal generation and detection networks with more powerful features. In addition, the detection module is also redesigned.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.5.">Speeding up</head><p>In region proposal generation module, the number of ROIs to be processed is large and most of the forward time is spent in it (about 70% of the total time). This module needs repeatedly evaluate tens of thousands of candidate boxes as shown in <ref type="figure" target="#fig_2">Figure 3</ref>   Recognizing this fact, we make a minor modification to speed up this process. As shown in <ref type="figure" target="#fig_2">Figure 3</ref>, we move the 3×3×4 convolutional layer to the front of ROI pooling layer. This change has two advantages: (a) The channel number of Hyper Feature maps has been significantly reduced (from 126 to 4). (b) The sliding window classifier is more simple (from Conv-FC to FC). Both two characteristics can speed up region proposal generation process. As we show in experiments, with a little bit drop of recall, the region proposal generation step is almost cost-free (40× speed up). We also speed up the object detection module with similar changes.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Comparison to Prior Works</head><p>Here, we compare HyperNet with several existing stateof-the-art object proposal and detection frameworks and point out key similarities and differences between them. Fast R-CNN Fast R-CNN <ref type="bibr" target="#b12">[13]</ref> is the best performing version of R-CNN <ref type="bibr" target="#b13">[14]</ref>. HyperNet shares some similarities with Fast R-CNN. Each candidate box predicts a potential bounding box and then scores that bounding box using Con-vNet features. However, HyperNet produces object proposal and detection results in a unified network. And the number of region proposals needed is far less than that of Fast R <ref type="figure" target="#fig_0">-CNN (100 vs 2000)</ref>. HyperNet also gets more accurate object detection results.</p><p>Faster R-CNN Unlike Fast R-CNN, the region proposals in Faster R-CNN <ref type="bibr" target="#b27">[28]</ref> are produced by RPN. Both Faster R-CNN and the proposed HyperNet have joined region proposal generator with classifier together. Main differences are: (a) Faster R-CNN still relies on Fast R-CNN for object detection while our system unifies region proposal generation and detection into a redesigned network. (b) Our system achieves bounding box regression and region scoring in a different manner. By generating Hyper Feature, our system is more suitable for small object discovery. (c) For high IoU thresholds (e.g.,&gt;0.8), our region proposals still perform well. Deepbox and DeepProposal Deepbox <ref type="bibr" target="#b21">[22]</ref> is a ConvNet model that re-ranks region proposals generated by Edge-Boxes <ref type="bibr" target="#b35">[36]</ref>. This method follows R-CNN manner to score and refine proposals. Our model, however, firstly computes the feature map of an entire image and then applies detection. DeepProposal <ref type="bibr" target="#b10">[11]</ref> is based on a cascade starting from the last convolutional layer of AlexNet <ref type="bibr" target="#b20">[21]</ref>. It goes down with subsequent refinements until the initial layers of the network. Our network uses in-net sampling to fuse multi-level CNN features. Using 100 region proposals with IoU=0.5, HyperNet gets 97% recall, 14 points higher than DeepProposal on PASCAL VOC 2007 test dataset. Multi-region &amp; Seg-aware Gidaris et al. <ref type="bibr" target="#b11">[12]</ref> propose a multi-region &amp; semantic segmentation-aware CNN model for object detection. They enrich candidate box representations by additional boxes. They also use semantic segmentation results to enhance localization accuracy. Using these tricks, they get high localization accuracy on PAS-CAL VOC challenges. However, firstly this method relies on region proposals generated from Selective Search. Secondly, it is time-consuming to evaluate additional boxes and to add semantic segmentation results. In this paper, we propose to develop a unified, efficient, end-to-end training and testing system for proposal generation and detection. Hy-perNet also gets state-of-the-art object detection accuracy on corresponding benchmarks .</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Experimental Evaluation</head><p>We evaluate HyperNet on PASCAL VOC 2007 and 2012 challenges <ref type="bibr" target="#b8">[9]</ref> and compare results with other state-of-theart methods, both for object proposal <ref type="bibr" target="#b32">[33]</ref>[36] <ref type="bibr" target="#b27">[28]</ref> and detection <ref type="bibr" target="#b12">[13]</ref> <ref type="bibr" target="#b13">[14]</ref>. We also provide deep analysis of Hyper Feature affection to object proposal and detection performances.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.1.">Analysis for Region Proposal Generation</head><p>In this section, we compare HyperNet against wellknown, state-of-the-art object proposal generators. Following <ref type="bibr" target="#b35">[36]</ref>[33] <ref type="bibr" target="#b27">[28]</ref>, we evaluate recall and localization accuracy on PASCAL VOC 2007 test set, which consists of   </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>4,952 images with bounding box annotation for the object instances from 20 categories.</head><p>We compare HyperNet with Selective Search, EdgeBoxes and the most recently proposed RPN methods. Curves of recall for methods at different IoU thresholds are plotted. IoU is defined as w∩b w∪b where b and w are the ground truth and object proposal bounding boxes. We evaluate recall vs. overlap for a fixed number of proposals, as shown in <ref type="figure" target="#fig_4">Figure  4</ref>. The N proposals are the top-N ranked ones based on the confidence generated by these methods.</p><p>The plots show that our region proposal generation method performs well when the region number drops from 2k to one hundred level and even less. Specifically, with 50 region proposals, HyperNet gets 95% recall, outperforming RPN by 11 points, Selective Search by 42 points and Edgeboxes by 39 points with IoU = 0.5 <ref type="figure" target="#fig_4">(Figure 4</ref> left). Using 100 and 200 region proposals, our network exceeds RPN by 6 and 4 points correspondingly. HyperNet also surpasses Selective Search and EdgeBoxes by a significant margin.</p><p>Both RPN and HyperNet achieve promising detection results compared with methods without CNN. However, for high IoU thresholds(e.g., &gt; 0.8), the recall of RPN drops sharply compared with our method. RPN's features used for regression at an anchor are of the same spatial size (3×3), which means different boxes of scales at the same position share features. It makes sense with loose IoU (e.g., 0.5). But cannot achieve high recall with strict thresholds <ref type="bibr" target="#b27">[28]</ref>. Hy-perNet achieves good results across a variety of IoU thresholds, which is desirable in practice and plays an important role in object detectors' performance <ref type="bibr" target="#b0">[1]</ref>. <ref type="figure" target="#fig_5">Figure 5</ref> shows recall versus number of proposals for d-  <ref type="bibr" target="#b16">[17]</ref> show that this criteria correlates well with detection performance. An object proposal with 0.5 IoU threshold is too loose to fit the ground truth object, which usually leads to the failure of later object detectors. In order to achieve good detection results, an object proposal with higher IoU thresholds such as 0.7 is desired. We also show higher IoU threshold results <ref type="table">(Table  1)</ref>. Achieving a recall of 75% requires 20 proposals using HyperNet, 250 proposals using RPN, 800 proposals using EdgeBoxes and 1400 proposals using Selective Search with IoU=0.7.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.2.">PASCAL VOC 2007 Results</head><p>We compare HyperNet to Fast R-CNN and Faster R-CNN for generic object detection on PASCAL VOC 2007. This dataset covers 20 object categories, and the performance is measured by mean average precision (mAP) on the test set. All methods start from the same pre-trained VGG16 <ref type="bibr" target="#b31">[32]</ref> network and use bounding box regression. We refer to VGG16 based HyperNet if not explain specially.</p><p>Fast R-CNN with Selective Search achieves a mAP of 70.0%. Faster R-CNN's result is 73.2%. HyperNet achieves a mAP of 76.3%, 6.3 points higher than Fast R-CNN and 3.1 points higher than Faster R-CNN. As we have shown above, this is because proposals generated by HyperNet are more accurate than Selective Search and RPN. HyperNet  is elaborately designed and benefits from more informative Hyper Feature. Reasonable resolution of Hyper Feature makes for better object localization, especially when the object size is small. For object of small size, our detection network outperforms Faster R-CNN by a significant margin as seen in <ref type="table">Table 2</ref>. For bottle, HyperNet achieves 62.4% AP, 10.3 points improvement and for potted plant, HyperNet achieves 51.2% AP, 12.4 points higher than Faster R-CNN. The speed up version also keeps up effectiveness. <ref type="table" target="#tab_4">Table 3</ref> shows the detection results with IoU = 0.7, we outperform the best result of <ref type="bibr" target="#b11">[12]</ref> by about 10 points with respect to mAP.</p><p>We also present a small network trained based on the AlexNet architecture <ref type="bibr" target="#b20">[21]</ref>, as shown in <ref type="table" target="#tab_4">Table 2 (row 3)</ref>. This network gets a 65.9% mAP. For small instances such as bottle and potted plant, the detection performance is in comparable with that of the very deep Fast R-CNN model. These results demonstrate that a light weight HyperNet can give excellent performance for small object detection.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.3.">PASCAL VOC 2012 Results</head><p>We compare against top methods on the comp4 (outside data) track from the public leaderboard on PASCAL VOC 2012. As the data statistics are similar to VOC 2007, the training data is the union set of all VOC 2007, VOC 2012 train and validation dataset, following <ref type="bibr" target="#b12">[13]</ref>. Networks on Convolutional feature maps(NoC) <ref type="bibr" target="#b28">[29]</ref> is based on SPPNet <ref type="bibr" target="#b15">[16]</ref>. HyperNet achieves the top result on VOC 2012 with a mAP of 71.4% <ref type="table">(Table 4</ref>). This is 3.0 points and 1.0 points higher than the counterparts. For small objects ('bottle', 'chair', and 'plant'), our network still outperforms others. The speed up version also gets state-of-the-art mAP of 71.3% with efficiency.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.4.">The Role of Hyper Feature</head><p>An important property of HyperNet is that it combines coarse-to-fine information across deep CNN models. However, does this strategy really help? We design a set of ex- periments to elucidate this question. Starting from AlexNet, we separately train different models and see their performances. Firstly, we train a single layer for object proposals (layer 1, 3 and 5). Secondly, we combine layer 3 and 5 together and finally, layer 1, 3 and 5 are all assembled to get results. For fairness, feature maps are normalized to the same resolution and all networks are trained with the same configuration.</p><p>Unsurprisingly, we find that the combination of layer 1, 3 and 5 works the best, as shown in <ref type="figure" target="#fig_6">Figure 6</ref>. This result indicates two keys: (a) The multi-layer combination works better than single layer, both for proposal and detection. (b) The last layer performs better than low layers. This is the reason why most systems use the last CNN layer for region proposal generation or detection <ref type="bibr" target="#b10">[11]</ref>[14] <ref type="bibr" target="#b12">[13]</ref>. The detection accuracy with respect to mAP is shown in <ref type="table">Table 5</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.5.">Combine Which Layers?</head><p>Hyper Feature is effective for region proposal generation and detection, mainly because of its richness and appropriate resolution. But it also raises another question: which layers should we combine to get the best performance? To answer this question, we train three models based on AlexNet. The first model combines layer 1, 3 and 5. The second network combines layer 1, 2 and 3 and the final model combines layer 3, 4 and 5. In this section, all networks are trained with the same configuration. <ref type="figure" target="#fig_6">Figure 6</ref> shows region proposal performances for different models. There is no sharp difference within these results. However, combining layer 1, 3 and 5 outperforms other networks. Because adjacent layers are strongly correlated, combinations of low layers or high layers behave not that excellent. This indicates that the combination of wider coarse-to-fine CNN features is more important.</p><p>We evaluate the detection performance on PASCAL VOC 2007 for these models (see <ref type="table">Table 5</ref>). Combining layer 1, 3 and 5 also gets the best detection result (mAP=65.9%). These detection results demonstrate the effectiveness of the low-to-high combination strategy. <ref type="figure" target="#fig_7">Figure 7</ref> shows visualizations for Hyper Features. The feature maps involve not only the strength of the responses, but also their spatial positions. We can see that the feature maps have the potentiality of projecting objects. The area with obvious variation in visualization is more likely to be or part of an object with interest. For example, the particular feature map focuses on cars, but not the background buildings in the first picture. These objects in the input images activate the feature maps at the corresponding positions.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.6.">Hyper Feature Visualization</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.7.">Running Time</head><p>We evaluate running time for methods on PASCAL VOC 2007 test dataset, as shown in <ref type="table">Table 6</ref>. For Selective Search, we use the 'fast-mode' as described in <ref type="bibr" target="#b12">[13]</ref>. Our basic Hy-perNet system takes 1.14 seconds in total, which is 2× The total time is 200 ms, which is on par with Faster R-CNN (5 fps) <ref type="bibr" target="#b27">[28]</ref>.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Method</head><p>Conv(shared) Proposal Detection Total Fast <ref type="table">R-CNN  140  2260  170  2570  HyperNet  150  810  180  1140  HyperNet-SP  150  20</ref> 30 200 <ref type="table">Table 6</ref>. Timing (ms) on an Nvidia TitanX GPU, except Selective Search proposal is evaluated in a single CPU.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="6.">Conclusion</head><p>We have presented HyperNet, a fully trainable deep architecture for joint region proposal generation and object detection. HyperNet provides an efficient combination framework for deep but semantic, intermediate but complementary, and shallow but high-resolution CNN features. A highlight of the proposed architecture is its ability to produce small number of object proposals while guaranteeing high recalls. Both the basic HyperNet and its speed up version achieve state-of-the-art object detection accuracy on standard benchmarks.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 1 .</head><label>1</label><figDesc>HyperNet object detection overview. Topleft: top 10 object proposals generated by the network. Topright: detection results with precision value. Down: object proposal generation and detection pipeline.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_1"><head>Figure 2 .</head><label>2</label><figDesc>HyperNet object detection architecture. Our system (1) takes an input image, (2) computes Hyper Feature representation, (3) genrates 100 proposals and (4) classifies and makes adjustment for each region.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head>Figure 3 .</head><label>3</label><figDesc>HyperNet speed up. We move the 3×3×4 convolutional layer to the front of ROI pooling to accelerate test speed.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 4 .</head><label>4</label><figDesc>Recall versus IoU threshold on the PASCAL VOC 2007 test set. Left: 50 region proposals. Middle: 100 region proposals. Right: 200 region proposals.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 5 .</head><label>5</label><figDesc>Recall versus number of proposals on the PASCAL VOC 2007 test set. Left: IoU=0.5. Middle: IoU=0.6. Right: IoU=0.7.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>Figure 6 .</head><label>6</label><figDesc>Recall versus number of proposals for different layer combinations using AlexNet (IoU = 0.5).</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 7 .</head><label>7</label><figDesc>Hyper Feature visualization. Row 1 and 3: input images. Row 2 and 4: corresponding Hyper Feature maps faster than Fast R-CNN. With shared Conv features, the speed up version only takes 20 ms to generate proposals.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head></head><label></label><figDesc>top.</figDesc><table>scoring 
+
+bbox reg 
+
+Hyper Feature maps 
+
+Speeding up 
+
+Object Detection 
+
+scoring 
+
+bbox reg 
+
+3X3X4 
+conv 
+
+256 
+fc 
+ROI Pooling 
+
+Object Detection 
+
+Hyper Feature maps 
+
+3X3X4 
+conv 
+
+ROI 
+Pooling 
+
+256 
+fc 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head>Table 3 .</head><label>3</label><figDesc></figDesc><table>Results on PASCAL VOC 2007 test set (with IoU = 0.7). Rows 1-2 present Multi-region &amp; Seg-aware methods[12] for comparison. 
+Rows 3-4 present our HyperNet performance. 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_5" validated="false"><head></head><label></label><figDesc>Approach mAP aero bike bird boat bottle bus car cat chair cow table dog horse mbike person plant sheep sofa train tv Table 4. Results on PASCAL VOC 2012 test set reported by the evaluation server. Rows 4-5 present our HyperNet performance. HyperNet-SP denotes the speeding up version.Table 5. Proposal and detection performance with different layer combination strategies. The region proposal number is 100 for evaluation (IoU = 0.5).</figDesc><table>Fast R-CNN 
+68.4 
+82.3 78.4 70.8 52.3 38.7 77.8 71.6 89.3 44.2 73.0 55.0 87.5 80.5 80.8 72.0 35.1 68.3 65.7 80.4 64.2 
+Faster R-CNN 
+70.4 
+84.9 79.8 74.3 53.9 49.8 77.5 75.9 88.5 45.6 77.1 55.3 86.9 81.7 80.9 79.6 40.1 72.6 60.9 81.2 61.5 
+NoC 
+68.8 
+82.8 79.0 71.6 52.3 53.7 74.1 69.0 84.9 46.9 74.3 53.1 85.0 81.3 79.5 72.2 38.9 72.4 59.5 76.7 68.1 
+HyperNet 
+71.4 
+84.2 78.5 73.6 55.6 53.7 78.7 79.8 87.7 49.6 74.9 52.1 86.0 81.7 83.3 81.8 48.6 73.5 59.4 79.9 65.7 
+HyperNet-SP 
+71.3 
+84.1 78.3 73.3 55.5 53.6 78.6 79.6 87.5 49.5 74.9 52.1 85.6 81.6 83.2 81.6 48.4 73.2 59.3 79.7 65.6 
+
+Layers Proposal recall Detection mAP 
+1 
+82.15% 
+62.8% 
+3 
+93.19% 
+63.8% 
+5 
+94.98% 
+64.2% 
+3+5 
+95.00% 
+64.4% 
+1+2+3 
+94.79% 
+63.8% 
+3+4+5 
+95.43% 
+64.7% 
+1+3+5 
+96.16% 
+65.9% 
+
+</table></figure>
+		</body>
+		<back>
+
+			<div type="acknowledgement">
+<div xmlns="http://www.tei-c.org/ns/1.0" />
+			</div>
+
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">What is an object</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Alexe</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Deselaers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ferrari</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Multiscale combinatorial grouping</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbelaez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Pont-Tuset</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Barron</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Marques</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<analytic>
+		<title level="a" type="main">Object detection using stronglysupervised deformable part models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Azizpour</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Laptev</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Constrained parametric min-cuts for automatic object segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Carreira</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sminchisescu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Bing: Binarized normed gradients for objectness estimation at 300fps</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M.-M</forename><surname>Cheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W.-Y</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Torr</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Histograms of oriented gradients for human detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Dalal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Triggs</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<monogr>
+		<title level="m" type="main">Fast feature pyramids for object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Appel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Belongie</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Perona</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>PAMI</publisher>
+			<biblScope unit="volume">36</biblScope>
+			<biblScope unit="page" from="1532" to="1545" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Scalable object detection using deep neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Erhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Szegedy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Toshev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Anguelov</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<monogr>
+		<title level="m" type="main">The pascal visual object classes challenge: A retrospective. IJCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Everingham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">M A</forename><surname>Eslami</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">K I</forename><surname>Williams</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Winn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="98" to="136" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Object detection with discriminatively trained partbased models</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><forename type="middle">F</forename><surname>Felzenszwalb</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Mcallester</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ramanan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">PAMI</title>
+		<imprint>
+			<biblScope unit="volume">32</biblScope>
+			<biblScope unit="issue">9</biblScope>
+			<biblScope unit="page" from="1627" to="1645" />
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<analytic>
+		<title level="a" type="main">Deepproposal: Hunting objects by cascading deep convolutional layers</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Ghodrati</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pedersoli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tuytelaars</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Diba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">V</forename><surname>Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Object detection via a multiregion &amp; semantic segmentation-aware cnn model</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gidaris</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Komodakis</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<analytic>
+		<title level="a" type="main">Fast r-cnn</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<analytic>
+		<title level="a" type="main">Rich feature hierarchies for accurate object detection and semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Hypercolumns for object segmentation and fine-grained localization</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hariharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Arbeláez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">Spatial pyramid pooling in deep convolutional networks for visual recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<monogr>
+		<title level="m" type="main">What makes for effective detection proposals?</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Hosang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Benenson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>PAMI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Online object tracking with proposal selection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Hua</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Alahari</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Category-independent object-level saliency detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Han</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">Caffe: Convolutional architecture for fast feature embedding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Jia</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Donahue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Karayev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">B</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Guadarrama</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ACM Multimedia</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Deepbox: Learning objectness with convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Kuo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Hariharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Malik</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<analytic>
+		<title level="a" type="main">Learning to combine mid-level cues for object proposal generation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lee</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fidler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Dickinson</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Fully convolutional networks for semantic segmentation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Long</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shelhamer</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Darrell</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<analytic>
+		<title level="a" type="main">Distinctive image features from scale-invariant keypoints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">G</forename><surname>Lowe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">IJCV</title>
+		<imprint>
+			<biblScope unit="volume">60</biblScope>
+			<biblScope unit="issue">2</biblScope>
+			<biblScope unit="page" from="91" to="110" />
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<analytic>
+		<title level="a" type="main">Occlusion patterns for object class detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Pepikj</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Stark</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Gehler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Schiele</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<monogr>
+		<title level="m" type="main">You only look once: Unified, real-time object detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Redmon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Divvala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Farhadi</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1506.02640</idno>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">Faster r-cnn: Towards real-time object detection with region proposal networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ren</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Girshick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Sun</surname></persName>
+		</author>
+		<idno type="arXiv">arXiv:1504.06066</idno>
+		<title level="m">Object detection networks on convolutional feature maps</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Russakovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Su</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Krause</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Satheesh</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ma</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Khosla</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Bernstein</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">C</forename><surname>Berg</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<title level="m">ImageNet Large Scale Visual Recognition Challenge. IJCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+			<biblScope unit="page" from="1" to="42" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<analytic>
+		<title level="a" type="main">Overfeat: Integrated recognition, localization and detection using convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Sermanet</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Eigen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mathieu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Very deep convolutional networks for large-scale image recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Simonyan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Zisserman</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICLR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<analytic>
+		<title level="a" type="main">Segmentation as selective search for object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><forename type="middle">E</forename><surname>Van De Sande</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">R</forename><surname>Uijlings</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Gevers</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">W</forename><surname>Smeulders</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<analytic>
+		<title level="a" type="main">An hog-lbp human detector with partial occlusion handling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">X</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Yan</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2009" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<analytic>
+		<title level="a" type="main">Improving object detection with deep convolutional networks via bayesian optimization and structured prediction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Sohn</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Villegas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Pan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Lee</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Edge boxes: Locating object proposals from edges</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>

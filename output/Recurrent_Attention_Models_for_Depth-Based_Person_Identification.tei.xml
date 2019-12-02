@@ -1,0 +1,1897 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xml:space="preserve" xmlns="http://www.tei-c.org/ns/1.0" 
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+xsi:schemaLocation="http://www.tei-c.org/ns/1.0 /mnt/c/Users/pc/Desktop/cs510_proj/grobid-0.5.6/grobid-home/schemas/xsd/Grobid.xsd"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+	<teiHeader xml:lang="en">
+		<fileDesc>
+			<titleStmt>
+				<title level="a" type="main">Recurrent Attention Models for Depth-Based Person Identification</title>
+			</titleStmt>
+			<publicationStmt>
+				<publisher/>
+				<availability status="unknown"><licence/></availability>
+			</publicationStmt>
+			<sourceDesc>
+				<biblStruct>
+					<analytic>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Albert</forename><surname>Haque</surname></persName>
+							<email>ahaque@cs.stanford.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">Computer Science Department</orgName>
+								<orgName type="institution">Stanford University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Alexandre</forename><surname>Alahi</surname></persName>
+							<email>alahi@cs.stanford.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">Computer Science Department</orgName>
+								<orgName type="institution">Stanford University</orgName>
+							</affiliation>
+						</author>
+						<author>
+							<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Li</forename><surname>Fei-Fei</surname></persName>
+							<email>feifeili@cs.stanford.edu</email>
+							<affiliation key="aff0">
+								<orgName type="department">Computer Science Department</orgName>
+								<orgName type="institution">Stanford University</orgName>
+							</affiliation>
+						</author>
+						<title level="a" type="main">Recurrent Attention Models for Depth-Based Person Identification</title>
+					</analytic>
+					<monogr>
+						<imprint>
+							<date/>
+						</imprint>
+					</monogr>
+				</biblStruct>
+			</sourceDesc>
+		</fileDesc>
+
+		<encodingDesc>
+			<appInfo>
+				<application version="0.5.6" ident="GROBID" when="2019-12-02T16:45+0000">
+					<ref target="https://github.com/kermitt2/grobid">GROBID - A machine learning software for extracting information from scholarly documents</ref>
+				</application>
+			</appInfo>
+		</encodingDesc>		<profileDesc>
+			<abstract>
+<div xmlns="http://www.tei-c.org/ns/1.0"><p>We present an attention-based model that reasons on human body shape and motion dynamics to identify individuals in the absence of RGB information, hence in the dark. Our approach leverages unique 4D spatio-temporal signatures to address the identification problem across days. Formulated as a reinforcement learning task, our model is based on a combination of convolutional and recurrent neural networks with the goal of identifying small, discriminative regions indicative of human identity. We demonstrate that our model produces state-of-the-art results on several published datasets given only depth images. We further study the robustness of our model towards viewpoint, appearance, and volumetric changes. Finally, we share insights gleaned from interpretable 2D, 3D, and 4D visualizations of our model's spatio-temporal attention.</p></div>
+			</abstract>
+		</profileDesc>
+	</teiHeader>
+	<text xml:lang="en">
+		<body>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="1.">Introduction</head><p>A quick, partial view of a person is often sufficient for a human to recognize an individual. This remarkable ability has proven to be an elusive task for modern computer vision systems. Nevertheless, it represents a valuable task for security authentication, human tracking, public safety, and role-based activity understanding <ref type="bibr" target="#b33">[34,</ref><ref type="bibr" target="#b29">30,</ref><ref type="bibr" target="#b1">2]</ref>.</p><p>Given an input image, person identification aims to assign identification labels to individuals present in the image. Despite the best efforts from previous work <ref type="bibr" target="#b78">[79,</ref><ref type="bibr" target="#b79">80,</ref><ref type="bibr" target="#b39">40]</ref>, this problem remains largely unsolved. Without accurate spatial or temporal constraints, visual features alone are often intrinsically weak for matching people across time due to intra-class differences. Additional variances due to illumination, viewpoint, and pose further exacerbate the problem.</p><p>Research findings from physiology and psychology have shown that gait is unique to each individual <ref type="bibr" target="#b56">[57,</ref><ref type="bibr" target="#b55">56,</ref><ref type="bibr" target="#b16">17]</ref>. Building on this observation, we aim to learn body shape and motion signatures unique to each person (see <ref type="figure">Figure 1</ref>). Inspired by the recent success of the depth modality <ref type="bibr" target="#b3">[4,</ref><ref type="bibr" target="#b76">77]</ref>, our goal is to output an identification label from a depth image or video. <ref type="figure">Figure 1</ref>: Gait has been shown to be unique to each person. We propose a 4D recurrent attention model to learn spatiotemporal signatures and identify people from depth images.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Time</head><p>The primary challenge towards this goal is designing a model that is not only rich enough to reason about motion and body shape but also robust to intra-class variability. The second challenge is that person identification inherently comprises of a large number of classes with few training examples per class (in some cases a single training example). Existing datasets <ref type="bibr" target="#b51">[52,</ref><ref type="bibr" target="#b4">5,</ref><ref type="bibr" target="#b53">54]</ref> often collect frontfacing views with constant appearances (i.e. similar sets of clothing). While this makes the identification problem more tractable, we are interested in relaxing these assumptions to solve a more general identification task which is applicable to a broader audience.</p><p>Our core insight is that we can leverage raw depth video despite the scarcity of training inputs, to address the aforementioned challenges by formulating the task as a reinforcement learning problem. Our approach involves pruning the high dimensional input space and focuses on small, discriminative regions while being free of visual and temporal assumptions. Concretely, our contributions are:</p><p>(i) We develop a recurrent attention model that identifies humans based on depth videos. Our model leverages a 4D input and is robust to appearance and volumetric changes. By combining a sparsification technique with a reinforcement learning objective, our recurrent attention model attends to small spatio-temporal regions with high fidelity while avoiding areas with little information (see Section 3).</p><p>(ii) We re-examine the person identification task and build a challenging dataset which taxes existing methods (see <ref type="bibr">Section 4)</ref>. We push the limits of our model by varying the viewing angle and testing on diverse training examples of people carrying objects (e.g. coffee or laptops) or wearings hats and backpacks.</p><p>In Section 4, we show that our model achieves state-ofthe-art results on several existing datasets. Furthermore, we take advantage of our recurrent attention model and create interpretable 2D, 3D, and 4D visualizations of hard attention <ref type="bibr" target="#b70">[71]</ref>. Our findings shed new insights on volumetric and motion-based differences between individuals. To aid in future research, we make all code, data, and annotations publicly available upon publication.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="2.">Related Work</head><p>RGB-Based Methods. The primary challenge associated with identification is intra-class variance. These include changes in appearance due to illumination, point of view, pose, and occlusion. There have been many attempts to solve this problem by improving the feature representations <ref type="bibr" target="#b23">[24,</ref><ref type="bibr" target="#b67">68,</ref><ref type="bibr" target="#b21">22,</ref><ref type="bibr" target="#b77">78,</ref><ref type="bibr" target="#b78">79,</ref><ref type="bibr" target="#b36">37,</ref><ref type="bibr" target="#b79">80]</ref> and by exploring new similarity metrics <ref type="bibr" target="#b39">[40,</ref><ref type="bibr" target="#b48">49,</ref><ref type="bibr" target="#b59">60]</ref>. Silhouette-based approaches ignore color altogether and use anthropometric or geodesic distances between body parts <ref type="bibr" target="#b33">[34,</ref><ref type="bibr" target="#b43">44,</ref><ref type="bibr" target="#b63">64]</ref>.</p><p>Depth-Based Methods. Following suit from silhouettebased approaches, several depth-based studies have applied anthropometric and soft biometrics to the 3D human skeleton <ref type="bibr" target="#b50">[51,</ref><ref type="bibr" target="#b2">3,</ref><ref type="bibr" target="#b54">55,</ref><ref type="bibr" target="#b3">4,</ref><ref type="bibr" target="#b19">20]</ref>. Harnessing the full power of depth cameras, several papers investigated 3D point clouds for person identification <ref type="bibr" target="#b76">[77,</ref><ref type="bibr" target="#b29">30]</ref>. Although these approaches are successful, they rely on hand-crafted features (e.g. arm length, torso width) or low-level RGB features (e.g. SURF <ref type="bibr" target="#b6">[7]</ref>, SIFT <ref type="bibr" target="#b41">[42]</ref>).</p><p>Spatio-Temporal Representations. Methods described thus far have largely ignored spatio-temporal information. Originally proposed in <ref type="bibr" target="#b25">[26]</ref>, the gait energy image and ifigts variants <ref type="bibr" target="#b15">[16,</ref><ref type="bibr" target="#b5">6,</ref><ref type="bibr" target="#b28">29,</ref><ref type="bibr" target="#b65">66]</ref>, embed temporal information onto a two-dimensional image by averaging the silhouette across all frames of a video. Test time predictions are obtained from a k-nearest neighbor lookup.</p><p>More recently, the gait energy image has been extended into 3D by using depth sensors <ref type="bibr" target="#b27">[28,</ref><ref type="bibr" target="#b62">63]</ref>. Spatial volumes and higher-dimensional tensors have been proposed for activity and action recognition <ref type="bibr" target="#b57">[58,</ref><ref type="bibr" target="#b66">67,</ref><ref type="bibr" target="#b74">75,</ref><ref type="bibr" target="#b7">8,</ref><ref type="bibr" target="#b31">32,</ref><ref type="bibr" target="#b38">39]</ref>, medical image analysis <ref type="bibr" target="#b61">[62]</ref>, robotics <ref type="bibr" target="#b46">[47,</ref><ref type="bibr" target="#b47">48]</ref>, and human motion analysis <ref type="bibr" target="#b37">[38]</ref> but have not been thoroughly explored in the person identification domain.</p><p>Deep Learning for Identification. A small number of studies have explored the applicability of deep neural networks to person identification. In <ref type="bibr" target="#b72">[73]</ref>, Yi et al. proposed a siamese convolutional neural network for similarity metric learning. In <ref type="bibr" target="#b40">[41]</ref>, Li et al. proposed a similar approach by using filter pairs to model photometric and geometric transforms. Following these works, Ding et al. <ref type="bibr" target="#b18">[19]</ref> formulated the input as a triplet containing both correct and incorrect reference images. In <ref type="bibr" target="#b0">[1]</ref>, Ahmed et al. introduced crossinput neighborhood differences.</p><p>Our work has several key differences with the aforementioned works: First, we focus on the depth modality and do not use any RGB information. Second, the methods above <ref type="bibr" target="#b72">[73,</ref><ref type="bibr" target="#b40">41,</ref><ref type="bibr" target="#b18">19,</ref><ref type="bibr" target="#b0">1]</ref> ingest several images as input and compute similarity between these inputs. They formulate the identification problem as an image-similarity task using images captured from non-overlapping camera views. Our model uses a single image 1 as input and does not rely on metric learning.</p><p>Attention Models. Interpretability of deep learning models is becoming increasingly important within the machine learning and computer vision communities. By measuring the sensitivity of output variables to variances in the input, attention models applied to image classification <ref type="bibr" target="#b75">[76,</ref><ref type="bibr" target="#b24">25,</ref><ref type="bibr" target="#b69">70]</ref>, image captioning <ref type="bibr" target="#b20">[21,</ref><ref type="bibr" target="#b70">71,</ref><ref type="bibr" target="#b13">14]</ref>, object detection <ref type="bibr" target="#b10">[11]</ref>, and tracking <ref type="bibr" target="#b17">[18]</ref> have demystified many aspects of convolutional and recurrent networks. These methods exploit the spatial structure of the input to understand intermediate network representations. Sequential data, on the other hand, requires temporal attention models to understand the order dependence of the input data. Recent papers in speech recognition <ref type="bibr" target="#b22">[23]</ref>, video captioning <ref type="bibr" target="#b71">[72]</ref>, and natural language processing <ref type="bibr" target="#b34">[35,</ref><ref type="bibr" target="#b42">43,</ref><ref type="bibr" target="#b12">13]</ref> explore the concept of attention in the temporal domain.</p><p>Many deep learning models impose constraints on the input. Due to the high dimensionality of images (i.e. high pixel count), preprocessing often includes resizing and/or cropping the original input image <ref type="bibr" target="#b35">[36]</ref>. Videos are often truncated to a fixed length for training. Due to computational limitations, this loss of information is necessary to constrain runtimes. In the next section, we describe our model and how we balance this trade-off by employing visual "glimpses" <ref type="bibr" target="#b49">[50]</ref> which process small 4D regions with high fidelity and grow to larger regions with lower detail.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.">Our Model</head><p>The goal of our model is to identify humans from depth images or video. Our model ( <ref type="figure" target="#fig_0">Figure 2</ref>) computes hard attention regions <ref type="bibr" target="#b70">[71]</ref> which are used to predict an identification label. In this section, we describe our 4D input representation followed by a discussion of our attention model.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>CNN</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>LSTM</head></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head>Glimpse</head><p>Encoder Core RAM Unit </p><formula xml:id="formula_0">f (h t ; θ ℓ ) f (h t ; θ α ) c t ϕ t+1 y t h t ϕ t h t−1 Input CNN LSTM ϕ t+1 ϕ t+2 f (h t+1 ; θ ℓ ) f (h t+1 ; θ α )ŷ t+1 c t+1 h t+1 Action Network Location Network Action Network Location Network RAM Timestep (t) ρ(x, ϕ t ) ρ(x, ϕ t+1 ) h t</formula></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.1.">Input Representation</head><p>Projections from higher dimensional spaces onto lower spaces result in information loss. This serves as our motivation for using 4D data: we want to preserve as much information as possible and let our model decide the relevant regions. Four-dimensional data consists of a 3D point cloud (e.g., x, y, and z cooridnate) and time τ . For simplicitly, <ref type="figure" target="#fig_0">Figure 2</ref> shows the input as 3D point clouds which are constructed from depth images.</p><p>Each training example (x, y) consists of a variable sized 4D tensor x and corresponding label y. The tensor is variable due to variable video lengths. Let f denote the number of frames in video i and let x, y and z denote the width, height, and depth dimensions of our tensor. 2</p><p>x ∈ R f ×x×y×z and y ∈ [1, ..., C]</p><p>where C is the number of classes. For an average video containing 500 frames, flattening x leads to a feature vector of 2.5×10 9 elements. For comparison, a 227 × 227 RGB image (typical for a convolutional network), results in 1.2×10 6 elements. This means that our model must operate on an input space three orders of magnitude larger than common convolutional networks. Consequently, our model must be designed to intelligently navigate this high dimensional space. <ref type="bibr" target="#b1">2</ref> We use a tensor of size 250 × 100 × 200.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.2.">Recurrent Attention Model</head><p>Given this high-dimensional depth representation, we want our model to focus on smaller, discriminative regions in the input space. Minh et al. <ref type="bibr" target="#b49">[50]</ref> recently proposed the recurrent attention model (RAM) for image classification and reinforcement learning problems. While they show promising results, they enjoyed several advantages. First, training data is plentiful. Image classification has been well-studied and several large benchmarks exist. Dynamic environments such as a control-based video game can generate data onthe-fly as the game is played. Second, the input dimensionality of these problems is relatively small: MNIST is 28×28 while the control game is 24 × 24 <ref type="bibr" target="#b49">[50]</ref>.</p><p>Person identification, on the other hand, does not enjoy these advantages. Instead, we are tasked with limited, highdimensional training data. <ref type="figure" target="#fig_0">Figure 2</ref> shows an overview of our proposed model. It consists of a glimpse layer which down-samples the input, an encoding stage which acts as an additional dimensionality reduction tool, and a core RAM network responsible for spatio-temporal learning.</p><p>Glimpse Layer. The goal of the glimpse layer is twofold: (i) it must avoid (or greatly limit) information loss and (ii) it must refrain from processing large inputs. At a given time step t, our model does not have full access to the input x but instead extracts a partial observation or "glimpse" denoted by ρ(x, ϕ t ). A glimpse encodes the region around ϕ t with high resolution but uses a progressively lower resolution for points further from ϕ t . Adopting a multi-scale strategy has been shown to be an effective de-noising technique <ref type="bibr" target="#b80">[81]</ref>. Additionally, this results in a tensor with much lower dimensionality than the original input x. By focusing on specific regions, we can reduce the required computation by our model, reducing the loss of spatio-temporal detail, and reduce the effect of noise.</p><p>As shown in <ref type="figure" target="#fig_0">Figure 2</ref>, a glimpse is comprised of G hypercube patches. The first patch has a side length of g s and maintains full resolution of the input centered at ϕ. The second patch has a side length of 2g s and is sampled at 1/2 resolution. Patches grow in size with progressively lower resolution. Specifically, the k th patch has a side length of kg s and is sampled at 1/k of the original input resolution. The final glimpse is a concatenation of these hypercube patches.</p><p>Encoder. The glimpse still contains a large number of features (on the order of 1×10 6 ). We must further compress the glimipse before it becomes a feasible solution for our data-limited person identification task. To accomplish this, we use an encoding layer to further reduce the feature space. In our model, this is done with a 4D convolutional autoencoder <ref type="bibr" target="#b44">[45,</ref><ref type="bibr" target="#b32">33]</ref>. The encoder layer is trained offline and separately from the RAM. During RAM training and test time, encoded features are denoted as c t .</p><p>Core RAM Unit. As mentioned previously, the number of features associated with a 4D input is on the order of 1×10 9 . Conventional deep learning methods cannot feasibly explore and learn from the full input space. Motivated by this, we use a recurrent attention model. Our goals of the RAM are two-fold: First, model interpretability is an overarching theme of this work. Given image-based input, an attention-based model allows us to visually understand human shape and body dynamics. Second, a RAM provides us with computational advantages by pruning the input space by focusing on rich, discriminative regions.</p><p>As shown in <ref type="figure" target="#fig_0">Figure 2</ref> our model is a recurrent network: it consists of a long short-term memory (LSTM) unit <ref type="bibr" target="#b26">[27]</ref> and two sub-networks. Parameterized by θ r , our LSTM receives encoded features c t and the previous hidden layer h t−1 at each time step t and outputs a hidden state h t .</p><p>Sub-Networks. Before the next iteration of our RAM, our model must take two actions: (i) it decides the next glimpse location and (ii) it outputs a predicted identification label for the current time step. We compute these by using two sub-networks: the location and action network, respectively.</p><p>The location network stochastically selects the next glimpse location using the distribution parametrized by f (h t ; θ ℓ ) (where θ ℓ refers to the location network's parameters). Similar to <ref type="bibr" target="#b49">[50]</ref>, the location network outputs the mean of the location policy (defined by a 4-component Gaussian) at time t and is defined by</p><formula xml:id="formula_2">: f (h t ; θ ℓ ) = tanh(Linear(h t ))</formula><p>where Linear(•) is a linear transformation.</p><p>The action network (parameterized by θ α ), outputs a predicted class labelŷ given the current LSTM hidden state, h t . Parameterized by f (h t ; θ α ), the action network consists of a linear and softmax layer defined by f (h t ; θ α ) = exp(Linear(h t ))/Z where Z is a normalizing factor. The predicted class labelŷ t is then selected from the softmax output.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="3.3.">Training and Optimization</head><p>Formulation. Depth video is inherently a large feature space. To avoid exploring the entire input space, we pose the training task as a reinforcement learning problem. After our model decides the labelŷ and next glimpse location ϕ, our model receives a reward R where R = 1 ifŷ t = y at time T , where T is a threshold for the maximum number of time steps; otherwise R = 0. Let Θ = {θ r , θ ℓ , θ α } denote all parameters of the RAM.</p><p>Let s 1:t = x, ϕ 1 ,ŷ 1 , ..., x, ϕ t ,ŷ t denote the historical sequence of all input-action pairs (i.e. input tensor, predicted label, and next glimpse). We call this a glimpse path. A glimpse path shows where our model "looks at" over time 3 . Our model must learn a stochastic policy π(ϕ t ,ŷ t |s 1:t ; Θ) which maps the glimpse path s 1:t to a distribution over actions for the current time step. The policy π is defined by our core RAM unit and the history s t is embedded in the LSTM's hidden state h t .</p><p>Optimization. The policy of our model induces a distribution over possible glimpse paths. Our goal is to maximize the reward function over s 1:N :</p><formula xml:id="formula_3">J(Θ) = E p(s1:t;Θ) [R]<label>(2)</label></formula><p>where p(s 1:T ; Θ) depends on the policy π. However, computing the expectation introduces unknown environment parameters which makes the problem intractable. Formulating the task as a partially-observable Markov decision process allows us to compute a sample approximation to the gradient, known as the REINFORCE rule <ref type="bibr" target="#b68">[69]</ref>:</p><formula xml:id="formula_4">∇ Θ J(Θ) = T t=1 E p(s 1:T ;Θ) ∇ Θ log π(y|s 1:t ; Θ)R (3) ≈ 1 M M i=1 T t=1 ∇ Θ log π(y|s (i) 1:t ; Θ)R (i)<label>(4)</label></formula><p>where s (i) 1:t denotes the glimpse path, R (i) denotes the reward, and y (i) denotes the correct label for the i th training example. Additionally, ∇ θ log π(u    location network with REINFORCE. This formulation allows our model to focus on salient 3D regions in both space and time. Advantages. A major benefit of this formulation is that limited training data is no longer an issue. Our model is trained on glimpses (i.e. subsets of the input) and not the entire video sequence. Therefore, the effective number of training examples made available to our model is on the order of 1×10 6 to 1×10 9 per video (i.e. number of possible glimpses). Despite having a single video as input, our model almost never sees the same training example twice. Our model is still limited by the number of training data but our formulation makes it less of a concern.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.">Experiments</head><p>First, we describe our datasets and evaluation metrics. This is followed by a discussion of experimental, hyperparameter, and design selections. We then present results for the single-shot (single image) and multi-shot (multiframe) person identification task. We then show 2D, 3D, and 4D visualizations followed by concluding remarks on our model's limitations.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.1.">Datasets</head><p>Our goal is to identify humans based on their 3D shape and body dynamics captured by a depth camera. The majority of human-based RGB-D datasets are catered to human activity analysis and action recognition <ref type="bibr" target="#b11">[12,</ref><ref type="bibr" target="#b9">10,</ref><ref type="bibr" target="#b30">31]</ref>. Since they generally consist of many gestures performed by few subjects, these datasets are not suited for the identification problem. We hence use existing depth-based identification datasets and collected a new one to further test our model. We evaluate our model on several existing depth-based identification datasets: BIWI <ref type="bibr" target="#b51">[52]</ref>, IIT PAVIS <ref type="bibr" target="#b4">[5]</ref>, and IAS-Lab <ref type="bibr" target="#b53">[54]</ref>. These datasets contain 50, 79, and 11 humans, respectively. For BIWI, we use the full training set and the Walking test set. For PAVIS, we use Walking1 and Walking2 as the training and test set, respectively. For IAS-Lab, we use the full training set and both test splits.</p><p>Existing datasets impose constraints to simplify the identification problem (e.g., few sets of clothing per person, front-facing views, or slow walking speed). We collected a new dataset: Depth-Based Person Identification from Top (DPI-T), which is different from previous datasets.</p><p>We provide more observations per individual. On average, individuals appear in a total of 25 videos across several days. This naturally results in individuals wearing different sets of clothing -5 different sets of clothing on average. <ref type="figure" target="#fig_3">Figure 3</ref> shows three individuals from our dataset wearing different sets of clothing. Additionally, people in our dataset walk at variable speeds depending on the time of day or week.</p><p>Challenging top-view angles. In real-world applications such as smart spaces and public environments (e.g., hospitals, retail stores), cameras are often attached to the ceiling pointed down, as opposed to clean, frontal or side view images available in existing datasets. This introduces self-occlusion challenges and often leads to undetected faces and incomplete 3D point cloud reconstructions.</p><p>People are holding objects. Existing datasets collect data from the simple case of walking in a controlled environment. In our dataset, people are "in the wild," often holding objects such as coffee, laptops, or food. Additionally, since our dataset is collected across a long period of time, people often wear hats, bags, or carry umbrellas (see <ref type="figure" target="#fig_3">Figure 3)</ref> </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.2.">Evaluation Metrics</head><p>Person identification can be solved in a "single-shot" manner using one image to produce a label or a "multi-shot" method which leverages multiple frames, temporal features, or multi-frame voting schemes. Below, we provide evaluation results for both single-shot and multi-shot approaches.   Specific metrics include the top-1 recognition rate, cumulative matching curve (CMC), normalized area under the curve (nAUC) metrics. Top-k recognition rate indicates the fraction of test examples that contained the ground truth label within the top-k predictions. Generalizing the top-k metric to higher ranks (up to the number of people in the dataset), produces the cumulative matching curve. Integrating the area under the CMC curve and normalizing for the number of ranks produces the nAUC.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.3.">Experimental Settings</head><p>Tensors were fixed to a size of 250 × 100 × 200 and converted to integer indices corresponding to the x, y, and z real world coordinates. The x and y units represent real world centimeters while the z units represents 10 millimeters. Glimpse locations are encoded as ϕ = (x, y, z, τ ) where x, y, z are real values while τ is integer valued. The first glimpse patch has a side length of 8 tensor units and we use 5 glimpse patches. For 3D and 4D inputs, we augment the data by applying Gaussian noise, with mean of 0 cm and 5 cm variance, to each point in the point cloud. Images and tensors are shifted between 0 and ±5 cm in all directions about the origin and randomly scaled between 0.8× and 1.2×. We train our model from scratch using stochastic gradient descent with mini-batches of size 20, a learning rate of 1×10 −4 , momentum of 0.9, and weight decay of 5×10 −4 . The CNN was pretrained on augmented training examples before RAM training. All learning layers employ dropout <ref type="bibr" target="#b64">[65]</ref> with 0.5 probability.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.4.">Baselines</head><p>Single-Shot Identification. We compare our recurrent attention model to several depth-based methods. <ref type="table" target="#tab_4">Table 2</ref> shows various methods and results for the single-shot identification task: (1) We computed performance using a uniformly random guessing strategy. (2) Four humans manually performed the identification task. Each human was shown a single test input and was given full access to the training data. <ref type="bibr" target="#b2">(3)</ref><ref type="bibr" target="#b3">(4)</ref><ref type="bibr" target="#b4">(5)</ref> Distances between skeleton joints are used as hand-crafted features <ref type="bibr" target="#b4">[5,</ref><ref type="bibr" target="#b51">52,</ref><ref type="bibr" target="#b52">53]</ref>. (6) A threedimensional CNN operates on 3D point clouds. <ref type="formula">(7)</ref> A twodimensional RAM operates on depth images. (8) A three-  <ref type="table">--------6</ref> Depth Skeleton (SVM) <ref type="bibr" target="#b52">[53]</ref> 17. <ref type="table">9  ---------7</ref> Depth   dimensional RAM operates on 3D point clouds. Although the focus of our paper is depth-based person identification, for completeness, we include related RGB and RGB-D methods to provide a more holistic view of the field. (9) A face descriptor is used <ref type="bibr" target="#b51">[52]</ref>. (10) A point-tilt-zoom camera selectively zooms in on different parts of the image <ref type="bibr" target="#b60">[61]</ref>. <ref type="bibr" target="#b10">(11)</ref> A facial descriptor is concatenated with distances between skeleton joints <ref type="bibr" target="#b52">[53]</ref>. <ref type="bibr" target="#b11">(12)</ref> Similarity scores are computed on 3D point clouds and distances between skeleton joints <ref type="bibr" target="#b51">[52]</ref>.</p><p>Multi-Shot Identification. <ref type="table" target="#tab_7">Table 3</ref> list several multishot methods. (1-2) We use random and human performance as baselines. <ref type="bibr" target="#b2">(3)</ref><ref type="bibr" target="#b3">(4)</ref> We evaluate the gait energy image <ref type="bibr" target="#b25">[26]</ref> and volume <ref type="bibr" target="#b62">[63]</ref>. (5-6) These methods use handcrafted skeleton features with an inter-frame voting system. (7) Pairwise skeleton joint distances (same as 5-6) are fed into a LSTM. (8) A 3D CNN with average pooling <ref type="bibr" target="#b8">[9]</ref> over time <ref type="bibr" target="#b73">[74]</ref> . <ref type="bibr" target="#b8">(9)</ref> A 3D LSTM operates on 3D point clouds. </p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.5.">Single-Shot Identification Performance</head><p>Learned encoding improves performance. To better understand the source of our performance, we reduced the input dimensionality of our RAM and evaluated a 2D and 3D variant. The 2D and 3D models were evaluated on the single-shot task. As the dimensionality of the input increases from 2D to 3D, the performance of our RAM monotonically increases (see <ref type="figure" target="#fig_4">Figure 4</ref>). Contrast this with gait energy in <ref type="table" target="#tab_4">Table 2</ref>. Gait energy undergoes a similar transformation from 2D to 3D (i.e. image to volume), but exhibits lower performance in the higher-dimensional case. This indicates that our learned encoder is able to preserve pertinent information from higher dimensional inputs whereas the gait energy volume fails without such encoding.</p><p>RAM outperforms deep learning baselines. As further validation of our model's performance, we evaluated a 3D convolutional neural network <ref type="bibr" target="#b32">[33]</ref>. The input to both the 3D CNN and 3D RAM are 3D point clouds. As shown in <ref type="table" target="#tab_4">Table 2</ref>, our 3D RAM model outperforms the 3D CNN. This confirms our hypothesis that our RAM is able to leverage glimpses to artificially increase the number of training examples and improve performance. The 3D CNN does not perform such data augmentation and instead operates on the entire point cloud.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.6.">Multi-Shot Identification Performance</head><p>Our final model (4D RAM) outperforms the human baseline and existing depth-based approaches. Both Munaro et al. <ref type="bibr" target="#b51">[52]</ref> and <ref type="bibr">Barbosa et al. [5]</ref> used distances between skeleton joints as features. We list the performance of these hand-crafted features in <ref type="table" target="#tab_7">Table 3</ref>. Results show that these features are unable to infer the complex latent variables. Our 4D RAM model also outperforms an RGB-D method <ref type="bibr" target="#b12">(13)</ref> in <ref type="table" target="#tab_7">Table 3</ref>. Proposed in <ref type="bibr" target="#b51">[52]</ref>, method (13) computes a standardized 3D point cloud representation with the above skeleton-distance features. Although <ref type="bibr" target="#b12">(13)</ref> leverages RGB information, it analyzes the entire point cloud which may include extraneous noise. Our model avoids noisy areas by selecting glimpses which contain useful information.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="4.7.">Hard Attention Regions</head><p>There is one key difference between our 3D and 4D RAM. In the 3D case, our model must "pay attention" to regions for each frame τ . However, in the 4D case, our model does not have this requirement since τ is a free parameter. Our model has full discretion on which frames to "pay attention to" and can move both forward and backward in time as needed. We analyze this in <ref type="figure" target="#fig_5">Figure 5</ref>. Over the course of the video, p(ŷ t = y) varies. Not only can our model change the glimpse's spatial location in each frame, it can also change the magnitude. Although our model has no explicit notion of attention magnitude, it can indirectly mimic the concept. To reduce the magnitude of attention given to frame k, our model moves the glimpse center to a frame further away from k. Although the overal "magnitude" of attention remains constant for each glimpse, the amount of attention given to k has been reduced.</p><p>As shown in <ref type="figure" target="#fig_5">Figure 5</ref>, our model begins at ϕ 1 , "looks at" the person's shoulder, jumps to a different frame, and continues "staring at" the shoulder. One interpretation of this is that our model has learned to identify periodic cycles. Interestingly, it has been shown in the biological literature that males exhibit strong rotational displacement at the shoulders while walking <ref type="bibr" target="#b45">[46]</ref>. Our model's attention corroborates this claim. The model then jumps backward in time and attends to the feet at ϕ 3 . This indicates that leg motions (i.e. gait) potentially provide traces of identity. It is quite possible that this particular glimpse path was taken since our learned policy simply never explored other paths, but our model was trained over many epochs with different initial glimpse locations to reduce this possibility.</p><p>We then project the 4D attention onto a 2D image. <ref type="figure" target="#fig_7">Figure 6a</ref> shows glimpse paths taken by our model. Notice how it nearly always visits a major skeleton joint. <ref type="figure" target="#fig_7">Figure  6b</ref> shows an attention heatmap over all pixels. It illustrates that different regions of the body attract varying levels of attention. Our model easily identifies unique shoes or hair styles. Furthermore, it identifies the left female's hips as a discriminative region. As confirmed in the biomechanics literature <ref type="bibr" target="#b14">[15]</ref>, females demonstrate strong lateral sway in the hip region. For some females, this alone can be the unique motion signature.</p></div>
+<div xmlns="http://www.tei-c.org/ns/1.0"><head n="5.">Conclusion</head><p>We introduced a recurrent attention model that identifies discriminative spatio-temporal regions for the person identification problem from depth video. Our model learns unique volumetric signatures from a high-dimensional 4D input space. Reducing the dimensionality through glimpses and an encoder allows us to train a recurrent network with a LSTM module. Evaluating our model's performance on two, three, and four dimensional inputs showed that our attention model achieves state-of-the-art performance on several person identification datasets. Visualizations of our model's attention offer new insights for future research in computer vision, biomechanics, and physiology.</p></div><figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_0"><head>Figure 2 :</head><label>2</label><figDesc>Our full model. Dashed arrows indicate information exchange across time steps. Solid arrows indicate information exchange within a time step. Two time steps are shown with a series of events occurring from left to right. Note: RAM timestep t refers to the "iteration" of our model and does not refer to the input video timestamp τ . All other variables are defined in Section 3.2.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_2"><head></head><label></label><figDesc>t ; θ)R (i) is the gradient of the LSTM. Consistent with<ref type="bibr" target="#b49">[50]</ref>, we train the action network with the cross entropy loss function and train the</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_3"><head>Figure 3 :</head><label>3</label><figDesc>Sample images from our Depth-Based Person Identification from Top (DPI-T) dataset. Each row denotes a different person. The three left columns show RGB images for convenience. Our model only uses depth images, as depicted in the right column.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_4"><head>Figure 4 :</head><label>4</label><figDesc>(a-c) Cumulative matching curves for test set performance on various datasets and models. Dataset details can be found in Section 4.1. Model details can be found in Section 4.4. The y axis denotes recognition rate. For the x axis, rank-k is the recognition rate if the ground truth label is within the model's top-k predictions.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_5"><head>Figure 5 :</head><label>5</label><figDesc>Hard 4D attention regions. Bright colored regions indicate areas closer to the glimpse center. Each point cloud is shown above in three dimensions (x, y, z) while the point clouds are arranged in video-order starting from the left. Arrows indicate jumps in time τ . Although sparse point clouds are shown above, our model operates on the raw, dense point clouds.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_6"><head>( 10 )</head><label>10</label><figDesc>Our final RAM model. (11-12) Face descriptors are used with a voting system. (13) A Multiple Component Dissimilarity (MCD) metric is computed on a pair of images. (14) RGB-D point cloud matching plus hand-crafted features are used for identification.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" xml:id="fig_7"><head>Figure 6 :</head><label>6</label><figDesc>Two-dimensional projections of our model's 4D attention. (a) Glimpse paths. Green and red lines indicate correct and incorrect class label predictions, respectively. Circles denote the final glimpse location which led to the prediction. (b) Glimpse heatmap. Red regions denote areas on the human body frequently visited by our model. Heatmaps were smoothed with a Gaussian filter.</figDesc></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_1" validated="false"><head>Table 1 :</head><label>1</label><figDesc>Comparison of datasets. DPI-T is our newly collected dataset. We list the number of subjects, images, and videos for both the training and test sets. The test set is shown in parenthesis. Appearance is defined by a person wearing unique clothing or distinct visual appearance.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_2" validated="false"><head></head><label></label><figDesc>. A table showing the characteristics of existing datasets and our new dataset is shown inTable 1.</figDesc><table></table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_4" validated="false"><head>Table 2 :</head><label>2</label><figDesc></figDesc><table>Single-shot identification performance. Methods shown above use only spatial information. A summary of each 
+method can be found in Section 4.4. Both metrics were computed on the test set. Larger values are better. Dashes indicate 
+that no published information is available. (*) Although not a fair comparison, for sake of completeness, we list RGB and 
+RGB-D methods. 
+
+</table></figure>
+<figure xmlns="http://www.tei-c.org/ns/1.0" type="table" xml:id="tab_7" validated="false"><head>Table 3 :</head><label>3</label><figDesc></figDesc><table>Multi-shot identification performance. Methods shown above use multiple test images or use temporal information. 
+A summary of each method can be found in Section 4.4. Both metrics were computed on the test set. Larger values are better. 
+Dashes indicate that no published information is available. (*) Although not a fair comparison, for sake of completeness, we 
+list RGB and RGB-D methods. 
+
+</table></figure>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="1">The input to our model is one image for frame-wise identification or one sequence for video-level (i.e. temporal or voting) identification.</note>
+			<note xmlns="http://www.tei-c.org/ns/1.0" place="foot" n="3">For 4D input, time refers to the iteration of the RAM and not the input video's frame order.</note>
+		</body>
+		<back>
+			<div type="references">
+
+				<listBibl>
+
+<biblStruct xml:id="b0">
+	<analytic>
+		<title level="a" type="main">An improved deep learning architecture for person re-identification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Ahmed</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Jones</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">K</forename><surname>Marks</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b1">
+	<analytic>
+		<title level="a" type="main">Socially-aware large-scale crowd forecasting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Alahi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Ramanathan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b2">
+	<monogr>
+		<title level="m" type="main">Who is who at different cameras: people re-identification using depth cameras. Computer Vision</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Albiol</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Oliver</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">M</forename><surname>Mossi</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b3">
+	<analytic>
+		<title level="a" type="main">Anthropometric and human gait identification using skeleton data from kinect sensor</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Andersson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Dutra</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Araújo</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In Symposium on Applied Computing</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>ACM</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b4">
+	<analytic>
+		<title level="a" type="main">Re-identification with rgb-d sensors</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">I</forename><surname>Barbosa</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cristani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Bue</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bazzani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Murino</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">EECV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b5">
+	<analytic>
+		<title level="a" type="main">Gait recognition without subject cooperation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Bashir</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gong</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Pattern Recognition Letters</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b6">
+	<analytic>
+		<title level="a" type="main">Surf: Speeded up robust features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Bay</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Tuytelaars</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b7">
+	<analytic>
+		<title level="a" type="main">Actions as space-time shapes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Blank</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Gorelick</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Shechtman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Irani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Basri</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b8">
+	<analytic>
+		<title level="a" type="main">A theoretical analysis of feature pooling in visual recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y.-L</forename><surname>Boureau</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ponce</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Lecun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICML</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b9">
+	<analytic>
+		<title level="a" type="main">Utd-mhad: A multimodal dataset for human action recognition utilizing a depth camera and a wearable inertial sensor</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">J C</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Kehtarnavaz</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICIP</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b10">
+	<monogr>
+		<title level="m" type="main">Semantic guidance of visual attention for localizing objects in scenes</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Caicedo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Lazebnik</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>ICCV</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b11">
+	<analytic>
+		<title level="a" type="main">Cross-dataset action detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Cao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">S</forename><surname>Huang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b12">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Chan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Jaitly</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><forename type="middle">V</forename><surname>Le</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vinyals</surname></persName>
+		</author>
+		<title level="m">Listen, attend and spell</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b13">
+	<monogr>
+		<title level="m" type="main">Minds eye: A recurrent visual representation for image caption generation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">L</forename><surname>Zitnick</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b14">
+	<analytic>
+		<title level="a" type="main">Gender differences in three dimensional gait analysis data from 98 healthy korean adults</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Park</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Kwon</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Clinical biomechanics</title>
+		<imprint>
+			<date type="published" when="2004" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b15">
+	<analytic>
+		<title level="a" type="main">A behavior classification based on enhanced gait energy image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Chunli</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Kejun</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Networking and Digital Society</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b16">
+	<analytic>
+		<title level="a" type="main">Recognizing friends by their walk: Gait perception without familiarity cues</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><forename type="middle">E</forename><surname>Cutting</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><forename type="middle">T</forename><surname>Kozlowski</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Bulletin of the psychonomic society</title>
+		<imprint>
+			<date type="published" when="1977" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b17">
+	<analytic>
+		<title level="a" type="main">Learning where to attend with deep architectures for image tracking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Denil</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bazzani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Larochelle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>De Freitas</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b18">
+	<analytic>
+		<title level="a" type="main">Deep feature learning with relative distance comparison for person reidentification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ding</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Lin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Chao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Pattern Recognition</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b19">
+	<analytic>
+		<title level="a" type="main">A gait analysis method based on a depth camera for fall prevention</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Dubois</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Charpillet</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">In Engineering in Medicine and Biology Society</title>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>IEEE</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b20">
+	<monogr>
+		<title level="m" type="main">From captions to visual concepts and back</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Fang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gupta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Iandola</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Deng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Dollár</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>He</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Mitchell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Platt</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b21">
+	<analytic>
+		<title level="a" type="main">Person re-identification by symmetry-driven accumulation of local features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Farenzena</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bazzani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Perina</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Murino</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cristani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b22">
+	<monogr>
+		<title level="m" type="main">Connectionist temporal classification: labelling unsegmented sequence data with recurrent neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Fernández</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Gomez</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+			<pubPlace>In ICML</pubPlace>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b23">
+	<analytic>
+		<title level="a" type="main">Viewpoint invariant pedestrian recognition with ensemble localized features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Gray</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Tao</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2008" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b24">
+	<monogr>
+		<title level="m" type="main">Draw: A recurrent neural network for image generation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Gregor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Danihelka</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Wierstra</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b25">
+	<monogr>
+		<title level="m" type="main">Individual recognition using gait energy image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Han</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Bhanu</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2006" />
+			<publisher>PAMI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b26">
+	<analytic>
+		<title level="a" type="main">Long short-term memory</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hochreiter</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Neural computation</title>
+		<imprint>
+			<date type="published" when="1997" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b27">
+	<analytic>
+		<title level="a" type="main">2.5d gait biometrics using the depth gradient histogram energy image</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Hofmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Bachmann</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Rigoll</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Biometrics</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b28">
+	<analytic>
+		<title level="a" type="main">Gait recognition using linear discriminant analysis with artificial walking conditions</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Huang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><forename type="middle">V</forename><surname>Boulgouris</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICIP</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b29">
+	<monogr>
+		<title level="m" type="main">Gait recognition using compact feature extraction transforms and depth information. Information Forensics and Security</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Ioannidis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Tzovaras</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><forename type="middle">G</forename><surname>Damousis</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Argyropoulos</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Moustakas</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b30">
+	<monogr>
+		<title level="m" type="main">Hu-man3.6m: Large scale datasets and predictive methods for 3d human sensing in natural environments</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Ionescu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Papava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Olaru</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sminchisescu</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>PAMI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b31">
+	<analytic>
+		<title level="a" type="main">Towards understanding action recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Jhuang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Gall</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Zuffi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schmid</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">J</forename><surname>Black</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b32">
+	<monogr>
+		<title level="m" type="main">3d convolutional neural networks for human action recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ji</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yu</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<publisher>PAMI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b33">
+	<monogr>
+		<title level="m" type="main">Gait analysis for human identification. In Audio-and Video-Based Biometric Person Authentication</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Kale</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Cuntoor</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Yegnanarayana</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Rajagopalan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Chellappa</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2003" />
+			<publisher>Springer</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b34">
+	<monogr>
+				<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Karpathy</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Johnson</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Fei-Fei</surname></persName>
+		</author>
+		<title level="m">Visualizing and understanding recurrent networks</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+	<note type="report_type">arXiv preprint</note>
+</biblStruct>
+
+<biblStruct xml:id="b35">
+	<analytic>
+		<title level="a" type="main">Imagenet classification with deep convolutional neural networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><forename type="middle">E</forename><surname>Hinton</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b36">
+	<monogr>
+		<title level="m" type="main">Color invariants for person reidentification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Kviatkovsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Adam</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Rivlin</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<publisher>PAMI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b37">
+	<monogr>
+		<title level="m" type="main">On space-time interest points. IJCV</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Laptev</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2005" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b38">
+	<monogr>
+		<title level="m" type="main">Local velocity-adapted motion events for spatio-temporal recognition. Computer Vision and Image Understanding</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Laptev</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Caputo</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Schüldt</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Lindeberg</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b39">
+	<analytic>
+		<title level="a" type="main">Locally aligned feature transforms across views</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b40">
+	<analytic>
+		<title level="a" type="main">Deepreid: Deep filter pairing neural network for person re-identification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b41">
+	<analytic>
+		<title level="a" type="main">Object recognition from local scale-invariant features</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Lowe</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="1999" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b42">
+	<analytic>
+		<title level="a" type="main">Effective approaches to attention-based neural machine translation</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">T</forename><surname>Luong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Pham</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><forename type="middle">D</forename><surname>Manning</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">EMNLP</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b43">
+	<analytic>
+		<title level="a" type="main">Gait recognition under speed transition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mansur</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Makihara</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Aqmar</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Yagi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b44">
+	<analytic>
+		<title level="a" type="main">Stacked convolutional auto-encoders for hierarchical feature extraction</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Masci</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">U</forename><surname>Meier</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Cireşan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Schmidhuber</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICANN</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b45">
+	<analytic>
+		<title level="a" type="main">Gender discrimination in biological motion displays based on dynamic cues</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Mather</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Murdoch</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Biological Sciences</title>
+		<imprint>
+			<date type="published" when="1994" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b46">
+	<analytic>
+		<title level="a" type="main">3d convolutional neural networks for landing zone detection from lidar</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Maturana</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Scherer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b47">
+	<analytic>
+		<title level="a" type="main">Voxnet: A 3d convolutional neural network for real-time object recognition</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Maturana</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Scherer</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">IROS</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b48">
+	<analytic>
+		<title level="a" type="main">Pcca: A new approach for distance learning from sparse pairwise constraints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mignon</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Jurie</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b49">
+	<analytic>
+		<title level="a" type="main">Recurrent models of visual attention</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Mnih</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Heess</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Graves</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">NIPS</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b50">
+	<analytic>
+		<title level="a" type="main">Multimodal person re-identification using rgb-d sensors and a transient identification database</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Mogelmose</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><forename type="middle">B</forename><surname>Moeslund</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Nasrollahi</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Biometrics and Forensics</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b51">
+	<analytic>
+		<title level="a" type="main">3d reconstruction of freely moving persons for re-identification with a depth sensor</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Munaro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Basso</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fossati</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Menegatti</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b52">
+	<analytic>
+		<title level="a" type="main">One-shot person re-identification with a consumer depth camera</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Munaro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Fossati</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Basso</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Menegatti</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Van Gool</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Person Re-Identification</title>
+		<imprint>
+			<publisher>Springer</publisher>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b53">
+	<analytic>
+		<title level="a" type="main">A feature-based approach to people re-identification using skeleton keypoints</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Munaro</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Ghidoni</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">T</forename><surname>Dizmen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">E</forename><surname>Menegatti</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICRA</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b54">
+	<analytic>
+		<title level="a" type="main">Person identification using full-body motion and anthropometric biometrics from kinect videos</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><forename type="middle">C</forename><surname>Munsell</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Temlyakov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Qu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b55">
+	<analytic>
+		<title level="a" type="main">Gait as a total pattern of movement: indcluding a bibliography on gait</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">P</forename><surname>Murray</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">American Journal of Physical Medicine &amp; Rehabilitation</title>
+		<imprint>
+			<date type="published" when="1967" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b56">
+	<analytic>
+		<title level="a" type="main">Walking patterns of normal men</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">P</forename><surname>Murray</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">B</forename><surname>Drought</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">C</forename><surname>Kory</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="j">Journal of Bone &amp; Joint Surgery</title>
+		<imprint>
+			<date type="published" when="1964" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b57">
+	<analytic>
+		<title level="a" type="main">Hon4d: Histogram of oriented 4d normals for activity recognition from depth sequences</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Oreifej</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Liu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b58">
+	<analytic>
+		<title level="a" type="main">Multi-modal person re-identification using rgb-d cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Pala</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Satta</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Fumera</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">F</forename><surname>Roli</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Circuits and Systems for Video Technology</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b59">
+	<analytic>
+		<title level="a" type="main">Person re-identification by support vector ranking</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">B</forename><surname>Prosser</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W.-S</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gong</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Q</forename><surname>Mary</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">BMVC</title>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b60">
+	<analytic>
+		<title level="a" type="main">Person re-identification with a ptz camera: an introductory study</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Salvagnini</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Bazzani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Cristani</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">V</forename><surname>Murino</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICIP</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b61">
+	<monogr>
+		<title level="m" type="main">Stacked autoencoders for unsupervised feature learning and multiple organ detection in a pilot study using 4d patient data</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><forename type="middle">C</forename><surname>Shin</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">R</forename><surname>Orton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><forename type="middle">J</forename><surname>Collins</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">J</forename><surname>Doran</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">O</forename><surname>Leach</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2013" />
+			<publisher>PAMI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b62">
+	<monogr>
+		<title level="m" type="main">Gait energy volumes and frontal gait recognition using depth images</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sivapalan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Denman</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Sridharan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Fookes</surname></persName>
+		</author>
+		<editor>Biometrics. IEEE</editor>
+		<imprint>
+			<date type="published" when="2011" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b63">
+	<monogr>
+		<title level="m" type="main">Gait-based reidentification of people in urban surveillance video</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Skog</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2010" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b64">
+	<monogr>
+		<title level="m" type="main">Dropout: A simple way to prevent neural networks from overfitting</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Srivastava</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Hinton</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Krizhevsky</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Sutskever</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>JMLR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b65">
+	<monogr>
+		<title level="m" type="main">Matching shape sequences in video with applications in human movement analysis</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Veeraraghavan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><forename type="middle">K</forename><surname>Roy-Chowdhury</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Chellappa</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2005" />
+			<publisher>PAMI</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b66">
+	<analytic>
+		<title level="a" type="main">Robust 3d action recognition with random occupancy patterns</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Chorowski</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Chen</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Wu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2012" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b67">
+	<analytic>
+		<title level="a" type="main">Shape and appearance context modeling</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Doretto</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Sebastian</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Rittscher</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">P</forename><surname>Tu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2007" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b68">
+	<monogr>
+		<title level="m" type="main">Simple statistical gradient-following algorithms for connectionist reinforcement learning. Machine learning</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><forename type="middle">J</forename><surname>Williams</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="1992" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b69">
+	<monogr>
+		<title level="m" type="main">The application of two-level attention models in deep convolutional neural network for fine-grained image classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xiao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Yang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Zhang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Peng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Zhang</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>CVPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b70">
+	<monogr>
+		<title level="m" type="main">Show, attend, tell: Neural image caption generation with visual attention</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Xu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Ba</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Kiros</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Courville</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Salakhutdinov</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zemel</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Y</forename><surname>Bengio</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2015" />
+			<publisher>JMLR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b71">
+	<analytic>
+		<title level="a" type="main">Describing videos by exploiting temporal structure</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">L</forename><surname>Yao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Torabi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">K</forename><surname>Cho</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">N</forename><surname>Ballas</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Pal</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Larochelle</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">A</forename><surname>Courville</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b72">
+	<monogr>
+		<title level="m" type="main">Deep metric learning for practical person re-identification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">D</forename><surname>Yi</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">Z</forename><surname>Lei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><forename type="middle">Z</forename><surname>Li</surname></persName>
+		</author>
+		<imprint>
+			<date type="published" when="2014" />
+			<publisher>ICPR</publisher>
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b73">
+	<analytic>
+		<title level="a" type="main">Beyond short snippets: Deep networks for video classification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Yue-Hei</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Ng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Hausknecht</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">O</forename><surname>Vijayanarasimhan</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Vinyals</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Monga</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><surname>Toderici</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b74">
+	<analytic>
+		<title level="a" type="main">The moving pose: An efficient 3d kinematics descriptor for low-latency action recognition and detection</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zanfir</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Leordeanu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">C</forename><surname>Sminchisescu</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b75">
+	<analytic>
+		<title level="a" type="main">Visualizing and understanding convolutional networks</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><forename type="middle">D</forename><surname>Zeiler</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Fergus</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ECCV</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b76">
+	<analytic>
+		<title level="a" type="main">3d gait recognition using multiple cameras</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">G</forename><surname>Liu</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">H</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Pietikäinen</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">Automatic Face and Gesture Recognition</title>
+		<imprint>
+			<publisher>IEEE</publisher>
+			<date type="published" when="2006" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b77">
+	<analytic>
+		<title level="a" type="main">Unsupervised salience learning for person re-identification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Ouyang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b78">
+	<analytic>
+		<title level="a" type="main">Learning mid-level filters for person re-identification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">R</forename><surname>Zhao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><surname>Ouyang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Wang</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2014" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b79">
+	<analytic>
+		<title level="a" type="main">Partial person re-identification</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">W</forename><forename type="middle">S</forename><surname>Zheng</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">X</forename><surname>Li</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">T</forename><surname>Xiang</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Liao</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">J</forename><surname>Lai</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">S</forename><surname>Gong</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">ICCV</title>
+		<imprint>
+			<date type="published" when="2015" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+<biblStruct xml:id="b80">
+	<analytic>
+		<title level="a" type="main">Separating signal from noise using patch recurrence across scales</title>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Zontak</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">I</forename><surname>Mosseri</surname></persName>
+		</author>
+		<author>
+			<persName xmlns="http://www.tei-c.org/ns/1.0"><forename type="first">M</forename><surname>Irani</surname></persName>
+		</author>
+	</analytic>
+	<monogr>
+		<title level="m">CVPR</title>
+		<imprint>
+			<date type="published" when="2013" />
+		</imprint>
+	</monogr>
+</biblStruct>
+
+				</listBibl>
+			</div>
+		</back>
+	</text>
+</TEI>
