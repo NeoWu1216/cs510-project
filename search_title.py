@@ -29,10 +29,28 @@ def query(string):
     for d_id, _ in top_docs:
         search_result += papers[d_id]
         search_result += "<br><br>"
-    title = search_result.split('|')[0].strip('.xml')
-    title = os.path.splitext(title)[0]
-    title = os.path.splitext(title)[0]
-    return title
+    # print search_result
+    # exit()
+    ### split all documents ###
+    all_title = search_result.split('<br><br>')
+    title_list = []
+    # print len(all_title)
+    ### length ###
+    length = len(all_title)
+    # print all_title
+    # exit()
+    for i in range(length):
+        if all_title[i] != '':
+            tmp_content = all_title[i].split('|')[0]
+            tmp_content = os.path.splitext(tmp_content)[0]
+            tmp_content = os.path.splitext(tmp_content)[0]
+            title_list.append(tmp_content)
+        else:
+            continue
+    # print title_list
+    # print len(title_list)
+
+    return title_list
 
 if __name__ == '__main__':
     print(query(sys.argv[1]))
