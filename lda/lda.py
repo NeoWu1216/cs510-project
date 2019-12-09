@@ -8,7 +8,7 @@ if __name__ == '__main__':
     else:
         _num_topics = int(sys.argv[1])
 
-    _output_prefix = "output"
+    _output_prefix = "lda"
     metapy.log_to_stderr()
     fidx = metapy.index.make_forward_index('config.toml')
     dset = metapy.learn.Dataset(fidx)
@@ -20,19 +20,25 @@ if __name__ == '__main__':
 
     model = metapy.topics.TopicModel(_output_prefix)
 
+    per_words_desc = 10
     with open(_output_prefix+'-topic.txt','w+') as topic:
         for topic_id in range(_num_topics):
             print('Topic ' + str(topic_id))
-            print([(fidx.term_text(pr[0]), pr[1]) for pr in model.top_k(tid=topic_id, k = 20)])
+            print([(fidx.term_text(pr[0]), pr[1]) for pr in model.top_k(tid=topic_id, k = per_words_desc)])
             topic.write('Topic ' + str(topic_id) + '\n')
-            topic.write(str([(fidx.term_text(pr[0]), pr[1]) for pr in model.top_k(tid=topic_id, k = 20)]))
+            topic.write(str([(fidx.term_text(pr[0]), pr[1]) for pr in model.top_k(tid=topic_id, k = per_words_desc)]))
+            topic.write('\n')
+    with open(_output_prefix+'-topic_core.txt','w+') as topic:
+        for topic_id in range(_num_topics):
+            print([(fidx.term_text(pr[0]), pr[1]) for pr in model.top_k(tid=topic_id, k = per_words_desc)])
+            topic.write(str([fidx.term_text(pr[0]) for pr in model.top_k(tid=topic_id, k = per_words_desc)]))
             topic.write('\n')
 
-    target_doc_count = 5
-    with open(_output_prefix+'-document.txt','w+') as doc:
-        for d_id in range(target_doc_count):
-            print('Document ' + str(d_id))
-            print(model.topic_distribution(d_id))
-            doc.write('Document ' + str(d_id) + '\n')
-            doc.write(str(model.topic_distribution(d_id)))
-            doc.write('\n')
+    # target_doc_count = 5
+    # with open(_output_prefix+'-document.txt','w+') as doc:
+    #     for d_id in range(target_doc_count):
+    #         print('Document ' + str(d_id))
+    #         print(model.topic_distribution(d_id))
+    #         doc.write('Document ' + str(d_id) + '\n')
+    #         doc.write(str(model.topic_distribution(d_id)))
+    #         doc.write('\n')

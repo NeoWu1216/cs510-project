@@ -9,8 +9,56 @@ import PyPDF2
 import xmltodict
 import pprint
 import csv
+with open('temp.json', 'r') as json_file:
+	temp = json.load(json_file)
+with open('paragraph_abstract.json', 'r') as json_file:
+	dic = json.load(json_file)
+print(len(temp))
+print(len(dic))
 
 
+def reg_remove(inp):
+	return inp.replace(" ", "")\
+		.replace(":", "").replace("-", "")\
+		.replace("'", "").replace("/", "")\
+		.replace("?", "").replace(r"\\", "").replace("\"", "").lower()
+
+reverse_temp = {}
+for key in temp:
+	reverse_temp[reg_remove(key)] = key
+
+data = []
+for file_name in dic:
+	res = ''
+	if reg_remove(file_name) not in reverse_temp: 
+		continue
+	temp_key = reverse_temp[reg_remove(file_name)]
+	author = temp[temp_key][0]
+	link = temp[temp_key][1]
+	res += file_name + " | "
+	res +=  dic[file_name]["abstract"] + " | "
+	res += " ".join(dic[file_name]["paragraph"])
+	data.append(res)
+	dic[file_name]["author"] = author
+	dic[file_name]["link"] = link
+print(len(data))
+data = '\n'.join(data)
+
+with open("test.dat", "w+", encoding="utf8") as file:
+    file.write(data)
+with open('test.json', 'w+') as json_file:
+	json.dump(dic, json_file)
+
+
+with open('test.json', 'r') as json_file:
+	dic = json.load(json_file)
+print(len(dic))
+temp = list(dic.keys())
+for t in temp:
+	print(dic[t]["link"])
+
+
+#==============================================================================================================
 data = []
 direc = "output/"
 empty = 0
