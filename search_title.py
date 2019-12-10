@@ -4,7 +4,7 @@ import os
 # Path of parsed papers
 path_parsed = "./test/"
 # path_parsed = ""
-def query(string):
+def query(string,top_num):
 	### get all papers content ###
     with open(path_parsed + 'test.dat', "r") as f:
         papers = f.read().split('\n')
@@ -23,7 +23,7 @@ def query(string):
     # print q.content(string)
     # exit()
     # Get documents
-    top_docs = ranker.score(idx, q, num_results=5)
+    top_docs = ranker.score(idx, q, num_results=top_num)
     # Construct search results
     search_result = ""
     for d_id, _ in top_docs:
@@ -53,4 +53,4 @@ def query(string):
     return title_list
 
 if __name__ == '__main__':
-    print(query(sys.argv[1]))
+    print(query(sys.argv[1],int(sys.argv[2])))
