@@ -53,15 +53,29 @@ function App() {
   const resList = [
     {title: 'Hello world', paragraph: 'Lopism Aifoei idie'},
     {title: 'gg', paragraph: 'oigj'} 
-  ]
+  ];
 
   const [state, setState] = React.useState({
     searchMode : '',
     searchText : '',
-  })
+  });
+
+  const [searchResState, setSearchResState] = React.useState([]);
 
   function onMenuItemChange(e) {
     setState({searchMode: e.target.value})
+  }
+
+  function onSearch() {
+      fetch("http://127.0.0.1:8000/query_title_paragraph",
+          {
+              method: 'POST',
+              body: JSON.stringify({queryString:'cv'}),
+              headers: {
+                  'Content-Type': 'application/json'
+              }
+          }
+      ).then(res => res.json()).then(json => setSearchResState(json))
   }
 
   const classes = useStyles();
@@ -107,9 +121,17 @@ function App() {
               shrink: true,
             }}
             variant="outlined"
+            onKeyPress={(ev) => {
+                console.log(`Pressed keyCode ${ev.key}`);
+                if (ev.key === 'Enter') {
+                    // Do code here
+                    onSearch();
+                    ev.preventDefault();
+                }
+            }}
         />
       </div>
-      <SearchResList data={resList} className={classes.resList}/>
+      <SearchResList data={searchResState} className={classes.resList}/>
     </div>
   );
 }
