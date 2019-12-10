@@ -5,6 +5,7 @@ https://www.machinelearningplus.com/nlp/topic-modeling-gensim-python/
 import re
 import numpy as np
 from pprint import pprint
+import json
 
 # Gensim
 import gensim
@@ -15,7 +16,9 @@ import os.path
 # spacy for lemmatization
 import spacy
 from nltk.corpus import stopwords
-
+import collections
+from heapq import heappush, heappop
+import pickle
 def sent_to_words(sentences):
 	for sentence in sentences:
 		yield(gensim.utils.simple_preprocess(str(sentence), deacc=True))
@@ -49,11 +52,12 @@ def main():
 	with open('test/test.dat', 'r') as f:
 		line  = f.readline()
 		data.append(line)
-		title_to_idx[line[:80].split(" |")[0]] = cnt
+		cnt
+		title_to_idx[cnt] = line[:100].split(" |")[0]
 		while line:
 			cnt += 1
 			line  = f.readline()
-			title_to_idx[line[:80].split(" |")[0]] = cnt
+			title_to_idx[cnt] = line[:100].split(" |")[0]
 			data.append(line)
 
 	data = [re.sub('\S*@\S*\s?', '', sent) for sent in data]
@@ -99,15 +103,37 @@ def main():
 
 	with open('gensim-topic_core.txt','w+') as file:
 		for topic_id, comb in lda_model.print_topics():
-			file.write(str([(topic.split("*")[1]).replace("\"", "") for topic in comb.split("+") ])+"\n")
+			file.write(str([(topic.split("*")[1]).replace("\"", "").replace(" ", "") for topic in comb.split("+") ])+"\n")
 
 
 	# pprint(lda_model.print_topics())
 	# doc_lda = lda_model[corpus]
 	get_document_topics = [lda_model.get_document_topics(item) for item in corpus]
+	print("===============")
+	print(len(title_to_idx))
+	print(len(get_document_topics))
+	print("===============")
 	print(get_document_topics[:10])
+	print("===============")
 
-	
+	output = collections.defaultdict(list)
+	mapping = {0:"Dataset", 1:"Graphic", 2:"Video", 3:"Similarity", 4:"Object Detection", 5:"Convolution", 6:"Points"}
+
+	for idx, ll in enumerate(get_document_topics):
+		heap = []
+		for topic, prob in ll:
+			heappush(heap, (prob, mapping[topic]))
+			if len(heap) > 2:
+				heappop(heap)
+		while heap:
+			output[title_to_idx[idx]].append(heappop(heap))
+
+	with open('gensim-topic-mapping.p', 'wb') as fp:
+		pickle.dump(data, fp)
+	with open('gensim-topic-mapping.txt','w+') as file:
+		for key, val in output.items():
+			file.write(str(key) + " " + str(val) + "\n")
+
 	def metrics():
 		print('\nPerplexity: ', lda_model.log_perplexity(corpus))
 		coherence_model_lda = CoherenceModel(model=lda_model, texts=data_lemmatized, dictionary=id2word, coherence='c_v')
@@ -128,8 +154,6 @@ def main():
 	# 												alpha='auto',
 	# 												per_word_topics=True)
 	# metrics()
-
-
 
 if __name__ == "__main__":
 	main()
