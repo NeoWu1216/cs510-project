@@ -1,11 +1,11 @@
-from flask import Flask, request, render_template, jsonify
+from flask import Flask, request, render_template, jsonify,current_app
 import subprocess
 
 app = Flask(__name__)
 
 @app.route("/")
 def index():
-    return render_template('index.html')
+    return current_app.send_static_file('index.html')
 
 @app.route("/query", methods=['POST'])
 def query():
