@@ -21,11 +21,11 @@ def most_related_paragraph(title,paragraph_list):
 
     return most_similar
 
-def paragraph_rank(string):
+def paragraph_rank(string,top_num):
     #feature 2, return most related paragraph
     f = open(path_parsed + "test.json", 'r')
     data = json.load(f)
-    title_list = search_title.query(string)
+    title_list = search_title.query(string,top_num)
     ret_val = [] #list of (title. paragraph)
     for title in title_list:
         paragraph = most_related_paragraph(title,data[title]["paragraph"])
@@ -33,4 +33,4 @@ def paragraph_rank(string):
     return ret_val
 
 if __name__ == '__main__':
-    print(paragraph_rank(sys.argv[1]))
+    print(paragraph_rank(sys.argv[1],sys.argv[2]))
