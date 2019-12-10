@@ -26,10 +26,10 @@ def paragraph_rank(string,top_num):
     f = open(path_parsed + "test.json", 'r')
     data = json.load(f)
     title_list = search_title.query(string,top_num)
-    ret_val = [] #list of (title. paragraph)
+    ret_val = {} #dictionary of title and info
     for title in title_list:
         paragraph = most_related_paragraph(title,data[title]["paragraph"])
-        ret_val.append((title,paragraph))
+        ret_val[title] = {"paragraph": paragraph, "author":data[title]["author"], "link": data[title]["link"] }
     return ret_val
 
 if __name__ == '__main__':
