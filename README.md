@@ -10,7 +10,7 @@ https://cs510-project.herokuapp.com
 ## Developer's guide
 
 ### Local
-To run frontend, just `yarn && yarn start`. You have to run backend individually `python3 app.py`
+To run frontend, just `cd frontend && yarn && yarn start`. You have to run backend individually `python3 app.py`
 
 ### Deployment
-To deploy, just `yarn && yarn build && cp -r ./frontend/build/static . && cp ./static/index.html ./static`
+To deploy, just `cd frontend && yarn && yarn build && cp ./build/index.html ./build/static && cp -r ./build/static ..`
