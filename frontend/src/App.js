@@ -140,7 +140,7 @@ function App() {
               value={state.searchMode}
               onChange={onMenuItemChange}
           >
-            <MenuItem value={10}>Search Papers</MenuItem>
+            <MenuItem value={10}>Search Titles</MenuItem>
             <MenuItem value={20}>Search Paragraphs</MenuItem>
             <MenuItem value={30}>Recommend Papers</MenuItem>
           </Select>
