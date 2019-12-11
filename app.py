@@ -11,11 +11,12 @@ CORS(app)
 def index():
     return current_app.send_static_file('index.html')
 
-@app.route("/query", methods=['POST'])
-def query():
+@app.route("/query_title", methods=['POST'])
+def query_title():
     query_string = request.json["queryString"]
-    output = subprocess.Popen(['python3' ,'search.py', query_string], stdout=subprocess.PIPE).stdout.read()
-    return jsonify([output.decode('utf8')])
+    output = subprocess.Popen(['python3' ,'search_title.py', query_string, "10"], stdout=subprocess.PIPE).stdout.read()
+    print(output.decode('utf-8'))
+    return jsonify(json.loads(output.decode('utf8')))
 
 @app.route("/query_title_paragraph", methods=['POST'])
 def query_title_paragraph():
