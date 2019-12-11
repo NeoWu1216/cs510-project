@@ -68,14 +68,18 @@ function App() {
   const [searchResState, setSearchResState] = React.useState([]);
 
   function onMenuItemChange(e) {
-    setState({searchMode: e.target.value})
+    setState({searchText: state.searchText, searchMode: e.target.value})
+  }
+
+  function onChange(e) {
+      setState({searchText: e.target.value, searchMode: state.searchMode})
   }
 
   function onSearch() {
       fetch("http://"+prefix+"/query_title_paragraph",
           {
               method: 'POST',
-              body: JSON.stringify({queryString:'cv'}),
+              body: JSON.stringify({queryString:state.searchText}),
               headers: {
                   'Content-Type': 'application/json'
               }
@@ -134,6 +138,7 @@ function App() {
                     ev.preventDefault();
                 }
             }}
+            onChange={onChange}
         />
       </div>
       <SearchResList data={searchResState} className={classes.resList}/>
