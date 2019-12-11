@@ -39,7 +39,7 @@ function SearchRes(props) {
 
   return (
     <Paper className={classes.searchRes}>
-      <Typography variant="h7" component="h3">
+      <Typography variant="h6" component="h3">
         <Link href={link}>
           {title}
         </Link>
