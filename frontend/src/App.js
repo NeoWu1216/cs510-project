@@ -13,6 +13,11 @@ import FormControl from '@material-ui/core/FormControl';
 import Select from '@material-ui/core/Select';
 import SearchResList from './searchResList.js'
 
+var prefix = "cs510-project.herokuapp.com"
+if (process.env.NODE_ENV !== 'production') {
+  prefix = "127.0.0.1:8000"
+}
+
 const useStyles = makeStyles(theme => ({
   root: {
     flexGrow: 1,
@@ -67,7 +72,7 @@ function App() {
   }
 
   function onSearch() {
-      fetch("http://127.0.0.1:8000/query_title_paragraph",
+      fetch("http://"+prefix+"/query_title_paragraph",
           {
               method: 'POST',
               body: JSON.stringify({queryString:'cv'}),
