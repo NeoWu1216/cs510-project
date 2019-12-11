@@ -1,17 +1,12 @@
 import React from 'react';
 import './App.css';
 import { makeStyles } from '@material-ui/core/styles';
-import AppBar from '@material-ui/core/AppBar';
-import Toolbar from '@material-ui/core/Toolbar';
-import Typography from '@material-ui/core/Typography';
+import {AppBar, Toolbar, Typography, IconButton} from '@material-ui/core'
+import {TextField, MenuItem, FormControl, Select} from '@material-ui/core'
+
 import AccountCircle from '@material-ui/icons/AccountCircle';
-import IconButton from "@material-ui/core/IconButton";
-import TextField from '@material-ui/core/TextField';
-import InputLabel from '@material-ui/core/InputLabel';
-import MenuItem from '@material-ui/core/MenuItem';
-import FormControl from '@material-ui/core/FormControl';
-import Select from '@material-ui/core/Select';
 import SearchResList from './searchResList.js'
+import LabelGroup from './Label.js'
 
 var prefix = "cs510-project.herokuapp.com"
 if (process.env.NODE_ENV !== 'production') {
@@ -20,7 +15,9 @@ if (process.env.NODE_ENV !== 'production') {
 
 const useStyles = makeStyles(theme => ({
   root: {
-    flexGrow: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
   },
   menuButton: {
     marginRight: theme.spacing(2),
@@ -33,20 +30,21 @@ const useStyles = makeStyles(theme => ({
     marginRight: -12
   },
   searchBar: {
-    marginLeft: "5vw",
-    marginRight: "5vw",
     display: "flex",
     alignItems: "center",
-    height: "40vh",
-    alignContent: "center"
+    height: "20vh",
+    // alignContent: "center"
   },
   formControl: {
-    width: "20vw",
+    width: "30vw",
+  },
+  labelGroup: {
+    flex: 1, 
+    justifyContent: 'center'
   },
   resList: {
+    display: 'flex',
     color : 'red',
-    paddingLeft: 200,
-    
     // display: 'flex',
     // height: '60vh',
     // alignItems: 'center',
@@ -55,24 +53,36 @@ const useStyles = makeStyles(theme => ({
 }));
 
 function App() {
-  const resList = [
-    {title: 'Hello world', paragraph: 'Lopism Aifoei idie'},
-    {title: 'gg', paragraph: 'oigj'} 
-  ];
+  let topics = ['All', 'Dataset', 'Graphic', 'Video', 'Similarity', 'Object Detection', 'Convolution', 'Points']
+
+
+  function buttonObj(text) {
+    return {text:text, onClick:onButtonClick, color:(state.topic==text ? 'primary': 'default')}
+  }
 
   const [state, setState] = React.useState({
     searchMode : '',
     searchText : '',
+    topic: topics[0]
   });
 
+  
+  function onButtonClick(e) {
+    console.log('Clicked', e.target.innerText)
+    setState({...state, topic: e.target.innerText})
+  }
+
+
+  
   const [searchResState, setSearchResState] = React.useState([]);
 
+
   function onMenuItemChange(e) {
-    setState({searchText: state.searchText, searchMode: e.target.value})
+    setState({...state, searchMode: e.target.value})
   }
 
   function onChange(e) {
-      setState({searchText: e.target.value, searchMode: state.searchMode})
+      setState({...state, searchText: e.target.value, buttons})
   }
 
   function onSearch() {
@@ -89,9 +99,12 @@ function App() {
 
   const classes = useStyles();
 
+  let buttons = topics.map(buttonObj)
+
+
   return (
     <div className={classes.root}>
-      <AppBar position="fixed">
+      <AppBar position="sticky">
         <Toolbar variant="dense">
           <Typography variant="h6" className={classes.title}>
             Computer Vision Paper Search
@@ -141,7 +154,9 @@ function App() {
             onChange={onChange}
         />
       </div>
+      <LabelGroup data={buttons} className={classes.labelGroup}/>
       <SearchResList data={searchResState} className={classes.resList}/>
+      
     </div>
   );
 }

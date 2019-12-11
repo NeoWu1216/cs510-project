@@ -36,11 +36,6 @@ function SearchRes(props) {
   const {data} = props
   const {title, paragraph} = data
 
-  const [state, setState] = React.useState({
-    searchMode : '',
-    searchText : '',
-  })
-
   return (
     <Paper className={classes.searchRes}>
       <Typography variant="h5" component="h3">
