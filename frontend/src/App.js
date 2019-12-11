@@ -61,7 +61,7 @@ function App() {
   }
 
   const [state, setState] = React.useState({
-    searchMode : '',
+    searchMode : 10,
     searchText : '',
     topic: topics[0]
   });
@@ -140,9 +140,6 @@ function App() {
               value={state.searchMode}
               onChange={onMenuItemChange}
           >
-            <MenuItem value="">
-              <em>None</em>
-            </MenuItem>
             <MenuItem value={10}>Search Papers</MenuItem>
             <MenuItem value={20}>Search Paragraphs</MenuItem>
             <MenuItem value={30}>Recommend Papers</MenuItem>
