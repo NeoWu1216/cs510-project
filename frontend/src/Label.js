@@ -19,6 +19,11 @@ const searchStyles = makeStyles(theme => ({
 function LabelGroup(props) {
   const classes = searchStyles();
   const resList = props.data;
+  const {hidden} = props;
+  
+  if (hidden) {
+    return <div></div>;
+  }
   return (<ButtonGroup className={classes.root}>
     {resList.map(x => <Label data={x} key={x.text}/>)}
   </ButtonGroup>)

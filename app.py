@@ -3,6 +3,7 @@ from flask_cors import CORS
 import json
 import subprocess
 import pickle
+import collections
 
 # load lda mapping
 lda_file_path = 'lda/gensim-topic-mapping.p'
@@ -18,7 +19,7 @@ def get_lda_prob(title, topic):
     candidate_topics = lda_raw_dict[title.strip()]
     print(title, topic, candidate_topics)
     for prob, cand_topic in candidate_topics:
-        if cand_topic == topic:
+        if cand_topic == topic or topic == 'All':
             return prob 
     return 0
 
@@ -69,7 +70,20 @@ def query_topic():
     
     lst_json = [{'title':x, 'link':test_jsn[x]['link']} for x in lst_json if get_lda_prob(x, topic_string) != 0]
     return jsonify(lst_json)
+@app.route("/query_similar", methods=['POST'])
+def query_similar():
+    query_title = request.json["queryString"]
+    summary = []
+    for title in query_title:
+        query_string = test_json[title]["abstract"]
+        output = subprocess.Popen(['python3' ,'search_title.py', query_string, "100"], stdout=subprocess.PIPE).stdout.read()
+        summary += output
+    summary = collections.Counter(summary)
+    output = []
+    for title, cnt in sorted(summary.items(), key = lambda item: item[1], reverse=True)[:(min(len(summary), 30))]:
+        output.append({"title":title, "link":test_json[title]})
 
+    return jsonify(output)
 
 if __name__ == "__main__":
     app.run(host = "0.0.0.0", port = 8000, threaded=True, debug=False)

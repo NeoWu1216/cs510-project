@@ -74,11 +74,11 @@ function App() {
   }
 
   const [state, setState] = React.useState({
-    searchMode : 10,
+    searchMode : 'Search Titles',
     searchText : '',
     topic: topics[0],
     topicData: {'All':[]},
-    searchResState: [],
+    searchResState: [{title:'Loading...'}],
   });
 
 
@@ -93,7 +93,6 @@ function App() {
                 }
             }
     ).then(res => res.json()).then(json => {
-      console.log(json)
       return setState(
       {...state, 
         topicData: json,
@@ -102,15 +101,12 @@ function App() {
   }, []);
 
   React.useEffect(()=>{
-    console.log(state)
-    setState({...state, searchResState: state.topicData['All']})
+    setState({...state, searchResState: state.topicData['All'].slice(0, 200)})
   },[state.topicData])
 
   
   function onButtonClick(e) {
     let clicked = e.target.innerText
-    console.log('Clicked', clicked)
-    console.log(state.topicData[clicked], state.allData)
     setState({...state, searchResState: state.topicData[clicked], topic: clicked})
   }
 
@@ -119,16 +115,23 @@ function App() {
 
 
   function onMenuItemChange(e) {
-    setState({...state, searchMode: e.target.value})
+    if (e.target.value == 'Search Titles') {
+      setState({...state, searchMode: e.target.value, topic:'All', searchResState: state.topicData['All'].slice(0, 200)})
+    } else {
+      setState({...state, searchMode: e.target.value, searchResState: []})
+    }
+    // console.log(e.target.value)
+    // setState({...state, })
   }
 
   function onChange(e) {
     setState({...state, searchText: e.target.value})
   }
 
-  function onSearch() {
-      if (state.topic === 'All') {
-        fetch("http://"+prefix+"/query_title_paragraph",
+  async function onSearch() {
+      await setState({...state, searchResState:[{paragraph:'Loading...'}]})
+      if (state.searchMode === 'Search Paragraphs') {
+        await fetch("http://"+prefix+"/query_title_paragraph",
             {
                 method: 'POST',
                 body: JSON.stringify({queryString:state.searchText}),
@@ -137,8 +140,8 @@ function App() {
                 }
             }
         ).then(res => res.json()).then(json => setState({...state, searchResState:json}))
-      } else {
-        fetch("http://"+prefix+"/query_topic",
+      } else if (state.searchMode === 'Search Titles') {
+        await fetch("http://"+prefix+"/query_topic",
         {
             method: 'POST',
             body: JSON.stringify({queryString:state.searchText, topicString: state.topic}),
@@ -181,9 +184,9 @@ function App() {
               value={state.searchMode}
               onChange={onMenuItemChange}
           >
-            <MenuItem value={10}>Search Titles</MenuItem>
-            <MenuItem value={20}>Search Paragraphs</MenuItem>
-            <MenuItem value={30}>Recommend Papers</MenuItem>
+            <MenuItem value={'Search Titles'}>Search Titles</MenuItem>
+            <MenuItem value={'Search Paragraphs'}>Search Paragraphs</MenuItem>
+            <MenuItem value={'Recommend Papers'}>Recommend Papers</MenuItem>
           </Select>
         </FormControl>
         <TextField
@@ -208,7 +211,7 @@ function App() {
             onChange={onChange}
         />
       </div>
-      <LabelGroup data={buttons} className={classes.labelGroup}/>
+      <LabelGroup data={buttons} className={classes.labelGroup} hidden={state.searchMode!=='Search Titles'}/>
       <SearchResList data={state.searchResState} className={classes.resList}/>
 
 
