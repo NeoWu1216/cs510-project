@@ -8,6 +8,15 @@ import AccountCircle from '@material-ui/icons/AccountCircle';
 import SearchResList from './searchResList.js'
 import LabelGroup from './Label.js'
 
+import Drawer from '@material-ui/core/Drawer';
+import List from '@material-ui/core/List';
+import Divider from '@material-ui/core/Divider';
+import ListItem from '@material-ui/core/ListItem';
+import ListItemIcon from '@material-ui/core/ListItemIcon';
+import ListItemText from '@material-ui/core/ListItemText';
+import InboxIcon from '@material-ui/icons/MoveToInbox';
+import MailIcon from '@material-ui/icons/Mail';
+
 var prefix = "cs510-project.herokuapp.com"
 if (process.env.NODE_ENV !== 'production') {
   prefix = "127.0.0.1:8000"
@@ -16,6 +25,7 @@ if (process.env.NODE_ENV !== 'production') {
 const useStyles = makeStyles(theme => ({
   root: {
     display: 'flex',
+    marginRight:240,
     flexDirection: 'column',
     alignItems: 'center',
   },
@@ -49,7 +59,10 @@ const useStyles = makeStyles(theme => ({
     // height: '60vh',
     // alignItems: 'center',
     // justifyContent: 'center'
-  }
+  },
+    drawerPaper: {
+        width: 240,
+    },
 }));
 
 function App() {
@@ -169,7 +182,29 @@ function App() {
       </div>
       <LabelGroup data={buttons} className={classes.labelGroup}/>
       <SearchResList data={searchResState} className={classes.resList}/>
-      
+
+
+
+        <Drawer
+            className={classes.drawer}
+            variant="permanent"
+            classes={{
+                paper: classes.drawerPaper,
+            }}
+            anchor="right"
+        >
+            <div className={classes.toolbar} />
+                Welcome User! 
+            <Divider />
+            <List>
+                {['Liked Papers'].map((text, index) => (
+                    <ListItem button key={text}>
+                        <ListItemIcon>{index % 2 === 0 ? <InboxIcon /> : <MailIcon />}</ListItemIcon>
+                        <ListItemText primary={text} />
+                    </ListItem>
+                ))}
+            </List>
+        </Drawer>
     </div>
   );
 }
