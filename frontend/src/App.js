@@ -86,15 +86,33 @@ function App() {
   }
 
   function onSearch() {
-      fetch("http://"+prefix+"/query_title_paragraph",
-          {
-              method: 'POST',
-              body: JSON.stringify({queryString:state.searchText}),
-              headers: {
-                  'Content-Type': 'application/json'
-              }
-          }
-      ).then(res => res.json()).then(json => setSearchResState(json))
+      if (state.topic === 'All') {
+        fetch("http://"+prefix+"/query_title_paragraph",
+            {
+                method: 'POST',
+                body: JSON.stringify({queryString:state.searchText}),
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            }
+        ).then(res => res.json()).then(json => setSearchResState(json))
+      } else {
+        fetch("http://"+prefix+"/query_topic",
+        {
+            method: 'POST',
+            body: JSON.stringify({queryString:state.searchText, topicString: state.topic}),
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        }
+        ).then(
+          res => res.json()
+        ).then(
+          obj => obj.map(x => {return {title:x}})
+        ).then(
+          json => setSearchResState(json)
+        )
+      }
   }
 
   const classes = useStyles();

@@ -33,7 +33,7 @@ function Label(props) {
   const {text, onClick, color} = data
 
   return (
-    <Button onClick={onClick} className={classes.button} color={color}>
+    <Button onClick={onClick} className={classes.button} color={color} variant={color==='primary' ? 'outlined': 'default'}>
       {text}
     </Button>
   )
