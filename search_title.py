@@ -1,6 +1,8 @@
 import sys
 import metapy
 import os
+import json 
+
 # Path of parsed papers
 path_parsed = "./test/"
 # path_parsed = ""
@@ -53,4 +55,4 @@ def query(string,top_num):
     return title_list
 
 if __name__ == '__main__':
-    print(query(sys.argv[1],int(sys.argv[2])))
+    print(json.dumps(query(sys.argv[1],int(sys.argv[2]))))
