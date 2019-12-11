@@ -63,18 +63,46 @@ function App() {
   const [state, setState] = React.useState({
     searchMode : '',
     searchText : '',
-    topic: topics[0]
+    topic: topics[0],
+    topicData: {'All':[]},
+    searchResState: [],
   });
+
+
+
+  React.useEffect(() => {
+    // Update the document title using the browser API
+    fetch("http://"+prefix+"/query_all",
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            }
+    ).then(res => res.json()).then(json => {
+      console.log(json)
+      return setState(
+      {...state, 
+        topicData: json,
+      }
+    )})
+  }, []);
+
+  React.useEffect(()=>{
+    console.log(state)
+    setState({...state, searchResState: state.topicData['All']})
+  },[state.topicData])
 
   
   function onButtonClick(e) {
-    console.log('Clicked', e.target.innerText)
-    setState({...state, topic: e.target.innerText})
+    let clicked = e.target.innerText
+    console.log('Clicked', clicked)
+    console.log(state.topicData[clicked], state.allData)
+    setState({...state, searchResState: state.topicData[clicked], topic: clicked})
   }
 
 
   
-  const [searchResState, setSearchResState] = React.useState([]);
 
 
   function onMenuItemChange(e) {
@@ -82,7 +110,7 @@ function App() {
   }
 
   function onChange(e) {
-      setState({...state, searchText: e.target.value, buttons})
+    setState({...state, searchText: e.target.value})
   }
 
   function onSearch() {
@@ -95,7 +123,7 @@ function App() {
                     'Content-Type': 'application/json'
                 }
             }
-        ).then(res => res.json()).then(json => setSearchResState(json))
+        ).then(res => res.json()).then(json => setState({...state, searchResState:json}))
       } else {
         fetch("http://"+prefix+"/query_topic",
         {
@@ -108,7 +136,7 @@ function App() {
         ).then(
           res => res.json()
         ).then(
-          json => setSearchResState(json)
+          json => setState({...state, searchResState:json})
         )
       }
   }
@@ -171,7 +199,7 @@ function App() {
         />
       </div>
       <LabelGroup data={buttons} className={classes.labelGroup}/>
-      <SearchResList data={searchResState} className={classes.resList}/>
+      <SearchResList data={state.searchResState} className={classes.resList}/>
       
     </div>
   );

@@ -10,6 +10,8 @@ with open(lda_file_path, 'rb') as fp:
     lda_raw_dict = pickle.load(fp)
 with open('test/test.json', 'r') as fp:
     test_jsn = json.load(fp)
+with open('label_to_title.json', 'r') as fp:
+    label_to_title = json.load(fp)
 
 
 def get_lda_prob(title, topic):
@@ -31,6 +33,11 @@ CORS(app)
 @app.route("/")
 def index():
     return current_app.send_static_file('index.html')
+
+@app.route("/query_all", methods=['POST'])
+def query_all():
+    print(label_to_title)
+    return jsonify(label_to_title)
 
 @app.route("/query_title", methods=['POST'])
 def query_title():
