@@ -5,7 +5,7 @@
 We mainly used metapy for the purpose of this project to construct a demo search engine  
 
 ## Demo App
-https://cs510-project.herokuapp.com
+http://cs510-project.herokuapp.com
 
 ## Developer's guide
 
