@@ -12,7 +12,7 @@ const searchStyles = makeStyles(theme => ({
   },
   searchRes: {
     padding: theme.spacing(3, 2),
-    width: '50vw',
+    width: '65vw',
     marginBottom: "5vh",
   },
 }))
@@ -34,12 +34,15 @@ function SearchRes(props) {
 
 
   const {data} = props
-  const {title, paragraph} = data
+  const {title, link, paragraph} = data
 
   return (
     <Paper className={classes.searchRes}>
       <Typography variant="h7" component="h3">
         {title}
+      </Typography>
+      <Typography component="p" variant="caption">
+        {link}
       </Typography>
       <Typography component="p">
         {paragraph}

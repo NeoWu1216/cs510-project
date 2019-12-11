@@ -8,6 +8,8 @@ import pickle
 lda_file_path = 'lda/gensim-topic-mapping.p'
 with open(lda_file_path, 'rb') as fp:
     lda_raw_dict = pickle.load(fp)
+with open('test/test.json', 'r') as fp:
+    test_jsn = json.load(fp)
 
 
 def get_lda_prob(title, topic):
@@ -53,11 +55,12 @@ def query_topic():
     print(output.decode('utf8'))
     output_json = json.loads(output.decode('utf8'))
 
-    lst_json = output_json
+    lst_json = list(map(lambda x: x.strip(), output_json))
     # sort result by how much it matches the given topic
     lst_json.sort(key=lambda x: -get_lda_prob(x, topic_string))
     # remove other topics
-    lst_json = [x for x in lst_json if get_lda_prob(x, topic_string) != 0]
+    
+    lst_json = [{'title':x, 'link':test_jsn[x]['link']} for x in lst_json if get_lda_prob(x, topic_string) != 0]
     return jsonify(lst_json)
 
 

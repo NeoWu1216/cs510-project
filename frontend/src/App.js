@@ -108,8 +108,6 @@ function App() {
         ).then(
           res => res.json()
         ).then(
-          obj => obj.map(x => {return {title:x}})
-        ).then(
           json => setSearchResState(json)
         )
       }
