@@ -85,7 +85,7 @@ def query_similar():
     output = []
     for title, cnt in sorted(summary.items(), key = lambda item: item[1], reverse=True)[:(min(len(summary), 30))]:
         title = title.strip()
-        output.append({"title":title, "link":test_jsn[title]})
+        output.append({"title":title, "link":test_jsn[title]['link']})
 
     return jsonify(output)
 
