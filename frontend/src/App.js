@@ -70,7 +70,7 @@ function App() {
 
 
   function buttonObj(text) {
-    return {text:text, onClick:onButtonClick, color:(state.topic==text ? 'primary': 'default')}
+    return {text:text, onClick:onButtonClick, color:(state.topic===text ? 'primary': 'default')}
   }
 
   const [state, setState] = React.useState({
@@ -79,7 +79,7 @@ function App() {
     topic: topics[0],
     topicData: {'All':[]},
     searchResState: [{title:'Loading...'}],
-    userLikedPapersTitle: [],
+    userLikedPapersTitle: localStorage.getItem('likedPapers') || [],
   });
 
 
@@ -103,11 +103,14 @@ function App() {
 
   React.useEffect(()=>{
     setState({...state, searchResState: state.topicData['All'].slice(0, 200)})
-  },[state.topicData])
+  },[state.topicData]);
 
+    React.useEffect(() => {
+        localStorage.setItem('likedPapers', JSON.stringify(state.userLikedPapersTitle));
+    }, [state.userLikedPapersTitle]);
   
   function onButtonClick(e) {
-    let clicked = e.target.innerText
+    let clicked = e.target.innerText;
     setState({...state, searchResState: state.topicData[clicked], topic: clicked})
   }
 
@@ -117,6 +120,12 @@ function App() {
       newlikedpapers = [... new Set(newlikedpapers)];
       setState({...state, userLikedPapersTitle: newlikedpapers});
   }
+
+    function onUnLike(title) {
+        let newlikedpapers = state.userLikedPapersTitle.concat([title]);
+        newlikedpapers = [... new Set(newlikedpapers)];
+        setState({...state, userLikedPapersTitle: newlikedpapers});
+    }
 
 
   function onMenuItemChange(e) {
