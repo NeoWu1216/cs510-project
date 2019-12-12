@@ -104,7 +104,7 @@ function App() {
   React.useEffect(()=>{
     setState({...state, searchResState: state.topicData['All'].slice(0, 200)})
   },[state.topicData]);
-
+  
     React.useEffect(() => {
         localStorage.setItem('likedPapers', JSON.stringify(state.userLikedPapersTitle));
     }, [state.userLikedPapersTitle]);
