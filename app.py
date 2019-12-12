@@ -73,19 +73,17 @@ def query_topic():
 @app.route("/query_similar", methods=['POST'])
 def query_similar():
     query_title = request.json["queryString"]
-    print(query_title)
     summary = []
     for title in query_title:
         query_string = test_jsn[title]["abstract"]
         output = subprocess.Popen(['python3' ,'search_title.py', query_string, "100"], stdout=subprocess.PIPE).stdout.read()
         summary += json.loads(output.decode('utf8'))
-    print(summary)
     summary = collections.Counter(summary)
-    print(summary)
     output = []
     for title, cnt in sorted(summary.items(), key = lambda item: item[1], reverse=True)[:(min(len(summary), 30))]:
-        title = title.strip()
-        output.append({"title":title, "link":test_jsn[title]['link']})
+        if title.strip() not in query_title:
+            title = title.strip()
+            output.append({"title":title, "link":test_jsn[title]['link']})
 
     return jsonify(output)
 

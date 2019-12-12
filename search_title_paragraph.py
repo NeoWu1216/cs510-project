@@ -28,7 +28,10 @@ def paragraph_rank(string,top_num):
     title_list = search_title.query(string,top_num)
     ret_val = [] # list of dictionary of title and info
     for idx,title in enumerate(title_list,1):
-        title = title.strip()
+        if title not in data:
+            title = title.strip()
+        if title not in data:
+            continue
         paragraph = most_related_paragraph(title,data[title]["paragraph"])
         ret_val.append({"title":title, "paragraph": paragraph, "author":data[title]["author"], "link": data[title]["link"]})
     return ret_val
