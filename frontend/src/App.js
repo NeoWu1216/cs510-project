@@ -245,7 +245,6 @@ function App() {
         >
             <div className={classes.toolbar} />
                 Welcome User!
-                {state.userLikedPapersTitle}
             <Divider />
             <List>
                 {['Liked Papers'].map((text, index) => (
@@ -255,6 +254,15 @@ function App() {
                     </ListItem>
                 ))}
             </List>
+            <Divider />
+              {state.userLikedPapersTitle.map((text) => (
+                  <div>
+                      <ListItem button key={text}>
+                          <ListItemText primary={text} />
+                      </ListItem>
+                      <Divider />
+                  </div>
+              ))}
         </Drawer>
     </div>
   );
