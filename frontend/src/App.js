@@ -16,6 +16,10 @@ import ListItemIcon from '@material-ui/core/ListItemIcon';
 import ListItemText from '@material-ui/core/ListItemText';
 import InboxIcon from '@material-ui/icons/MoveToInbox';
 import MailIcon from '@material-ui/icons/Mail';
+import ThumbUpAltIcon from "@material-ui/icons/ThumbUpAlt";
+import RemoveCircleOutlineIcon from '@material-ui/icons/RemoveCircleOutline';
+
+
 
 var prefix = "cs510-project.herokuapp.com"
 if (process.env.NODE_ENV !== 'production') {
@@ -79,7 +83,7 @@ function App() {
     topic: topics[0],
     topicData: {'All':[]},
     searchResState: [{title:'Loading...'}],
-    userLikedPapersTitle: localStorage.getItem('likedPapers') || [],
+    userLikedPapersTitle: JSON.parse(localStorage.getItem('likedPapers')) || [],
   });
 
 
@@ -122,8 +126,7 @@ function App() {
   }
 
     function onUnLike(title) {
-        let newlikedpapers = state.userLikedPapersTitle.concat([title]);
-        newlikedpapers = [... new Set(newlikedpapers)];
+        let newlikedpapers = state.userLikedPapersTitle.filter(_ => _ !== title);
         setState({...state, userLikedPapersTitle: newlikedpapers});
     }
 
@@ -268,6 +271,9 @@ function App() {
                   <div>
                       <ListItem button key={text}>
                           <ListItemText primary={text} />
+                          <IconButton aria-label="unlike" onClick={()=>onUnLike(text)}>
+                              <RemoveCircleOutlineIcon/>
+                          </IconButton>
                       </ListItem>
                       <Divider />
                   </div>
