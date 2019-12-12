@@ -17,7 +17,6 @@ with open('label_to_title.json', 'r') as fp:
 
 def get_lda_prob(title, topic):
     candidate_topics = lda_raw_dict[title.strip()]
-    print(title, topic, candidate_topics)
     for prob, cand_topic in candidate_topics:
         if cand_topic == topic or topic == 'All':
             return prob 
@@ -37,21 +36,18 @@ def index():
 
 @app.route("/query_all", methods=['POST'])
 def query_all():
-    print(label_to_title)
     return jsonify(label_to_title)
 
 @app.route("/query_title", methods=['POST'])
 def query_title():
     query_string = request.json["queryString"]
     output = subprocess.Popen(['python3' ,'search_title.py', query_string, "10"], stdout=subprocess.PIPE).stdout.read()
-    print(output.decode('utf-8'))
     return jsonify(json.loads(output.decode('utf8')))
 
 @app.route("/query_title_paragraph", methods=['POST'])
 def query_title_paragraph():
     query_string = request.json["queryString"]
     output = subprocess.Popen(['python3' ,'search_title_paragraph.py', query_string, "10"], stdout=subprocess.PIPE).stdout.read()
-    print(output.decode('utf-8'))
     return jsonify(json.loads(output.decode('utf8')))
 
 @app.route("/query_topic", methods=['POST'])
@@ -59,8 +55,6 @@ def query_topic():
     query_string = request.json["queryString"]
     topic_string = request.json["topicString"]
     output = subprocess.Popen(['python3' ,'search_title.py', query_string, "100"], stdout=subprocess.PIPE).stdout.read()
-    print('Output', type(output))
-    print(output.decode('utf8'))
     output_json = json.loads(output.decode('utf8'))
 
     lst_json = list(map(lambda x: x.strip(), output_json))
@@ -81,8 +75,11 @@ def query_similar():
     summary = collections.Counter(summary)
     output = []
     for title, cnt in sorted(summary.items(), key = lambda item: item[1], reverse=True)[:(min(len(summary), 30))]:
-        if title.strip() not in query_title:
-            title = title.strip()
+        if title.strip() not in query_title and title not in query_title:
+            if title not in test_jsn:
+                title = title.strip()
+            if title not in test_jsn:
+                continue
             output.append({"title":title, "link":test_jsn[title]['link']})
 
     return jsonify(output)
