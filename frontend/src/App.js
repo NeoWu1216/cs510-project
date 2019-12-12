@@ -125,6 +125,17 @@ function App() {
     } else {
       setState({...state, searchMode: e.target.value, searchResState: []})
     }
+    if (e.target.value === 'Recommend Papers' ) {
+        fetch("http://"+prefix+"/query_similar",
+            {
+                method: 'POST',
+                body: JSON.stringify({queryString:state.userLikedPapersTitle}),
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            }
+        ).then(res => res.json()).then(json => setState({...state, searchResState:json}))
+    }
     // console.log(e.target.value)
     // setState({...state, })
   }
