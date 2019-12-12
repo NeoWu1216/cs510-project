@@ -189,6 +189,8 @@ function App() {
             <MenuItem value={'Recommend Papers'}>Recommend Papers</MenuItem>
           </Select>
         </FormControl>
+
+        { (state.searchMode === 'Recommend Papers') ? null :
         <TextField
             id="outlined-full-width"
             label="CV papers to search"
@@ -210,6 +212,7 @@ function App() {
             }}
             onChange={onChange}
         />
+        }
       </div>
       <LabelGroup data={buttons} className={classes.labelGroup} hidden={state.searchMode!=='Search Titles'}/>
       <SearchResList data={state.searchResState} className={classes.resList}/>
