@@ -79,6 +79,7 @@ function App() {
     topic: topics[0],
     topicData: {'All':[]},
     searchResState: [{title:'Loading...'}],
+    userLikedPapersTitle: [],
   });
 
 
@@ -111,11 +112,15 @@ function App() {
   }
 
 
-  
+  function onLike(title) {
+      let newlikedpapers = state.userLikedPapersTitle.concat([title]);
+      newlikedpapers = [... new Set(newlikedpapers)];
+      setState({...state, userLikedPapersTitle: newlikedpapers});
+  }
 
 
   function onMenuItemChange(e) {
-    if (e.target.value == 'Search Titles') {
+    if (e.target.value === 'Search Titles') {
       setState({...state, searchMode: e.target.value, topic:'All', searchResState: state.topicData['All'].slice(0, 200)})
     } else {
       setState({...state, searchMode: e.target.value, searchResState: []})
@@ -215,7 +220,7 @@ function App() {
         }
       </div>
       <LabelGroup data={buttons} className={classes.labelGroup} hidden={state.searchMode!=='Search Titles'}/>
-      <SearchResList data={state.searchResState} className={classes.resList}/>
+      <SearchResList data={state.searchResState} className={classes.resList} onLike={onLike}/>
 
 
 
@@ -228,7 +233,8 @@ function App() {
             anchor="right"
         >
             <div className={classes.toolbar} />
-                Welcome User! 
+                Welcome User!
+                {state.userLikedPapersTitle}
             <Divider />
             <List>
                 {['Liked Papers'].map((text, index) => (
