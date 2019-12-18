@@ -15,10 +15,12 @@ def query(string,top_num):
         
     # Create inverted index
     idx = metapy.index.make_inverted_index('main.toml')
+    fwd_idx = metapy.index.make_forward_index('main.toml')
     # print idx
     # exit()
     # Initialize ranker
-    ranker = metapy.index.OkapiBM25()
+    ranker = metapy.index.JelinekMercer(0.87)
+    ranker = metapy.index.Rocchio(fwd_idx, ranker, 0.8, 0.9, 20) 
     # Initialize query
     q = metapy.index.Document()
     q.content(string)
