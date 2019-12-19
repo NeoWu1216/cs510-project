@@ -12,8 +12,8 @@ http://cs510-project.herokuapp.com
 ### Local
 To run frontend, just `cd frontend && yarn && yarn start`. You have to run backend individually `pip3 install -r requirements.txt && python3 app.py`
 
-### Deployment
-To deploy, just `cd frontend && yarn && yarn build && cp ./build/index.html ./build/static && cp -r ./build/static ..`
+### Build
+To Build code, just `cd frontend && yarn && yarn build && cp ./build/index.html ./build/static && cp -r ./build/static ..`
 
 ### Topic Modeling
 We implemented Latent Dirichlet Allocation (LDA) using both metapy and Gensim. LDA takes text corpus as input and output the word distributions of topics and topic proportion of documents.
