@@ -21,16 +21,16 @@ We implemented Latent Dirichlet Allocation (LDA) using both metapy and Gensim. L
 First change the number of topic at line 88 in `gensim_.py`, for example, to set the number of topics to be 7:
 ```python
 if not os.path.isfile('gensim_model'):
-		tpc = 7
-		lda_model = gensim.models.ldamodel.LdaModel(corpus=corpus,
-							id2word=id2word,
-							num_topics=tpc, 
-							random_state=100,
-							update_every=1,
-							chunksize=100,
-							passes=10,
-							alpha='auto',
-							per_word_topics=True)
+	tpc = 7
+	lda_model = gensim.models.ldamodel.LdaModel(corpus=corpus,
+						id2word=id2word,
+						num_topics=tpc, 
+						random_state=100,
+						update_every=1,
+						chunksize=100,
+						passes=10,
+						alpha='auto',
+						per_word_topics=True)
 ```
 then run `python gensim_.py` to execute the program.
 
